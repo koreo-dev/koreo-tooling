@@ -1,0 +1,3 @@
+#!/bin/sh
+
+pdm run python src/koreo-ls.py
