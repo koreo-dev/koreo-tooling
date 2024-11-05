@@ -9,3 +9,17 @@ More helpfully, we provide a language server that surfaces issues within your
 IDE.
 
 
+## CLI
+
+    pdm run python src/koreo-cli.py --yaml-dir=<your-koreo-yamls> --check
+
+
+## LSP
+
+Register the Koreo LSP with your IDE. Maybe in a config block like this:
+
+    "koreo-ls": {
+      "command": "koreo-ls",
+      "filetypes": ["koreo"],
+      "rootPatterns": ["*.koreo"]
+    }
