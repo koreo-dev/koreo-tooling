@@ -104,13 +104,36 @@ async def change_processor(params):
     await _handle_file(doc=doc)
 
 
-@server.feature(types.TEXT_DOCUMENT_TYPE_DEFINITION)
+@server.feature(types.TEXT_DOCUMENT_DEFINITION)
 async def goto_definitiion(params):
-    server.window_log_message(
-        params=types.LogMessageParams(
-            type=types.MessageType.Debug, message=f"goto def: {params}"
-        )
-    )
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    # TODO: Make this work anywhere within functionRef or workflowRef blocks.
+    word = doc.lines[params.position.line].split(":", 1)[1].strip()
+    definition_index = __RESOURCE_RANGE_INDEX[f"Function:{word}"]
+
+    definitions = []
+    for def_path, def_ranges in definition_index.items():
+        for def_range in def_ranges:
+            definitions.append(types.Location(uri=def_path, range=def_range))
+
+    return definitions
+
+
+@server.feature(types.TEXT_DOCUMENT_REFERENCES)
+async def goto_reference(params):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    # TODO: Make this work anywhere within functionRef or workflowRef blocks.
+    word = doc.lines[params.position.line].split(":", 1)[1].strip()
+    word_uses = __REF_RANGE_INDEX[f"Function:{word}"]
+
+    references = []
+    for ref_path, ref_ranges in word_uses.items():
+        for ref_range in ref_ranges:
+            references.append(types.Location(uri=ref_path, range=ref_range))
+
+    return references
 
 
 async def _handle_file(doc: TextDocument):
@@ -186,12 +209,21 @@ __RESOURCE_RANGE_INDEX = defaultdict[str, dict[str, list[types.Range]]](
 
 __PATH_RESOURCE_INDEX = defaultdict[str, set[str]](set[str])
 
+__REF_RANGE_INDEX = defaultdict[str, dict[str, list[types.Range]]](
+    lambda: defaultdict[str, list[types.Range]](list[types.Range])
+)
+__PATH_REF_INDEX = defaultdict[str, set[str]](set[str])
+
 
 def _reset_file_state(path_key: str):
     for resource_key in __PATH_RESOURCE_INDEX[path_key]:
         del __RESOURCE_RANGE_INDEX[resource_key][path_key]
 
+    for resource_key in __PATH_REF_INDEX[path_key]:
+        del __REF_RANGE_INDEX[resource_key][path_key]
+
     __PATH_RESOURCE_INDEX[path_key] = set()
+    __PATH_REF_INDEX[path_key] = set()
     __DIAGNOSTICS[path_key] = []
     __RANGE_INDEX[path_key] = {}
 
@@ -436,10 +468,25 @@ def _process_workflow_step(path, step_range, step, raw_step):
         if key.startswith("inputs")
     )
 
+    ref_name = None
+    ref_range = None
+
+    function_ref_block = raw_step.get("functionRef")
+    if function_ref_block:
+        ref_name = f"Function:{function_ref_block.get("name")}"
+        ref_range = function_ref_block.get(__RANGE_KEY, step_range)
+
+    workflow_ref_block = raw_step.get("workflowRef")
+    if workflow_ref_block:
+        ref_name = f"Workflow:{function_ref_block.get("name")}"
+        ref_range = workflow_ref_block.get(__RANGE_KEY, step_range)
+
+    if ref_name and ref_range:
+        __PATH_REF_INDEX[path].add(ref_name)
+        __REF_RANGE_INDEX[ref_name][path].append(ref_range)
+
     raw_inputs = raw_step.get("inputs", {})
-    inputs_range = raw_inputs.get(__RANGE_KEY)
-    if not inputs_range:
-        inputs_range = step_range
+    inputs_range = raw_inputs.get(__RANGE_KEY, step_range)
 
     inputs = call_arg_compare(step.provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
