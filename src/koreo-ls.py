@@ -20,6 +20,7 @@ from koreo.workflow.structure import Workflow, ErrorStep
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
+from koreo_tooling.indexing import IndexingLoader, __RANGE_KEY, range_stripper
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -108,9 +109,29 @@ async def change_processor(params):
 async def goto_definitiion(params):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    # TODO: Make this work anywhere within functionRef or workflowRef blocks.
-    word = doc.lines[params.position.line].split(":", 1)[1].strip()
-    definition_index = __RESOURCE_RANGE_INDEX[f"Function:{word}"]
+    resource_key = None
+    last_key = None
+    last_key_start_line = 0
+    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
+        range_start_line, range_end_line = _range_key_to_lines(ref_range)
+        if range_start_line > params.position.line:
+            continue
+
+        if (
+            range_start_line > last_key_start_line
+            and range_end_line >= params.position.line
+        ):
+            last_key = ref_range
+            last_key_start_line = range_start_line
+
+    if not last_key:
+        return []
+
+    resource_key = __RANGE_REF_INDEX[doc.path][last_key]
+    if not resource_key:
+        return []
+
+    definition_index = __RESOURCE_RANGE_INDEX[resource_key]
 
     definitions = []
     for def_path, def_ranges in definition_index.items():
@@ -124,12 +145,39 @@ async def goto_definitiion(params):
 async def goto_reference(params):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    # TODO: Make this work anywhere within functionRef or workflowRef blocks.
-    word = doc.lines[params.position.line].split(":", 1)[1].strip()
-    word_uses = __REF_RANGE_INDEX[f"Function:{word}"]
+    resource_key = None
+    last_key = None
+    last_key_start_line = 0
+    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
+        range_start_line, range_end_line = _range_key_to_lines(ref_range)
+        if range_start_line > params.position.line:
+            continue
+
+        if (
+            range_start_line > last_key_start_line
+            and range_end_line >= params.position.line
+        ):
+            last_key = ref_range
+            last_key_start_line = range_start_line
+
+    if not last_key:
+        return []
+
+    resource_key = __RANGE_REF_INDEX[doc.path][last_key]
+    if not resource_key:
+        return []
+
+    uses = __REF_RANGE_INDEX[resource_key]
 
     references = []
-    for ref_path, ref_ranges in word_uses.items():
+
+    definition_index = __RESOURCE_RANGE_INDEX[resource_key]
+
+    for def_path, def_ranges in definition_index.items():
+        for def_range in def_ranges:
+            references.append(types.Location(uri=def_path, range=def_range))
+
+    for ref_path, ref_ranges in uses.items():
         for ref_range in ref_ranges:
             references.append(types.Location(uri=ref_path, range=ref_range))
 
@@ -164,41 +212,19 @@ async def _handle_file(doc: TextDocument):
         )
 
 
-__RANGE_KEY = "..range.."
-
-
-class IndexingLoader(SafeLoader):
-    def construct_mapping(self, node, deep=False):
-        __RANGE_KEY = "..range.."
-        mapping = super(IndexingLoader, self).construct_mapping(node=node, deep=deep)
-        mapping[__RANGE_KEY] = types.Range(
-            start=types.Position(
-                line=node.start_mark.line, character=node.start_mark.column
-            ),
-            end=types.Position(line=node.end_mark.line, character=node.end_mark.column),
-        )
-        return mapping
-
-
-def _range_stripper(resource: Any):
-    if isinstance(resource, dict):
-        return {
-            key: _range_stripper(value)
-            for key, value in resource.items()
-            if key != __RANGE_KEY
-        }
-
-    if isinstance(resource, list):
-        return [_range_stripper(value) for value in resource]
-
-    return resource
-
-
 __RANGE_INDEX = defaultdict[str, dict[str, dict]](defaultdict[str, dict])
+__RANGE_REF_INDEX = defaultdict[str, dict[str, str]](defaultdict[str, str])
 
 
 def _range_key(resource_range: types.Range):
     return f"{resource_range.start.line}.{resource_range.start.line}:{resource_range.end.line}.{resource_range.end.line}"
+
+
+def _range_key_to_lines(key: str) -> tuple[int, int]:
+    start, end = key.split(":")
+    start_line = int(start.split(".")[0])
+    end_line = int(end.split(".")[0])
+    return (start_line, end_line)
 
 
 __DIAGNOSTICS = defaultdict[str, list[types.Diagnostic]](list[types.Diagnostic])
@@ -226,6 +252,7 @@ def _reset_file_state(path_key: str):
     __PATH_REF_INDEX[path_key] = set()
     __DIAGNOSTICS[path_key] = []
     __RANGE_INDEX[path_key] = {}
+    __RANGE_REF_INDEX[path_key] = {}
 
 
 async def _process_file(
@@ -300,8 +327,12 @@ async def _process_file(
 
         __RANGE_INDEX[path][_range_key(resource_range)] = raw_spec
 
+        __RANGE_REF_INDEX[path][
+            _range_key(metadata.get(__RANGE_KEY))
+        ] = resource_index_key
+
         try:
-            range_stripped = _range_stripper(copy.deepcopy(raw_spec))
+            range_stripped = range_stripper(copy.deepcopy(raw_spec))
             await cache.prepare_and_cache(
                 resource_class=resource_class,
                 preparer=preparer,
@@ -484,6 +515,7 @@ def _process_workflow_step(path, step_range, step, raw_step):
     if ref_name and ref_range:
         __PATH_REF_INDEX[path].add(ref_name)
         __REF_RANGE_INDEX[ref_name][path].append(ref_range)
+        __RANGE_REF_INDEX[path][_range_key(ref_range)] = ref_name
 
     raw_inputs = raw_step.get("inputs", {})
     inputs_range = raw_inputs.get(__RANGE_KEY, step_range)
