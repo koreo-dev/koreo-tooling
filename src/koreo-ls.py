@@ -13,6 +13,9 @@ from pygls.workspace import TextDocument
 from lsprotocol import types
 
 from koreo import cache
+from koreo.function_test.registry import get_function_tests
+from koreo.function_test.run import run_function_test
+from koreo.function_test.structure import FunctionTest
 from koreo.result import is_unwrapped_ok
 from koreo.workflow.structure import Workflow, ErrorStep
 
@@ -217,6 +220,8 @@ async def _handle_file(doc: TextDocument):
         return
 
     _process_workflows(path=doc.path)
+
+    await _run_function_tests(path=doc.path)
 
     dupes = _check_for_duplicate_resources(path=doc.path)
     has_errors = has_errors or dupes
@@ -566,6 +571,115 @@ def _process_workflow_step(path, step_range, step, raw_step):
             has_error = True
 
     return has_error
+
+
+async def _run_function_tests(path: str):
+    tests_to_run = []
+    for resource_key in __PATH_RESOURCE_INDEX[path]:
+        if resource_key.startswith("FunctionTest:"):
+            test_name = resource_key.split(":", 1)[1]
+            tests_to_run.append(test_name)
+
+        if resource_key.startswith("Function:"):
+            function_name = resource_key.split(":", 1)[1]
+            function_tests = get_function_tests(function_name)
+            tests_to_run.extend(function_tests)
+
+    for test_key in tests_to_run:
+        test = cache.get_resource_from_cache(
+            resource_class=FunctionTest, cache_key=test_key
+        )
+        if not test:
+            server.window_log_message(
+                params=types.LogMessageParams(
+                    type=types.MessageType.Error,
+                    message=f"Failed to find FunctionTest ('{test_key}') in Koreo cache.",
+                )
+            )
+            continue
+
+        await _run_function_test(path, test_key, test)
+
+
+async def _run_function_test(path: str, test_name: str, test: FunctionTest):
+    test_outcome = await run_function_test(location=test_name, function_test=test)
+
+    if not is_unwrapped_ok(test_outcome):
+        ranges = __RESOURCE_RANGE_INDEX[f"FunctionTest:{test_name}"][path]
+        for range in ranges:
+            __DIAGNOSTICS[path].append(
+                types.Diagnostic(
+                    message=f"FunctionTest ('{test_name}') failed with '{test_outcome.message}'.",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=range,
+                )
+            )
+
+    actual, expected = test_outcome
+    match = _dict_compare(actual, expected, base="")
+
+    server.window_log_message(
+        params=types.LogMessageParams(
+            type=types.MessageType.Info,
+            message=f"{test_name}: ('{match}')",
+        )
+    )
+
+
+def _dict_compare(lhs: dict, rhs: dict, base: str):
+    differences = []
+
+    lhs_keys = set(lhs.keys())
+    rhs_keys = set(rhs.keys())
+
+    differences.extend(f"{base}.{key}" for key in lhs_keys.difference(rhs_keys))
+    differences.extend(f"{base}.{key}" for key in rhs_keys.difference(lhs_keys))
+
+    for mutual_key in lhs_keys.intersection(rhs_keys):
+        lhs_value = lhs[mutual_key]
+        rhs_value = rhs[mutual_key]
+
+        key = f"{base}.{mutual_key}"
+
+        if type(lhs_value) != type(rhs_value):
+            differences.append(key)
+            continue
+
+        if isinstance(lhs_value, dict):
+            differences.extend(_dict_compare(lhs_value, rhs_value, base=key))
+            continue
+
+        if isinstance(lhs_value, list):
+            if not _values_match(lhs_value, rhs_value):
+                differences.append(key)
+
+            continue
+
+        if not _values_match(lhs_value, rhs_value):
+            differences.append(key)
+
+    return differences
+
+
+def _values_match(lhs, rhs) -> bool:
+    if type(lhs) != type(rhs):
+        return False
+
+    if isinstance(lhs, dict):
+        diffs = _dict_compare(lhs, rhs, base="")
+        return not diffs
+
+    if isinstance(lhs, list):
+        if len(lhs) != len(rhs):
+            return False
+
+        for lhs_value, rhs_value in zip(lhs, rhs):
+            if not _values_match(lhs_value, rhs_value):
+                return False
+
+        return True
+
+    return lhs == rhs
 
 
 if __name__ == "__main__":
