@@ -18,7 +18,13 @@ from koreo.workflow.structure import Workflow, ErrorStep
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
-from koreo_tooling.indexing import IndexingLoader, __RANGE_KEY, range_stripper
+from koreo_tooling.indexing import (
+    IndexingLoader,
+    TokenTypes,
+    _RANGE_KEY,
+    _SEMANTIC_TOKENS_KEY,
+    range_stripper,
+)
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -182,6 +188,19 @@ async def goto_reference(params: types.ReferenceParams):
     return references
 
 
+@server.feature(
+    types.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
+    types.SemanticTokensLegend(token_types=TokenTypes, token_modifiers=[]),
+)
+async def semantic_tokens_full(params: types.ReferenceParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    if not doc.path in __SEMANTIC_TOKEN_INDEX:
+        await _handle_file(doc=doc)
+
+    tokens = __SEMANTIC_TOKEN_INDEX[doc.path]
+    return types.SemanticTokens(data=tokens)
+
+
 async def _handle_file(doc: TextDocument):
     has_errors = False
     _reset_file_state(doc.path)
@@ -212,6 +231,7 @@ async def _handle_file(doc: TextDocument):
 
 __RANGE_INDEX = defaultdict[str, dict[str, dict]](defaultdict[str, dict])
 __RANGE_REF_INDEX = defaultdict[str, dict[str, str]](defaultdict[str, str])
+__SEMANTIC_TOKEN_INDEX = defaultdict[str, list[int]](list)
 
 
 def _range_key(resource_range: types.Range):
@@ -251,6 +271,7 @@ def _reset_file_state(path_key: str):
     __DIAGNOSTICS[path_key] = []
     __RANGE_INDEX[path_key] = {}
     __RANGE_REF_INDEX[path_key] = {}
+    __SEMANTIC_TOKEN_INDEX[path_key] = []
 
 
 async def _process_file(
@@ -269,6 +290,9 @@ async def _process_file(
 
     yaml_blocks = yaml.load_all(doc.source, Loader=IndexingLoader)
     for yaml_block in yaml_blocks:
+        tokens = yaml_block.get(_SEMANTIC_TOKENS_KEY)
+        __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
+
         try:
             api_version = yaml_block.get("apiVersion")
             kind = yaml_block.get("kind")
@@ -281,7 +305,7 @@ async def _process_file(
             )
             continue
 
-        resource_range = yaml_block.get(__RANGE_KEY)
+        resource_range = yaml_block.get(_RANGE_KEY)
 
         if api_version not in {
             constants.API_VERSION,
@@ -326,7 +350,7 @@ async def _process_file(
         __RANGE_INDEX[path][_range_key(resource_range)] = raw_spec
 
         __RANGE_REF_INDEX[path][
-            _range_key(metadata.get(__RANGE_KEY))
+            _range_key(metadata.get(_RANGE_KEY))
         ] = resource_index_key
 
         try:
@@ -445,7 +469,7 @@ def _process_workflow(
 
     for idx, step in enumerate(workflow.steps):
         raw_step = raw_steps[idx]
-        step_range = raw_step.get(__RANGE_KEY)
+        step_range = raw_step.get(_RANGE_KEY)
 
         step_error = _process_workflow_step(path, step_range, step, raw_step)
 
@@ -503,12 +527,12 @@ def _process_workflow_step(path, step_range, step, raw_step):
     function_ref_block = raw_step.get("functionRef")
     if function_ref_block:
         ref_name = f"Function:{function_ref_block.get("name")}"
-        ref_range = function_ref_block.get(__RANGE_KEY, step_range)
+        ref_range = function_ref_block.get(_RANGE_KEY, step_range)
 
     workflow_ref_block = raw_step.get("workflowRef")
     if workflow_ref_block:
         ref_name = f"Workflow:{function_ref_block.get("name")}"
-        ref_range = workflow_ref_block.get(__RANGE_KEY, step_range)
+        ref_range = workflow_ref_block.get(_RANGE_KEY, step_range)
 
     if ref_name and ref_range:
         __PATH_REF_INDEX[path].add(ref_name)
@@ -516,7 +540,7 @@ def _process_workflow_step(path, step_range, step, raw_step):
         __RANGE_REF_INDEX[path][_range_key(ref_range)] = ref_name
 
     raw_inputs = raw_step.get("inputs", {})
-    inputs_range = raw_inputs.get(__RANGE_KEY, step_range)
+    inputs_range = raw_inputs.get(_RANGE_KEY, step_range)
 
     inputs = call_arg_compare(step.provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
