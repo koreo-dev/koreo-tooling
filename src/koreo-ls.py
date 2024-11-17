@@ -169,15 +169,15 @@ async def goto_reference(params: types.ReferenceParams):
 
     references = []
 
+    for ref_path, ref_ranges in uses.items():
+        for ref_range in ref_ranges:
+            references.append(types.Location(uri=ref_path, range=ref_range))
+
     definition_index = __RESOURCE_RANGE_INDEX[resource_key]
 
     for def_path, def_ranges in definition_index.items():
         for def_range in def_ranges:
             references.append(types.Location(uri=def_path, range=def_range))
-
-    for ref_path, ref_ranges in uses.items():
-        for ref_range in ref_ranges:
-            references.append(types.Location(uri=ref_path, range=ref_range))
 
     return references
 
