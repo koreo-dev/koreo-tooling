@@ -20,6 +20,7 @@ TokenTypes = [
     "parameter",
     "property",
     "string",
+    "variable",
     "typeParameter",
 ]
 
@@ -138,8 +139,8 @@ SEMANTIC_TYPE_STRUCTURE = {
                         "inputs": {
                             "type": TokenTypes.index("property"),
                             "type_map": {
-                                ".": {
-                                    "type": TokenTypes.index("argument"),
+                                "*": {
+                                    "type": TokenTypes.index("variable"),
                                     "type_map": {
                                         ".": TokenTypes.index("argument"),
                                     },
@@ -219,6 +220,8 @@ class IndexingLoader(SafeLoader):
         if isinstance(node, MappingNode):
             for key, value in node.value:
                 hints = type_hint_map.get(key.value, {})
+                if not hints:
+                    hints = type_hint_map.get("*", {})
 
                 self.extract_semantic_token_info(
                     key,
