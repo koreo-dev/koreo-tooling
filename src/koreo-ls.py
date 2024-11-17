@@ -1,6 +1,5 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 import copy
 import os
 
@@ -8,7 +7,6 @@ os.environ["KOREO_DEV_TOOLING"] = "true"
 
 import nanoid
 import yaml
-from yaml.loader import SafeLoader
 
 from pygls.lsp.server import LanguageServer
 from pygls.workspace import TextDocument
