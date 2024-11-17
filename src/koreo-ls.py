@@ -104,7 +104,7 @@ async def change_processor(params):
 
 
 @server.feature(types.TEXT_DOCUMENT_DEFINITION)
-async def goto_definitiion(params):
+async def goto_definitiion(params: types.DefinitionParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     resource_key = None
@@ -140,7 +140,7 @@ async def goto_definitiion(params):
 
 
 @server.feature(types.TEXT_DOCUMENT_REFERENCES)
-async def goto_reference(params):
+async def goto_reference(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     resource_key = None
