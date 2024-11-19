@@ -616,14 +616,30 @@ async def _run_function_test(path: str, test_name: str, test: FunctionTest):
             )
 
     actual, expected = test_outcome
-    match = _dict_compare(actual, expected, base="")
+    wrong_fields = _dict_compare(actual, expected, base="")
+
+    if not wrong_fields:
+        return
 
     server.window_log_message(
         params=types.LogMessageParams(
             type=types.MessageType.Info,
-            message=f"{test_name}: ('{match}')",
+            message=f"{test_name}: ('{wrong_fields}')",
         )
     )
+
+    test_ranges = __RESOURCE_RANGE_INDEX[f"FunctionTest:{test_name}"][path]
+    for test_range in test_ranges:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message=f"Mismatch: {wrong_fields}",
+                severity=types.DiagnosticSeverity.Error,
+                range=types.Range(
+                    start=test_range.start,
+                    end=types.Position(line=test_range.start.line + 5, character=0),
+                ),
+            )
+        )
 
 
 def _dict_compare(lhs: dict, rhs: dict, base: str):
