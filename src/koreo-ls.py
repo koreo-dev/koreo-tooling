@@ -16,16 +16,17 @@ from koreo import cache
 from koreo.function_test.registry import get_function_tests
 from koreo.function_test.run import run_function_test
 from koreo.function_test.structure import FunctionTest
-from koreo.result import is_unwrapped_ok
 from koreo.workflow.structure import Workflow, ErrorStep
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
 from koreo_tooling.indexing import (
     IndexingLoader,
+    TokenModifiers,
     TokenTypes,
     _RANGE_KEY,
     _SEMANTIC_TOKENS_KEY,
+    _STRUCTURE_KEY,
     range_stripper,
 )
 
@@ -193,7 +194,7 @@ async def goto_reference(params: types.ReferenceParams):
 
 @server.feature(
     types.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
-    types.SemanticTokensLegend(token_types=TokenTypes, token_modifiers=[]),
+    types.SemanticTokensLegend(token_types=TokenTypes, token_modifiers=TokenModifiers),
 )
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
@@ -294,9 +295,6 @@ async def _process_file(
 
     yaml_blocks = yaml.load_all(doc.source, Loader=IndexingLoader)
     for yaml_block in yaml_blocks:
-        tokens = yaml_block.get(_SEMANTIC_TOKENS_KEY)
-        __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
-
         try:
             api_version = yaml_block.get("apiVersion")
             kind = yaml_block.get("kind")
@@ -308,6 +306,11 @@ async def _process_file(
                 )
             )
             continue
+
+        structure = yaml_block.get(_STRUCTURE_KEY)
+
+        tokens = yaml_block.get(_SEMANTIC_TOKENS_KEY)
+        __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
 
         resource_range = yaml_block.get(_RANGE_KEY)
 
@@ -364,6 +367,7 @@ async def _process_file(
                 preparer=preparer,
                 metadata=metadata,
                 spec=range_stripped,
+                _system_data=structure,
             )
 
         except Exception as err:
