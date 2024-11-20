@@ -226,12 +226,11 @@ async def _handle_file(doc: TextDocument):
     dupes = _check_for_duplicate_resources(path=doc.path)
     has_errors = has_errors or dupes
 
-    if __DIAGNOSTICS[doc.path]:
-        server.text_document_publish_diagnostics(
-            types.PublishDiagnosticsParams(
-                uri=doc.uri, version=doc.version, diagnostics=__DIAGNOSTICS[doc.path]
-            )
+    server.text_document_publish_diagnostics(
+        types.PublishDiagnosticsParams(
+            uri=doc.uri, version=doc.version, diagnostics=__DIAGNOSTICS[doc.path]
         )
+    )
 
 
 __RANGE_INDEX = defaultdict[str, dict[str, dict]](defaultdict[str, dict])
