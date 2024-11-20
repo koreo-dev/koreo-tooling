@@ -290,9 +290,10 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
 
 
 class IndexingLoader(SafeLoader):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, doc, **kwargs):
         super().__init__(*args, **kwargs)
         self.last_doc_start = (0, 0)
+        self.doc = doc
 
     def construct_document(self, node):
         doc = super().construct_document(node)
@@ -305,6 +306,7 @@ class IndexingLoader(SafeLoader):
             last_token_abs_start=self.last_doc_start,
             node=node,
             type_hint_map=doc_semantics,
+            doc=self.doc,
         )
         doc[_STRUCTURE_KEY] = structure
         doc[_SEMANTIC_TOKENS_KEY] = to_lsp_semantics(structure)
@@ -329,6 +331,7 @@ def extract_semantic_structure_info(
     last_token_abs_start: tuple[int, int],
     node,
     type_hint_map: dict[str, SemanticStructure],
+    doc,
 ):
     if isinstance(node, MappingNode):
         semantic_nodes = []
@@ -345,6 +348,7 @@ def extract_semantic_structure_info(
                 type_hint=hints.get("type", "keyword"),
                 modifier=hints.get("modifier", []),
                 type_hint_map={},
+                doc=doc,
             )
             semantic_nodes.extend(key_semantic_nodes)
 
@@ -358,6 +362,7 @@ def extract_semantic_structure_info(
                 type_hint=value_semantic_info.get("type"),
                 modifier=value_semantic_info.get("modifier", []),
                 type_hint_map=sub_structure,
+                doc=doc,
             )
             semantic_nodes.extend(value_semantic_nodes)
 
@@ -374,6 +379,7 @@ def extract_semantic_structure_info(
                 type_hint=None,
                 modifier=[],
                 type_hint_map=type_hint_map,
+                doc=doc,
             )
             semantic_nodes.extend(value_semantic_nodes)
         return semantic_nodes, new_last_start
@@ -387,6 +393,7 @@ def extract_semantic_structure_info(
         type_hint=value_semantic_info.get("type"),
         modifier=value_semantic_info.get("modifier", []),
         type_hint_map=type_hint_map,
+        doc=doc,
     )
 
 
@@ -397,6 +404,7 @@ def _extract_value_semantic_info(
     type_hint: TokenType | None,
     modifier: list[Modifier],
     type_hint_map: dict[str, SemanticStructure],
+    doc,
 ):
     if isinstance(node, (MappingNode, SequenceNode)):
         return extract_semantic_structure_info(
@@ -404,6 +412,7 @@ def _extract_value_semantic_info(
             last_token_abs_start=last_token_abs_start,
             node=node,
             type_hint_map=type_hint_map,
+            doc=doc,
         )
 
     if type_hint:
@@ -420,6 +429,14 @@ def _extract_value_semantic_info(
     node_line = node.start_mark.line
     node_column = node.start_mark.column
 
+    char_offset = node_column - (0 if node_line > last_line else last_column)
+
+    if node_line == node.end_mark.line:
+        value_len = len(node.value)
+    else:
+        line_data = doc.lines[node_line]
+        value_len = len(line_data) - node_column
+
     nodes = []
     while True:
         nodes.append(
@@ -427,17 +444,15 @@ def _extract_value_semantic_info(
                 key=key_path,
                 position=RelativePosition(
                     line_offset=node_line - last_line,
-                    char_offset=(
-                        node_column - (0 if node_line > last_line else last_column)
-                    ),
-                    length=len(node.value),
+                    char_offset=char_offset,
+                    length=value_len,
                 ),
                 node_type=node_type,
                 modifier=modifier,
             )
         )
 
-        if node_line >= node.end_mark.line:
+        if node_line + 1 >= node.end_mark.line:
             break
 
         last_line = node_line
@@ -445,6 +460,10 @@ def _extract_value_semantic_info(
 
         node_line += 1
         node_column = 0
+
+        line_data = doc.lines[node_line]
+        char_offset = len(line_data) - len(line_data.lstrip())
+        value_len = len(line_data.strip())
 
     return (
         nodes,

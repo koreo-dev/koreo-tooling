@@ -6,7 +6,6 @@ import os
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
 import nanoid
-import yaml
 
 from pygls.lsp.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -279,6 +278,18 @@ def _reset_file_state(path_key: str):
     __SEMANTIC_TOKEN_INDEX[path_key] = []
 
 
+def _load_all_yamls(stream, Loader, doc):
+    """
+    Parse all YAML documents in a stream
+    and produce corresponding Python objects.
+    """
+    loader = Loader(stream, doc=doc)
+    try:
+        while loader.check_data():
+            yield loader.get_data()
+    finally:
+        loader.dispose()
+
 async def _process_file(
     doc: TextDocument,
 ):
@@ -293,7 +304,7 @@ async def _process_file(
         )
     )
 
-    yaml_blocks = yaml.load_all(doc.source, Loader=IndexingLoader)
+    yaml_blocks = _load_all_yamls(doc.source, Loader=IndexingLoader, doc=doc)
     for yaml_block in yaml_blocks:
         try:
             api_version = yaml_block.get("apiVersion")
