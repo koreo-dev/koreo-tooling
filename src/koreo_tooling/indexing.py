@@ -432,7 +432,7 @@ def _extract_value_semantic_info(
     char_offset = node_column - (0 if node_line > last_line else last_column)
 
     if node_line == node.end_mark.line:
-        value_len = len(node.value)
+        value_len = node.end_mark.column - node_column
     else:
         line_data = doc.lines[node_line]
         value_len = len(line_data) - node_column
