@@ -29,6 +29,9 @@ async def run_function_tests(
             function_tests = get_function_tests(function_name)
             tests_to_run.update(function_tests)
 
+    if not tests_to_run:
+        return []
+
     tasks = []
     async with asyncio.TaskGroup() as task_group:
         for test_key in tests_to_run:

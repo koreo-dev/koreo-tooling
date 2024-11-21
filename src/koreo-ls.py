@@ -62,12 +62,6 @@ async def completions(params: types.CompletionParams):
 
 @server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)
 async def change_workspace_config(params):
-    server.window_log_message(
-        params=types.LogMessageParams(
-            type=types.MessageType.Debug,
-            message=f"folders: {server.workspace.folders}",
-        )
-    )
 
     suffixes = ("yaml", "yml", "koreo")
 
