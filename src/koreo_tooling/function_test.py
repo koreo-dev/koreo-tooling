@@ -180,6 +180,20 @@ async def _run_function_test(
                 )
             )
 
+    if not (
+        test_outcome.expected_resource
+        or test_outcome.expected_outcome
+        or test_outcome.expected_ok_value
+    ):
+        diagnostics.extend(
+            types.Diagnostic(
+                message=f"FunctionTest ('{test_name}') must define expectedResource, expectedOutcome, or expectedOkValue.",
+                severity=types.DiagnosticSeverity.Error,
+                range=range,
+            )
+            for range in ranges
+        )
+
     return diagnostics
 
 
