@@ -116,8 +116,9 @@ async def _run_function_test(
                     for range in ranges
                 )
         case Retry(message=message, delay=delay, location=location):
-            if test_outcome.expected_outcome is not None and not isinstance(
-                test_outcome.expected_outcome, Skip
+            if not test_outcome.expected_resource or (
+                test_outcome.expected_outcome is not None
+                and not isinstance(test_outcome.expected_outcome, Skip)
             ):
                 diagnostics.extend(
                     types.Diagnostic(
@@ -127,6 +128,28 @@ async def _run_function_test(
                     )
                     for range in ranges
                 )
+            elif test_outcome.expected_ok_value:
+                diagnostics.extend(
+                    types.Diagnostic(
+                        message=(
+                            f"FunctionTest ('{test_name}') failed. Can not "
+                            "assert expected ok-value when resource modifications "
+                            "requested. Ensure currentResource matches Function materializers."
+                        ),
+                        severity=types.DiagnosticSeverity.Error,
+                        range=range,
+                    )
+                    for range in ranges
+                )
+
+            diagnostics.extend(
+                _check_ok_value(
+                    "resource",
+                    test_outcome.actual_resource,
+                    test_outcome.expected_resource,
+                    ranges,
+                )
+            )
 
         case Ok(data=okValue) | okValue:
             if test_outcome.expected_outcome is not None and not isinstance(
@@ -141,20 +164,21 @@ async def _run_function_test(
                     for range in ranges
                 )
 
+            if test_outcome.expected_resource:
+                diagnostics.extend(
+                    types.Diagnostic(
+                        message=f"FunctionTest ('{test_name}') failed. Can not assert expectedResource unless changes requested.",
+                        severity=types.DiagnosticSeverity.Error,
+                        range=range,
+                    )
+                    for range in ranges
+                )
+
             diagnostics.extend(
                 _check_ok_value(
                     "ok-value", okValue, test_outcome.expected_ok_value, ranges
                 )
             )
-
-    diagnostics.extend(
-        _check_ok_value(
-            "resource",
-            test_outcome.actual_resource,
-            test_outcome.expected_resource,
-            ranges,
-        )
-    )
 
     return diagnostics
 
