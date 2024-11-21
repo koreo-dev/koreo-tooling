@@ -466,7 +466,7 @@ def data_structure_to_crd(
     pluralized = f"{kind.lower()}s"
     return {
         "apiVersion": constants.CRD_API_VERSION,
-        "kind": CRD_KIND,
+        "kind": constants.CRD_KIND,
         "metadata": {"name": f"{pluralized}.{api_group}"},
         "spec": {
             "scope": "Namespaced",
