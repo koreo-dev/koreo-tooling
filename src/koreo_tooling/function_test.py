@@ -106,7 +106,7 @@ async def _run_function_test(
                     for range in ranges
                 )
         case PermFail(message=message, location=location):
-            if not isinstance(test_outcome.expected_outcome, Skip):
+            if not isinstance(test_outcome.expected_outcome, PermFail):
                 diagnostics.extend(
                     types.Diagnostic(
                         message=f"FunctionTest ('{test_name}') failed. Unexpected PermFail(message='{message}', location='{location}').",
@@ -118,7 +118,7 @@ async def _run_function_test(
         case Retry(message=message, delay=delay, location=location):
             if not test_outcome.expected_resource or (
                 test_outcome.expected_outcome is not None
-                and not isinstance(test_outcome.expected_outcome, Skip)
+                and not isinstance(test_outcome.expected_outcome, Retry)
             ):
                 diagnostics.extend(
                     types.Diagnostic(
