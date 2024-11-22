@@ -135,6 +135,65 @@ def hover(params: types.HoverParams):
     )
 
 
+@server.feature(types.TEXT_DOCUMENT_INLAY_HINT)
+def inlay_hints(params: types.InlayHintParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    test_results = __TEST_RESULTS[doc.path]
+    if not test_results:
+        return []
+
+    start_line = params.range.start.line
+    end_line = params.range.end.line
+
+    resource_keys: list[tuple[str, str]] = []
+
+    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
+        range_start_line, range_end_line = _range_key_to_lines(ref_range)
+        if range_end_line < start_line:
+            continue
+
+        if range_start_line > end_line:
+            continue
+
+        resource_keys.append((__RANGE_REF_INDEX[doc.path][ref_range], ref_range))
+
+    test_keys = [
+        (key, range)
+        for (key, range) in resource_keys
+        if key.startswith("FunctionTest:")
+    ]
+    if not test_keys:
+        return []
+
+    inlays = []
+    for test_key, ref_range in test_keys:
+        test_name = test_key.split(":")[1]
+        result = __TEST_RESULTS[doc.path].get(test_name)
+
+        if not result:
+            inlay = "Not Ran"
+        elif result.success:
+            inlay = "Success"
+        else:
+            inlay = "Error"
+
+        range_start_line, _ = _range_key_to_lines(ref_range)
+        char = len(doc.lines[range_start_line])
+
+        inlays.append(
+            types.InlayHint(
+                label=inlay,
+                kind=types.InlayHintKind.Type,
+                padding_left=True,
+                padding_right=True,
+                position=types.Position(line=range_start_line, character=char),
+            )
+        )
+
+    return inlays
+
+
 @server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)
 async def change_workspace_config(params):
 
