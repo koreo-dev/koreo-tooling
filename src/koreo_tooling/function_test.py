@@ -5,7 +5,7 @@ from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 
 from koreo import cache
-from koreo.result import DepSkip, Ok, PermFail, Retry, Skip
+from koreo.result import DepSkip, Ok, PermFail, Retry, Skip, is_unwrapped_ok
 
 
 from koreo.function_test.registry import get_function_tests
@@ -74,6 +74,14 @@ async def run_function_tests(
 
 
 async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
+    if not is_unwrapped_ok(test.function_under_test):
+        return TestResults(
+            success=False,
+            messages=[f"{test.function_under_test}"],
+            resource_field_errors=None,
+            outcome_fields_errors=None,
+        )
+
     try:
         test_outcome = await run_function_test(location=test_name, function_test=test)
     except Exception as err:
