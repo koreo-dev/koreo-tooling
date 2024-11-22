@@ -13,7 +13,7 @@ from .semantics import (
     TypeIndex,
 )
 
-SYMBOL = re.compile(r"\w+")
+SYMBOL = re.compile(r"[\w@]+")
 OP = re.compile(r"->|[\{\}\(\)\.,+:*-='\"\[\]^$!<>|?]")
 SPACE = re.compile(r"\s+")
 
