@@ -17,7 +17,7 @@ from koreo.workflow.structure import Workflow, ErrorStep
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
-from koreo_tooling.function_test import run_function_tests
+from koreo_tooling.function_test import TestResults, run_function_tests
 from koreo_tooling.indexing import (
     IndexingLoader,
     TokenModifiers,
@@ -58,6 +58,80 @@ async def completions(params: types.CompletionParams):
             )
 
     return types.CompletionList(is_incomplete=True, items=items)
+
+
+@server.feature(types.TEXT_DOCUMENT_HOVER)
+def hover(params: types.HoverParams):
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    resource_key = None
+    last_key = None
+    last_key_start_line = 0
+    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
+        range_start_line, range_end_line = _range_key_to_lines(ref_range)
+        if range_start_line > params.position.line:
+            continue
+
+        if (
+            range_start_line > last_key_start_line
+            and range_end_line >= params.position.line
+        ):
+            last_key = ref_range
+            last_key_start_line = range_start_line
+
+    if not last_key:
+        return None
+
+    resource_key = __RANGE_REF_INDEX[doc.path][last_key]
+    if not resource_key:
+        return None
+
+    if resource_key.startswith("FunctionTest"):
+        test_name = resource_key.split(":")[1]
+        result = __TEST_RESULTS[doc.path].get(test_name)
+        hover_content = [f"# {test_name}"]
+        if not result:
+            hover_content.append(f"not yet ran")
+        else:
+
+            if result.success:
+                hover_content.append(f"*success*")
+            else:
+                if result.messages:
+                    hover_content.append("## Failure")
+                    hover_content.extend(result.messages)
+
+                if result.resource_field_errors:
+                    hover_content.append("## Field Mismatches")
+                    hover_content.extend(result.resource_field_errors)
+
+                if result.outcome_fields_errors:
+                    hover_content.append("## Outcome Mismatches")
+                    hover_content.extend(result.outcome_fields_errors)
+
+        return types.Hover(
+            contents=types.MarkupContent(
+                kind=types.MarkupKind.Markdown,
+                value="\n".join(hover_content),
+            ),
+            range=types.Range(
+                start=types.Position(line=params.position.line, character=0),
+                end=types.Position(line=params.position.line + 1, character=0),
+            ),
+        )
+
+    hover_content = [f"# {resource_key}"]
+
+    return types.Hover(
+        contents=types.MarkupContent(
+            kind=types.MarkupKind.Markdown,
+            value="\n".join(hover_content),
+        ),
+        range=types.Range(
+            start=types.Position(line=params.position.line, character=0),
+            end=types.Position(line=params.position.line + 1, character=0),
+        ),
+    )
 
 
 @server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)
@@ -197,14 +271,40 @@ async def _handle_file(doc: TextDocument):
 
     _process_workflows(path=doc.path)
 
-    test_diagnostics = await run_function_tests(
+    test_results = await run_function_tests(
         server=server,
-        path=doc.path,
         path_resources=__PATH_RESOURCE_INDEX[doc.path],
-        resource_range_index=__RESOURCE_RANGE_INDEX,
     )
-    if test_diagnostics:
-        __DIAGNOSTICS[doc.path].extend(test_diagnostics)
+    __TEST_RESULTS[doc.path] = test_results
+    if test_results:
+        for test_key, result in test_results.items():
+            if result.success:
+                continue
+
+            messages = []
+            if result.messages:
+                messages.append(f"Failures: {'; '.join(result.messages)}")
+
+            if result.resource_field_errors:
+                messages.append(
+                    f"Field errors: {', '.join(result.resource_field_errors)}"
+                )
+
+            if result.outcome_fields_errors:
+                messages.append(
+                    f"Outcome errors: {', '.join(result.outcome_fields_errors)}"
+                )
+
+            __DIAGNOSTICS[doc.path].extend(
+                types.Diagnostic(
+                    message=";".join(messages),
+                    severity=types.DiagnosticSeverity.Error,
+                    range=range,
+                )
+                for range in __RESOURCE_RANGE_INDEX[f"FunctionTest:{test_key}"][
+                    doc.path
+                ]
+            )
 
     duplicate_diagnostics = _check_for_duplicate_resources(path=doc.path)
     if duplicate_diagnostics:
@@ -217,6 +317,7 @@ async def _handle_file(doc: TextDocument):
     )
 
 
+__TEST_RESULTS = defaultdict[str, dict[str, TestResults]](defaultdict[str, TestResults])
 __RANGE_INDEX = defaultdict[str, dict[str, dict]](defaultdict[str, dict])
 __RANGE_REF_INDEX = defaultdict[str, dict[str, str]](defaultdict[str, str])
 __SEMANTIC_TOKEN_INDEX = defaultdict[str, list[int]](list)
@@ -260,6 +361,7 @@ def _reset_file_state(path_key: str):
     __RANGE_INDEX[path_key] = {}
     __RANGE_REF_INDEX[path_key] = {}
     __SEMANTIC_TOKEN_INDEX[path_key] = []
+    __TEST_RESULTS[path_key] = {}
 
 
 def _load_all_yamls(stream, Loader, doc):

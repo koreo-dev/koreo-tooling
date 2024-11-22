@@ -1,4 +1,5 @@
 import asyncio
+from typing import NamedTuple
 
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
@@ -12,12 +13,17 @@ from koreo.function_test.run import run_function_test
 from koreo.function_test.structure import FunctionTest
 
 
+class TestResults(NamedTuple):
+    success: bool
+    messages: list[str] | None
+    resource_field_errors: list[str] | None
+    outcome_fields_errors: list[str] | None
+
+
 async def run_function_tests(
     server: LanguageServer,
-    path: str,
     path_resources: set[str],
-    resource_range_index: dict[str, dict[str, list[types.Range]]],
-):
+) -> dict[str, TestResults]:
     tests_to_run = set[str]()
     for resource_key in path_resources:
         if resource_key.startswith("FunctionTest:"):
@@ -30,7 +36,7 @@ async def run_function_tests(
             tests_to_run.update(function_tests)
 
     if not tests_to_run:
-        return []
+        return {}
 
     tasks = []
     async with asyncio.TaskGroup() as task_group:
@@ -47,10 +53,9 @@ async def run_function_tests(
                 )
                 continue
 
-            ranges = resource_range_index[f"FunctionTest:{test_key}"][path]
             tasks.append(
                 task_group.create_task(
-                    _run_function_test(test_key, test, ranges), name=test_key
+                    _run_function_test(test_key, test), name=test_key
                 )
             )
 
@@ -64,167 +69,126 @@ async def run_function_tests(
                 )
             )
 
-    return [diagnostic for task in done for diagnostic in task.result()]
+    results = {task.get_name(): task.result() for task in done}
+    return results
 
 
-async def _run_function_test(
-    test_name: str, test: FunctionTest, ranges: list[types.Range]
-) -> list[types.Diagnostic]:
+async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
     try:
         test_outcome = await run_function_test(location=test_name, function_test=test)
     except Exception as err:
-        return [
-            types.Diagnostic(
-                message=f"FunctionTest ('{test_name}') failed. Unknown {err}.",
-                severity=types.DiagnosticSeverity.Error,
-                range=range,
-            )
-            for range in ranges
-        ]
+        return TestResults(
+            success=False,
+            messages=[f"Unknown {err}."],
+            resource_field_errors=None,
+            outcome_fields_errors=None,
+        )
 
-    diagnostics: list[types.Diagnostic] = []
+    success = True
+    messages = []
+    resource_field_errors = []
+    outcome_fields_errors = []
 
     match test_outcome.outcome:
         case DepSkip(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, DepSkip):
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=f"FunctionTest ('{test_name}') failed. Unexpected DepSkip(message='{message}', location='{location}'.",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
+                success = False
+                messages.append(
+                    f"Unexpected DepSkip(message='{message}', location='{location}'."
                 )
         case Skip(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, Skip):
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=f"FunctionTest ('{test_name}') failed. Unexpected Skip(message='{message}', location='{location}').",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
+                success = False
+                messages.append(
+                    f"Unexpected Skip(message='{message}', location='{location}')."
                 )
         case PermFail(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, PermFail):
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=f"FunctionTest ('{test_name}') failed. Unexpected PermFail(message='{message}', location='{location}').",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
+                success = False
+                messages.append(
+                    f"Unexpected PermFail(message='{message}', location='{location}')."
                 )
         case Retry(message=message, delay=delay, location=location):
             if not test_outcome.expected_resource or (
                 test_outcome.expected_outcome is not None
                 and not isinstance(test_outcome.expected_outcome, Retry)
             ):
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=f"FunctionTest ('{test_name}') failed. Unexpected Retry(message='{message}', delay={delay}, location='{location}').",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
+                success = False
+                messages.append(
+                    f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."
                 )
             elif test_outcome.expected_ok_value:
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=(
-                            f"FunctionTest ('{test_name}') failed. Can not "
-                            "assert expected ok-value when resource modifications "
-                            "requested. Ensure currentResource matches Function materializers."
-                        ),
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
+                success = False
+                messages.append(
+                    "Can not assert expected ok-value when resource "
+                    "modifications requested. Ensure currentResource matches "
+                    "materializer."
                 )
 
-            diagnostics.extend(
-                _check_ok_value(
-                    "resource",
-                    test_outcome.actual_resource,
-                    test_outcome.expected_resource,
-                    ranges,
-                )
+            excpect_resource_matched, resource_field_errors = _check_ok_value(
+                test_outcome.actual_resource,
+                test_outcome.expected_resource,
             )
+            success = success and excpect_resource_matched
 
         case Ok(data=okValue) | okValue:
             if test_outcome.expected_outcome is not None and not isinstance(
                 test_outcome.expected_outcome, Ok
             ):
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=f"FunctionTest ('{test_name}') failed. Unexpected Ok(...).",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
-                )
+                success = False
+                messages.append("Unexpected Ok(...).")
 
             if test_outcome.expected_resource:
-                diagnostics.extend(
-                    types.Diagnostic(
-                        message=f"FunctionTest ('{test_name}') failed. Can not assert expectedResource unless changes requested.",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=range,
-                    )
-                    for range in ranges
+                success = False
+                messages.append(
+                    "Can not assert expectedResource unless changes requested."
                 )
 
-            diagnostics.extend(
-                _check_ok_value(
-                    "ok-value", okValue, test_outcome.expected_ok_value, ranges
-                )
+            excpect_ok_matched, outcome_fields_errors = _check_ok_value(
+                okValue, test_outcome.expected_ok_value
             )
+            success = success and excpect_ok_matched
 
     if not (
         test_outcome.expected_resource
         or test_outcome.expected_outcome
         or test_outcome.expected_ok_value
     ):
-        diagnostics.extend(
-            types.Diagnostic(
-                message=f"FunctionTest ('{test_name}') must define expectedResource, expectedOutcome, or expectedOkValue.",
-                severity=types.DiagnosticSeverity.Error,
-                range=range,
-            )
-            for range in ranges
+        success = False
+        messages.append(
+            "Must define expectedResource, expectedOutcome, or expectedOkValue."
         )
 
-    return diagnostics
+    return TestResults(
+        success=success,
+        messages=messages,
+        resource_field_errors=resource_field_errors,
+        outcome_fields_errors=outcome_fields_errors,
+    )
 
 
 def _check_ok_value(
-    thing: str, actual: dict | None, expected: dict | None, ranges: list[types.Range]
-) -> list[types.Diagnostic]:
+    actual: dict | None, expected: dict | None
+) -> tuple[bool, list[str]]:
+    success = True
+
     if expected is None:
-        return []
+        return success, []
+
+    mismatches = []
 
     if actual is None:
-        return [
-            types.Diagnostic(
-                message=f"Actual {thing} was unexpectedly `None`",
-                severity=types.DiagnosticSeverity.Error,
-                range=range,
-            )
-            for range in ranges
-        ]
+        success = False
+        mismatches.append("Actual value was unexpectedly `None`")
+        return success, mismatches
 
     wrong_fields = _dict_compare(actual, expected, base="")
     if not wrong_fields:
-        return []
+        return success, []
 
-    return [
-        types.Diagnostic(
-            message=f"Mismatched {thing} fields: {wrong_fields}",
-            severity=types.DiagnosticSeverity.Error,
-            range=range,
-        )
-        for range in ranges
-    ]
+    success = False
+    mismatches.extend(wrong_fields)
+    return success, mismatches
 
 
 def _dict_compare(lhs: dict, rhs: dict, base: str):
