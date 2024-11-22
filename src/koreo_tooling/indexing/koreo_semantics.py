@@ -13,7 +13,6 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
             "sub_structure": {
                 VALUE: {
                     "type": "namespace",
-                    "modifier": [Modifier.definition],
                 },
             },
         },
@@ -114,7 +113,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
     "Workflow": {
         "apiVersion": {
             "sub_structure": {
-                VALUE: {"type": "namespace", "modifier": [Modifier.definition]},
+                VALUE: {"type": "namespace"},
             },
         },
         "kind": {"sub_structure": {VALUE: {"type": "type"}}},
@@ -206,6 +205,38 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
         },
     },
     ALL: {
+        "apiVersion": {
+            "sub_structure": {
+                VALUE: {
+                    "type": "namespace",
+                },
+            },
+        },
+        "kind": {
+            "sub_structure": {
+                VALUE: {
+                    "type": "type",
+                },
+            },
+        },
+        "metadata": {
+            "sub_structure": {
+                "name": {
+                    "sub_structure": {
+                        VALUE: {
+                            "modifier": [Modifier.definition],
+                        },
+                    },
+                },
+                "namespace": {
+                    "sub_structure": {
+                        VALUE: {
+                            "type": "namespace",
+                        },
+                    },
+                },
+            },
+        },
         ALL: {
             "type": "keyword",
         },

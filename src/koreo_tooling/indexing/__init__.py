@@ -44,7 +44,9 @@ class IndexingLoader(SafeLoader):
         doc = super().construct_document(node)
 
         doc_kind = doc.get("kind")
-        doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind, {})
+        doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
+        if not doc_semantics:
+            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(ALL, {})
 
         structure, doc_last_pos = extract_semantic_structure_info(
             key_path="",
