@@ -89,14 +89,15 @@ def hover(params: types.HoverParams):
     if resource_key.startswith("FunctionTest"):
         test_name = resource_key.split(":")[1]
         result = __TEST_RESULTS[doc.path].get(test_name)
-        hover_content = [f"# {test_name}"]
+        hover_content = []
         if not result:
-            hover_content.append(f"## test not ran")
+            hover_content.append(f"*Not ran*")
         else:
 
             if result.success:
-                hover_content.append(f"## success*")
+                hover_content.append(f"# *Success*")
             else:
+                hover_content.append("# *Error*")
                 if result.messages:
                     hover_content.append("## Failure")
                     hover_content.extend(result.messages)
