@@ -1,0 +1,271 @@
+from typing import NamedTuple
+import re
+
+
+from .semantics import (
+    Modifier,
+    NodeInfo,
+    RelativePosition,
+    SemanticStructure,
+    TokenModifiers,
+    TokenType,
+    TokenTypes,
+    TypeIndex,
+)
+
+SYMBOL = re.compile(r"\w+")
+OP = re.compile(r"->|[\{\}\(\)\.,+:*-='\"\[\]^$!<>|?]")
+SPACE = re.compile(r"\s+")
+
+NUMBER = re.compile(r"\d+")
+
+KEYWORDS = {"has", "all", "exists", "exists_one", "map", "filter"}
+
+
+class Token(NamedTuple):
+    line: int
+    offset: int
+    text: str
+
+    token_type: TokenType
+    token_modifiers: list[Modifier]
+
+
+def is_dquote(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == '"' and token.token_type == "operator"
+
+
+def is_squote(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "'" and token.token_type == "operator"
+
+
+def is_lparen(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "(" and token.token_type == "operator"
+
+
+def is_rparen(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == ")" and token.token_type == "operator"
+
+
+def is_lbracket(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "[" and token.token_type == "operator"
+
+
+def is_rbracket(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "]" and token.token_type == "operator"
+
+
+def is_lbrace(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "{" and token.token_type == "operator"
+
+
+def is_rbrace(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "}" and token.token_type == "operator"
+
+
+def is_colon(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == ":" and token.token_type == "operator"
+
+
+def parse(
+    cel_expression: str, seed_line: int = 0, seed_offset: int = 0, base_offset: int = 0
+):
+    """Convert the given expression into a list of tokens"""
+    tokens, pos_info = lex(
+        cel_expression=cel_expression,
+        seed_line=seed_line,
+        seed_offset=seed_offset,
+        base_offset=base_offset,
+    )
+
+    return (_extract_semantic_structure(tokens), pos_info)
+
+
+def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
+    """Given a list of tokens, determine their type and modifiers."""
+
+    def next(idx):
+        """Get the next token, if possible"""
+        if idx >= len(tokens) - 1:
+            return None
+
+        return tokens[idx + 1]
+
+    in_brace = False
+    in_bracket = False
+    in_paren = False
+    in_dquote = False
+    in_squote = False
+
+    nodes: list[NodeInfo] = []
+    for idx, token in enumerate(tokens):
+        if token.token_type == "operator":
+            if is_lparen(token):
+                in_paren = True
+
+            elif is_rparen(token):
+                in_paren = False
+
+            elif is_lbracket(token):
+                in_bracket = True
+
+            elif is_rbracket(token):
+                in_bracket = False
+
+            elif is_lbrace(token):
+                in_brace = True
+
+            elif is_rbrace(token):
+                in_brace = False
+
+            elif is_dquote(token):
+                in_dquote = not in_dquote
+
+            elif is_squote(token):
+                in_squote = not in_squote
+
+            nodes.append(
+                NodeInfo(
+                    key="",
+                    position=RelativePosition(
+                        line_offset=token.line,
+                        char_offset=token.offset,
+                        length=len(token.text),
+                    ),
+                    node_type=token.token_type,
+                    modifier=token.token_modifiers,
+                )
+            )
+
+            continue
+
+        token_type = ""
+        if in_dquote or in_squote:
+            if is_colon(next(idx)) and in_brace:
+                token_type = "parameter"
+            else:
+                token_type = "string"
+
+        elif token.text in KEYWORDS:
+            token_type = "keyword"
+
+        elif is_lparen(next(idx)):
+            token_type = "function"
+
+        elif is_colon(next(idx)) and in_brace:
+            token_type = "parameter"
+
+        else:
+            if NUMBER.match(token.text):
+                token_type = "number"
+            else:
+                token_type = "variable"
+
+        nodes.append(
+            NodeInfo(
+                key="",
+                position=RelativePosition(
+                    line_offset=token.line,
+                    char_offset=token.offset,
+                    length=len(token.text),
+                ),
+                node_type=token_type,
+                modifier=token.token_modifiers,
+            )
+        )
+
+    return nodes
+
+
+def lex(
+    cel_expression: str, seed_line: int = 0, seed_offset: int = 0, base_offset: int = 0
+) -> tuple[list[Token], tuple[int, int]]:
+    """Convert the given document into a list of tokens"""
+    tokens = []
+
+    current_line = 0
+    current_offset = seed_offset
+    prev_line = 0
+
+    for current_line, line in enumerate(cel_expression.splitlines(), start=seed_line):
+        prev_offset = 0
+        current_offset = seed_offset
+        chars_left = len(line)
+
+        while line:
+            if (match := SPACE.match(line)) is not None:
+                # Skip whitespace
+                current_offset += len(match.group(0))
+                line = line[match.end() :]
+
+            elif (match := SYMBOL.match(line)) is not None:
+                tokens.append(
+                    Token(
+                        line=current_line - prev_line,
+                        offset=current_offset - prev_offset,
+                        text=match.group(0),
+                        token_type="",
+                        token_modifiers=[],
+                    )
+                )
+
+                line = line[match.end() :]
+                prev_offset = current_offset
+                prev_line = current_line
+                current_offset += len(match.group(0))
+
+            elif (match := OP.match(line)) is not None:
+                tokens.append(
+                    Token(
+                        line=current_line - prev_line,
+                        offset=current_offset - prev_offset,
+                        text=match.group(0),
+                        token_type="operator",
+                        token_modifiers=[],
+                    )
+                )
+
+                line = line[match.end() :]
+                prev_offset = current_offset
+                prev_line = current_line
+                current_offset += len(match.group(0))
+
+            else:
+                raise RuntimeError(f"No match: {line!r}")
+
+            # Make sure we don't hit an infinite loop
+            if (n := len(line)) == chars_left:
+                raise RuntimeError("Inifite loop detected")
+            else:
+                chars_left = n
+
+        seed_offset = base_offset
+
+    return (tokens, (current_line, current_offset))

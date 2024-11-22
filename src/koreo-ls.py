@@ -23,8 +23,8 @@ from koreo_tooling.indexing import (
     TokenModifiers,
     TokenTypes,
     _RANGE_KEY,
-    _SEMANTIC_TOKENS_KEY,
     _STRUCTURE_KEY,
+    to_lsp_semantics,
     range_stripper,
 )
 
@@ -461,7 +461,7 @@ async def _process_file(
 
         structure = yaml_block.get(_STRUCTURE_KEY)
 
-        tokens = yaml_block.get(_SEMANTIC_TOKENS_KEY)
+        tokens = to_lsp_semantics(structure)
         __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
 
         resource_range = yaml_block.get(_RANGE_KEY)
