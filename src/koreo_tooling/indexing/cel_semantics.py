@@ -95,17 +95,16 @@ def is_colon(token: Token | None) -> bool:
 
 
 def parse(
-    cel_expression: str, seed_line: int = 0, seed_offset: int = 0, base_offset: int = 0
-):
+    cel_expression: str, seed_line: int = 0, seed_offset: int = 0
+) -> list[NodeInfo]:
     """Convert the given expression into a list of tokens"""
-    tokens, pos_info = lex(
+    tokens = lex(
         cel_expression=cel_expression,
         seed_line=seed_line,
         seed_offset=seed_offset,
-        base_offset=base_offset,
     )
 
-    return (_extract_semantic_structure(tokens), pos_info)
+    return _extract_semantic_structure(tokens)
 
 
 def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
@@ -204,14 +203,10 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
     return nodes
 
 
-def lex(
-    cel_expression: str, seed_line: int = 0, seed_offset: int = 0, base_offset: int = 0
-) -> tuple[list[Token], tuple[int, int]]:
+def lex(cel_expression: str, seed_line: int = 0, seed_offset: int = 0) -> list[Token]:
     """Convert the given document into a list of tokens"""
     tokens = []
 
-    current_line = 0
-    current_offset = seed_offset
     prev_line = 0
 
     for current_line, line in enumerate(cel_expression.splitlines(), start=seed_line):
@@ -266,6 +261,7 @@ def lex(
             else:
                 chars_left = n
 
-        seed_offset = base_offset
+        seed_offset = 0
+        prev_line = current_line
 
-    return (tokens, (current_line, current_offset))
+    return tokens
