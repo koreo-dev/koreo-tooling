@@ -18,6 +18,8 @@ class TestResults(NamedTuple):
     messages: list[str] | None
     resource_field_errors: list[str] | None
     outcome_fields_errors: list[str] | None
+    missing_inputs: set[str] | None
+    actual_resource: dict | None
 
 
 async def run_function_tests(
@@ -80,6 +82,24 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
             messages=[f"{test.function_under_test}"],
             resource_field_errors=None,
             outcome_fields_errors=None,
+            missing_inputs=None,
+            actual_resource=None,
+        )
+
+    provided_keys = [f"inputs.{input_key}" for input_key in test.inputs.keys()]
+
+    provided_keys.extend(f"parent.{input_key}" for input_key in test.parent.keys())
+
+    # TODO: This needs to also include the parent keys in the checker
+    wrong_keys = test.function_under_test.dynamic_input_keys.difference(provided_keys)
+    if wrong_keys:
+        return TestResults(
+            success=False,
+            messages=None,
+            resource_field_errors=None,
+            outcome_fields_errors=None,
+            missing_inputs=wrong_keys,
+            actual_resource=None,
         )
 
     try:
@@ -90,6 +110,8 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
             messages=[f"Unknown {err}."],
             resource_field_errors=None,
             outcome_fields_errors=None,
+            missing_inputs=None,
+            actual_resource=None,
         )
 
     success = True
@@ -117,10 +139,10 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
                     f"Unexpected PermFail(message='{message}', location='{location}')."
                 )
         case Retry(message=message, delay=delay, location=location):
-            if not test_outcome.expected_resource or (
-                test_outcome.expected_outcome is not None
-                and not isinstance(test_outcome.expected_outcome, Retry)
+            if test_outcome.expected_outcome is not None and not isinstance(
+                test_outcome.expected_outcome, Retry
             ):
+                messages.append(f"{test_outcome.expected_outcome}")
                 success = False
                 messages.append(
                     f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."
@@ -172,6 +194,8 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
         messages=messages,
         resource_field_errors=resource_field_errors,
         outcome_fields_errors=outcome_fields_errors,
+        missing_inputs=None,
+        actual_resource=test_outcome.actual_resource,
     )
 
 

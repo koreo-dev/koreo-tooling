@@ -5,6 +5,8 @@ import os
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
+import yaml
+
 import nanoid
 
 from pygls.lsp.server import LanguageServer
@@ -192,6 +194,259 @@ def inlay_hints(params: types.InlayHintParams):
         )
 
     return inlays
+
+
+@server.feature(types.TEXT_DOCUMENT_CODE_LENS)
+def code_lens(params: types.CodeLensParams):
+    """Return a list of code lens to insert into the given document.
+
+    This method will read the whole document and identify each sum in the document and
+    tell the language client to insert a code lens at each location.
+    """
+    doc = server.workspace.get_text_document(params.text_document.uri)
+
+    test_results = __TEST_RESULTS[doc.path]
+    if not test_results:
+        return []
+
+    doc_function_tests = {
+        resource_index_key: [
+            __RANGE_INDEX[doc.path][_range_key(resource_range)]
+            for resource_range in __RESOURCE_RANGE_INDEX[resource_index_key][doc.path]
+        ]
+        for resource_index_key in __PATH_RESOURCE_INDEX[doc.path]
+        if resource_index_key.startswith("FunctionTest:")
+    }
+
+    lens = []
+    for test_name, test_result in test_results.items():
+        if test_result.success:
+            continue
+
+        test_key = f"FunctionTest:{test_name}"
+
+        function_test_specs = doc_function_tests.get(test_key)
+        if not function_test_specs:
+            continue
+
+        function_test_spec = function_test_specs.pop()
+        if not function_test_spec:
+            continue
+
+        if test_result.missing_inputs:
+            inputs = function_test_spec.get("inputs")
+            if not inputs:
+                continue
+
+            inputs_range = inputs.get(_RANGE_KEY)
+
+            code_lens = types.CodeLens(
+                range=inputs_range,
+                command=types.Command(
+                    title="Generate inputs",
+                    command="codeLens.completeInputs",
+                    arguments=[
+                        {
+                            "path": doc.path,
+                            "uri": params.text_document.uri,
+                            "version": doc.version,
+                            "range": _range_key(inputs_range),
+                            "missing_inputs": list(test_result.missing_inputs),
+                            "test_name": test_name,
+                        }
+                    ],
+                ),
+            )
+            lens.append(code_lens)
+            continue
+
+        ref_range = function_test_spec.get(_RANGE_KEY)
+
+        range_start_line = ref_range.start.line
+        range_end_line = ref_range.end.line
+
+        expected_resource_line = None
+        expected_resource_char = None
+
+        wrong_lines = []
+        for line_offset in range(range_end_line - range_start_line):
+            line_data = doc.lines[range_start_line + line_offset]
+            line_data_stripped = line_data.lstrip()
+
+            if line_data_stripped.startswith("expectedResource"):
+                expected_resource_line = range_start_line + line_offset
+                expected_resource_char = len(line_data) - len(line_data_stripped)
+                break
+            wrong_lines.append(line_data)
+
+        if expected_resource_line is None:
+            continue
+
+        range_ = types.Range(
+            start=types.Position(
+                line=expected_resource_line, character=expected_resource_char + 16
+            ),
+            end=types.Position(
+                line=expected_resource_line, character=expected_resource_char + 30
+            ),
+        )
+
+        code_lens = types.CodeLens(
+            range=range_,
+            command=types.Command(
+                title="Auto-complete resource def",
+                command="codeLens.fillexpectedResource",
+                arguments=[
+                    {
+                        "path": doc.path,
+                        "uri": params.text_document.uri,
+                        "version": doc.version,
+                        "line": expected_resource_line,
+                        "indent": expected_resource_char,
+                        "test_name": test_name,
+                    }
+                ],
+            ),
+        )
+        lens.append(code_lens)
+
+    return lens
+
+
+@server.command("codeLens.completeInputs")
+def code_lens_inputs_action(args):
+    if not args:
+        return
+
+    edit_args = args[0]
+
+    doc_uri = edit_args["uri"]
+    inputs_range_key = edit_args["range"]
+    missing_inputs = edit_args["missing_inputs"]
+
+    raise Exception(f"{inputs_range_key}: {missing_inputs}")
+
+    doc = server.workspace.get_text_document(doc_uri)
+
+    start_line, end_line = _range_key_to_lines(inputs_range_key)
+
+    start_line = expected_resource_line + 1
+    end_line = start_line
+    end_char = 0
+    indent = expected_resource_indent + 2
+
+    while end_line < len(doc.lines):
+        line_data = doc.lines[end_line]
+        first_char = len(line_data) - len(line_data.lstrip())
+
+        if first_char <= expected_resource_indent:
+            break
+
+        # In case they're using other than 2 indent
+        indent = min(indent, first_char)
+
+        end_line += 1
+
+    end_line -= 1
+    end_char = len(doc.lines[end_line])
+
+    test_result = __TEST_RESULTS[edit_args["path"]][edit_args["test_name"]]
+
+    indent = " " * indent
+
+    actual_resource = "\n".join(
+        f"{indent}{line}"
+        for line in yaml.dump(test_result.actual_resource).splitlines()
+    )
+
+    edit = types.TextDocumentEdit(
+        text_document=types.OptionalVersionedTextDocumentIdentifier(
+            uri=doc_uri,
+            version=edit_args["version"],
+        ),
+        edits=[
+            types.TextEdit(
+                new_text=actual_resource,
+                range=types.Range(
+                    start=types.Position(line=start_line, character=0),
+                    end=types.Position(line=end_line, character=end_char),
+                ),
+            )
+        ],
+    )
+
+    # Apply the edit.
+    server.workspace_apply_edit(
+        types.ApplyWorkspaceEditParams(
+            edit=types.WorkspaceEdit(document_changes=[edit]),
+        ),
+    )
+
+
+@server.command("codeLens.fillexpectedResource")
+def code_lens_action(args):
+    if not args:
+        return
+
+    edit_args = args[0]
+
+    doc_uri = edit_args["uri"]
+    expected_resource_line = edit_args["line"]
+    expected_resource_indent = edit_args["indent"]
+
+    doc = server.workspace.get_text_document(doc_uri)
+
+    start_line = expected_resource_line + 1
+    end_line = start_line
+    end_char = 0
+    indent = expected_resource_indent + 2
+
+    while end_line < len(doc.lines):
+        line_data = doc.lines[end_line]
+        first_char = len(line_data) - len(line_data.lstrip())
+
+        if first_char <= expected_resource_indent:
+            break
+
+        # In case they're using other than 2 indent
+        indent = min(indent, first_char)
+
+        end_line += 1
+
+    end_line -= 1
+    end_char = len(doc.lines[end_line])
+
+    test_result = __TEST_RESULTS[edit_args["path"]][edit_args["test_name"]]
+
+    indent = " " * indent
+
+    actual_resource = "\n".join(
+        f"{indent}{line}"
+        for line in yaml.dump(test_result.actual_resource).splitlines()
+    )
+
+    edit = types.TextDocumentEdit(
+        text_document=types.OptionalVersionedTextDocumentIdentifier(
+            uri=doc_uri,
+            version=edit_args["version"],
+        ),
+        edits=[
+            types.TextEdit(
+                new_text=actual_resource,
+                range=types.Range(
+                    start=types.Position(line=start_line, character=0),
+                    end=types.Position(line=end_line, character=end_char),
+                ),
+            )
+        ],
+    )
+
+    # Apply the edit.
+    server.workspace_apply_edit(
+        types.ApplyWorkspaceEditParams(
+            edit=types.WorkspaceEdit(document_changes=[edit]),
+        ),
+    )
 
 
 @server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)
