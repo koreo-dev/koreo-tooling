@@ -115,6 +115,72 @@ class TestParse(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             parse('"')
 
+    def test_seed_offset_multiline(self):
+        nodes = parse(
+            """1
+      +
+      1
+""",
+            seed_offset=15,
+        )
+
+        expected = [
+            NodeInfo(
+                key="1",
+                position=RelativePosition(node_line=0, offset=15, length=1),
+                node_type="number",
+                modifier=[],
+            ),
+            NodeInfo(
+                key="+",
+                position=RelativePosition(node_line=1, offset=6, length=1),
+                node_type="operator",
+                modifier=[],
+            ),
+            NodeInfo(
+                key="1",
+                position=RelativePosition(node_line=1, offset=6, length=1),
+                node_type="number",
+                modifier=[],
+            ),
+        ]
+
+        self.maxDiff = None
+        self.assertListEqual(expected, nodes)
+
+    def test_seed_line_multiline(self):
+        nodes = parse(
+            """      1
+      +
+      1
+""",
+            seed_line=2,
+        )
+
+        expected = [
+            NodeInfo(
+                key="1",
+                position=RelativePosition(node_line=2, offset=6, length=1),
+                node_type="number",
+                modifier=[],
+            ),
+            NodeInfo(
+                key="+",
+                position=RelativePosition(node_line=1, offset=6, length=1),
+                node_type="operator",
+                modifier=[],
+            ),
+            NodeInfo(
+                key="1",
+                position=RelativePosition(node_line=1, offset=6, length=1),
+                node_type="number",
+                modifier=[],
+            ),
+        ]
+
+        self.maxDiff = None
+        self.assertListEqual(expected, nodes)
+
     def test_trailing_comma_single_line(self):
         nodes = parse('{"key": value,  }')
         expected = [
