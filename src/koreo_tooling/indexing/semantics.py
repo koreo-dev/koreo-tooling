@@ -60,9 +60,39 @@ class NodeInfo(NamedTuple):
     position: RelativePosition
     node_type: TokenType
     modifier: list[Modifier]
+    children: list[NodeInfo] | None
 
 
 class SemanticStructure(TypedDict):
     type: NotRequired[TokenType]
     modifier: NotRequired[list[Modifier]]
     sub_structure: NotRequired[dict[str, SemanticStructure]]
+
+
+def flatten(nodes: list[NodeInfo]) -> list[NodeInfo]:
+    flattened = []
+
+    for node in nodes:
+        flattened.extend(flatten_node(node))
+
+    return flattened
+
+
+def flatten_node(node: NodeInfo) -> list[NodeInfo]:
+    flattened = [
+        NodeInfo(
+            key=node.key,
+            position=node.position,
+            node_type=node.node_type,
+            modifier=node.modifier,
+            children=None,
+        )
+    ]
+
+    if not node.children:
+        return flattened
+
+    for child_node in node.children:
+        flattened.extend(flatten_node(child_node))
+
+    return flattened
