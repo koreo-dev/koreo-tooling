@@ -3,8 +3,10 @@ import re
 
 from .semantics import (
     Modifier,
+    NodeDiagnostic,
     NodeInfo,
     RelativePosition,
+    Severity,
     TokenType,
 )
 
@@ -69,6 +71,13 @@ def is_colon(token: Token | None) -> bool:
     return token.text == ":" and token.token_type == "operator"
 
 
+def is_comma(token: Token | None) -> bool:
+    if token is None:
+        return False
+
+    return token.text == "," and token.token_type == "operator"
+
+
 def parse(
     cel_expression: str, seed_line: int = 0, seed_offset: int = 0
 ) -> list[NodeInfo]:
@@ -99,6 +108,7 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
     nodes: list[NodeInfo] = []
     for idx, token in enumerate(tokens):
         if token.token_type == "operator":
+            node_diagnostic = None
             if is_lbrace(token):
                 in_brace = True
 
@@ -111,17 +121,23 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
             elif is_squote(token):
                 in_squote = not in_squote
 
+            elif is_comma(token) and is_rbrace(next(idx)):
+                node_diagnostic = NodeDiagnostic(
+                    message="Trailing commas are unsupported.",
+                    severity=Severity.error
+                )
+
             nodes.append(
                 NodeInfo(
                     key=token.text,
                     position=RelativePosition(
-                        line_offset=token.line,
-                        char_offset=token.offset,
+                        node_line=token.line,
+                        offset=token.offset,
                         length=len(token.text),
                     ),
                     node_type=token.token_type,
                     modifier=token.token_modifiers,
-                    children=None,
+                    diagnostic=node_diagnostic,
                 )
             )
 
@@ -150,13 +166,12 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
             NodeInfo(
                 key=token.text,
                 position=RelativePosition(
-                    line_offset=token.line,
-                    char_offset=token.offset,
+                    node_line=token.line,
+                    offset=token.offset,
                     length=len(token.text),
                 ),
                 node_type=token_type,
                 modifier=token.token_modifiers,
-                children=None,
             )
         )
 

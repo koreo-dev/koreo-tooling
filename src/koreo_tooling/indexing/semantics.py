@@ -1,6 +1,8 @@
 from __future__ import annotations
+from functools import reduce
 from typing import Literal, NamedTuple, NotRequired, TypedDict, get_args
 import enum
+import operator
 
 TokenType = Literal[
     "",
@@ -49,18 +51,32 @@ class Modifier(enum.IntFlag):
 TokenModifiers = [modifier.name for modifier in Modifier]
 
 
+class Severity(enum.IntFlag):
+    debug = enum.auto()
+    info = enum.auto()
+    warning = enum.auto()
+    error = enum.auto()
+
+
+class NodeDiagnostic(NamedTuple):
+    message: str
+    severity: Severity
+
+
 class RelativePosition(NamedTuple):
-    line_offset: int
-    char_offset: int
+    node_line: int
+    offset: int
     length: int
+    anchor_line: int = 0
 
 
 class NodeInfo(NamedTuple):
     key: str
     position: RelativePosition
-    node_type: TokenType
-    modifier: list[Modifier]
-    children: list[NodeInfo] | None
+    node_type: TokenType = ""
+    modifier: list[Modifier] | None = None
+    children: list[NodeInfo] | None = None
+    diagnostic: NodeDiagnostic | None = None
 
 
 class SemanticStructure(TypedDict):
@@ -85,7 +101,6 @@ def flatten_node(node: NodeInfo) -> list[NodeInfo]:
             position=node.position,
             node_type=node.node_type,
             modifier=node.modifier,
-            children=None,
         )
     ]
 
@@ -96,3 +111,19 @@ def flatten_node(node: NodeInfo) -> list[NodeInfo]:
         flattened.extend(flatten_node(child_node))
 
     return flattened
+
+
+def to_lsp_semantics(nodes: list[NodeInfo]) -> list[int]:
+    semantics = []
+    for node in nodes:
+        semantics.extend(
+            [
+                node.position.node_line,
+                node.position.offset,
+                node.position.length,
+                TypeIndex[node.node_type],
+                reduce(operator.or_, node.modifier, 0) if node.modifier else 0,
+            ]
+        )
+
+    return semantics

@@ -1,7 +1,5 @@
 from __future__ import annotations
-from functools import reduce
 from typing import Any
-import operator
 
 from yaml.loader import SafeLoader
 from yaml.nodes import MappingNode, SequenceNode
@@ -18,20 +16,13 @@ from .semantics import (
     TokenType,
     TokenTypes,
     TypeIndex,
+    to_lsp_semantics,
 )
 
 from . import cel_semantics
 
 _RANGE_KEY = "..range.."
 _STRUCTURE_KEY = "..structure.."
-
-
-# Relative position relative to document start.
-# For each document, track relative position and absolute position.
-# Provide helpers to convert the relative position into an absolute position.
-# -- I think we only need token relative? We can inject a dummy token for
-#    document start. Then we can modify that if a document can't be processed
-#    or something?
 
 
 class IndexingLoader(SafeLoader):
@@ -90,12 +81,11 @@ def extract_semantic_structure_info(
                     NodeInfo(
                         key=key_path,
                         position=RelativePosition(
-                            line_offset=line_offset,
-                            char_offset=0,
+                            node_line=line_offset,
+                            offset=0,
                             length=len(line_data),
                         ),
                         node_type="comment",
-                        modifier=[],
                     )
                 )
 
@@ -214,12 +204,11 @@ def _extract_value_semantic_info(
             NodeInfo(
                 key=key_path,
                 position=RelativePosition(
-                    line_offset=node_line - last_line,
-                    char_offset=char_offset,
+                    node_line=node_line - last_line,
+                    offset=char_offset,
                     length=1,
                 ),
                 node_type="operator",
-                modifier=[],
             )
         ]
 
@@ -253,12 +242,11 @@ def _extract_value_semantic_info(
             NodeInfo(
                 key=key_path,
                 position=RelativePosition(
-                    line_offset=node_line - last_line,
-                    char_offset=char_offset,
+                    node_line=node_line - last_line,
+                    offset=char_offset,
                     length=value_len,
                 ),
                 node_type=node_type,
-                modifier=modifier,
             )
         )
 
@@ -279,22 +267,6 @@ def _extract_value_semantic_info(
         nodes,
         (node_line, node_column),
     )
-
-
-def to_lsp_semantics(nodes: list[NodeInfo]) -> list[int]:
-    semantics = []
-    for node in nodes:
-        semantics.extend(
-            [
-                node.position.line_offset,
-                node.position.char_offset,
-                node.position.length,
-                TypeIndex[node.node_type],
-                reduce(operator.or_, node.modifier, 0),
-            ]
-        )
-
-    return semantics
 
 
 STRIP_KEYS = set([_RANGE_KEY])
