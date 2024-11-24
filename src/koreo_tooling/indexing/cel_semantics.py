@@ -123,8 +123,7 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
 
             elif is_comma(token) and is_rbrace(next(idx)):
                 node_diagnostic = NodeDiagnostic(
-                    message="Trailing commas are unsupported.",
-                    severity=Severity.error
+                    message="Trailing commas are unsupported.", severity=Severity.error
                 )
 
             nodes.append(
