@@ -1,20 +1,16 @@
 from typing import NamedTuple
 import re
 
-
 from .semantics import (
     Modifier,
     NodeInfo,
     RelativePosition,
-    SemanticStructure,
-    TokenModifiers,
     TokenType,
-    TokenTypes,
-    TypeIndex,
 )
 
-SYMBOL = re.compile(r"[\w@]+")
-OP = re.compile(r"->|[\{\}\(\)\.,+:*-='\"\[\]^$!<>|?]")
+SYMBOL = re.compile(r"[\w]+")
+QUOTED = re.compile(r"(?P<quote>['\"])(?P<string>.*?)(?P=quote)")
+OP = re.compile(r"->|[\{\}\(\)\.,+:*-=\[\]^$!<>|?]")
 SPACE = re.compile(r"\s+")
 
 NUMBER = re.compile(r"\d+")
@@ -50,27 +46,6 @@ def is_lparen(token: Token | None) -> bool:
         return False
 
     return token.text == "(" and token.token_type == "operator"
-
-
-def is_rparen(token: Token | None) -> bool:
-    if token is None:
-        return False
-
-    return token.text == ")" and token.token_type == "operator"
-
-
-def is_lbracket(token: Token | None) -> bool:
-    if token is None:
-        return False
-
-    return token.text == "[" and token.token_type == "operator"
-
-
-def is_rbracket(token: Token | None) -> bool:
-    if token is None:
-        return False
-
-    return token.text == "]" and token.token_type == "operator"
 
 
 def is_lbrace(token: Token | None) -> bool:
@@ -118,27 +93,13 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
         return tokens[idx + 1]
 
     in_brace = False
-    in_bracket = False
-    in_paren = False
     in_dquote = False
     in_squote = False
 
     nodes: list[NodeInfo] = []
     for idx, token in enumerate(tokens):
         if token.token_type == "operator":
-            if is_lparen(token):
-                in_paren = True
-
-            elif is_rparen(token):
-                in_paren = False
-
-            elif is_lbracket(token):
-                in_bracket = True
-
-            elif is_rbracket(token):
-                in_bracket = False
-
-            elif is_lbrace(token):
+            if is_lbrace(token):
                 in_brace = True
 
             elif is_rbrace(token):
@@ -152,7 +113,7 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
 
             nodes.append(
                 NodeInfo(
-                    key="",
+                    key=token.text,
                     position=RelativePosition(
                         line_offset=token.line,
                         char_offset=token.offset,
@@ -160,6 +121,7 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
                     ),
                     node_type=token.token_type,
                     modifier=token.token_modifiers,
+                    children=None,
                 )
             )
 
@@ -167,8 +129,8 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
 
         token_type = ""
         if in_dquote or in_squote:
-            if is_colon(next(idx)) and in_brace:
-                token_type = "parameter"
+            if is_colon(next(idx + 1)) and in_brace:
+                token_type = "property"
             else:
                 token_type = "string"
 
@@ -178,9 +140,6 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
         elif is_lparen(next(idx)):
             token_type = "function"
 
-        elif is_colon(next(idx)) and in_brace:
-            token_type = "parameter"
-
         else:
             if NUMBER.match(token.text):
                 token_type = "number"
@@ -189,7 +148,7 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
 
         nodes.append(
             NodeInfo(
-                key="",
+                key=token.text,
                 position=RelativePosition(
                     line_offset=token.line,
                     char_offset=token.offset,
@@ -197,6 +156,7 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
                 ),
                 node_type=token_type,
                 modifier=token.token_modifiers,
+                children=None,
             )
         )
 
@@ -219,6 +179,38 @@ def lex(cel_expression: str, seed_line: int = 0, seed_offset: int = 0) -> list[T
                 # Skip whitespace
                 current_offset += len(match.group(0))
                 line = line[match.end() :]
+
+            elif (match := QUOTED.match(line)) is not None:
+                tokens.extend(
+                    [
+                        Token(
+                            line=current_line - prev_line,
+                            offset=current_offset - prev_offset,
+                            text=match.group("quote"),
+                            token_type="operator",
+                            token_modifiers=[],
+                        ),
+                        Token(
+                            line=0,
+                            offset=1,
+                            text=match.group("string"),
+                            token_type="string",
+                            token_modifiers=[],
+                        ),
+                        Token(
+                            line=0,
+                            offset=len(match.group("string")),
+                            text=match.group("quote"),
+                            token_type="operator",
+                            token_modifiers=[],
+                        ),
+                    ]
+                )
+
+                line = line[match.end() :]
+                prev_offset = current_offset
+                prev_line = current_line
+                current_offset += 1
 
             elif (match := SYMBOL.match(line)) is not None:
                 tokens.append(
