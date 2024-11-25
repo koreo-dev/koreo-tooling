@@ -5,7 +5,7 @@ from .semantics import (
     Modifier,
     NodeDiagnostic,
     NodeInfo,
-    RelativePosition,
+    Position,
     Severity,
     TokenType,
 )
@@ -129,11 +129,11 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
             nodes.append(
                 NodeInfo(
                     key=token.text,
-                    position=RelativePosition(
-                        node_line=token.line,
+                    position=Position(
+                        line=token.line,
                         offset=token.offset,
-                        length=len(token.text),
                     ),
+                    length=len(token.text),
                     node_type=token.token_type,
                     modifier=token.token_modifiers,
                     diagnostic=node_diagnostic,
@@ -164,11 +164,11 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
         nodes.append(
             NodeInfo(
                 key=token.text,
-                position=RelativePosition(
-                    node_line=token.line,
+                position=Position(
+                    line=token.line,
                     offset=token.offset,
-                    length=len(token.text),
                 ),
+                length=len(token.text),
                 node_type=token_type,
                 modifier=token.token_modifiers,
             )

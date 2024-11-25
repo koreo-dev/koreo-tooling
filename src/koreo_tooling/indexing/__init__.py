@@ -8,14 +8,19 @@ from lsprotocol import types
 
 from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE, VALUE
 from .semantics import (
+    Anchor,
     Modifier,
+    NodeDiagnostic,
     NodeInfo,
-    RelativePosition,
+    Position,
     SemanticStructure,
+    Severity,
     TokenModifiers,
     TokenType,
     TokenTypes,
     TypeIndex,
+    extract_diagnostics,
+    flatten,
     to_lsp_semantics,
 )
 
@@ -30,6 +35,7 @@ class IndexingLoader(SafeLoader):
         super().__init__(*args, **kwargs)
         self.last_doc_start = (0, 0)
         self.doc = doc
+        self.doc_count = 0
 
     def construct_document(self, node):
         doc = super().construct_document(node)
@@ -38,6 +44,16 @@ class IndexingLoader(SafeLoader):
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
         if not doc_semantics:
             doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(ALL, {})
+
+        doc_metadata = doc.get("metadata", {})
+        doc_name = doc_metadata.get("name")
+
+        if not doc_kind:
+            anchor_key = f"{unknown}:{self.doc_count}"
+        elif doc_kind and doc_name:
+            anchor_key = f"{doc_kind}:{doc_name}"
+        else:
+            anchor_key = f"{doc_kind}:{self.doc_count}"
 
         structure, doc_last_pos = extract_semantic_structure_info(
             key_path="",
@@ -49,6 +65,8 @@ class IndexingLoader(SafeLoader):
         )
         doc[_STRUCTURE_KEY] = structure
         self.last_doc_start = doc_last_pos
+
+        self.doc_count = self.doc_count + 1
 
         return doc
 
@@ -91,10 +109,18 @@ def extract_semantic_structure_info(
 
     if isinstance(node, MappingNode):
         new_last_start = last_token_abs_start
+        seen_keys = set[str]()
         for key, value in node.value:
             hints = type_hint_map.get(key.value, {})
             if not hints:
                 hints = type_hint_map.get(ALL, {})
+
+            node_diagnostic = None
+            # TODO: Harden this.
+            if node.value[0] in seen_keys:
+                node_diagnostic = NodeDiagnostic(
+                    message="Duplicate key", severity=Severity.error
+                )
 
             key_semantic_nodes, new_last_start = _extract_value_semantic_info(
                 key_path=f"{key_path}._{key.value}_",
@@ -105,8 +131,10 @@ def extract_semantic_structure_info(
                 modifier=hints.get("modifier", []),
                 type_hint_map={},
                 doc=doc,
+                diagnostic=node_diagnostic,
             )
             semantic_nodes.extend(key_semantic_nodes)
+            seen_keys.add(node.value[0])
 
             sub_structure = hints.get("sub_structure", {})
             value_semantic_info = sub_structure.get(VALUE, {})
@@ -166,6 +194,7 @@ def _extract_value_semantic_info(
     modifier: list[Modifier],
     type_hint_map: dict[str, SemanticStructure],
     doc,
+    diagnostic: NodeDiagnostic | None = None,
 ):
     if isinstance(node, (MappingNode, SequenceNode)):
         return extract_semantic_structure_info(
@@ -203,12 +232,14 @@ def _extract_value_semantic_info(
         nodes = [
             NodeInfo(
                 key=key_path,
-                position=RelativePosition(
-                    node_line=node_line - last_line,
+                position=Position(
+                    line=node_line - last_line,
                     offset=char_offset,
-                    length=1,
                 ),
+                length=1,
                 node_type="operator",
+                modifier=modifier,
+                diagnostic=diagnostic,
             )
         ]
 
@@ -241,12 +272,14 @@ def _extract_value_semantic_info(
         nodes.append(
             NodeInfo(
                 key=key_path,
-                position=RelativePosition(
-                    node_line=node_line - last_line,
+                position=Position(
+                    line=node_line - last_line,
                     offset=char_offset,
-                    length=value_len,
                 ),
+                length=value_len,
                 node_type=node_type,
+                modifier=modifier,
+                diagnostic=diagnostic,
             )
         )
 

@@ -63,16 +63,23 @@ class NodeDiagnostic(NamedTuple):
     severity: Severity
 
 
-class RelativePosition(NamedTuple):
-    node_line: int
+class Position(NamedTuple):
+    line: int
     offset: int
-    length: int
-    anchor_line: int = 0
+
+
+class Anchor(NamedTuple):
+    key: str
+    abs_position: Position
+    rel_position: Position
+    children: list[Anchor | NodeInfo] | None = None
 
 
 class NodeInfo(NamedTuple):
     key: str
-    position: RelativePosition
+    position: Position
+    # anchor_position: Position
+    length: int
     node_type: TokenType = ""
     modifier: list[Modifier] | None = None
     children: list[NodeInfo] | None = None
@@ -85,7 +92,7 @@ class SemanticStructure(TypedDict):
     sub_structure: NotRequired[dict[str, SemanticStructure]]
 
 
-def flatten(nodes: list[NodeInfo]) -> list[NodeInfo]:
+def flatten(nodes: list[Anchor | NodeInfo]) -> list[NodeInfo]:
     flattened = []
 
     for node in nodes:
@@ -94,15 +101,18 @@ def flatten(nodes: list[NodeInfo]) -> list[NodeInfo]:
     return flattened
 
 
-def flatten_node(node: NodeInfo) -> list[NodeInfo]:
-    flattened = [
-        NodeInfo(
-            key=node.key,
-            position=node.position,
-            node_type=node.node_type,
-            modifier=node.modifier,
+def flatten_node(node: Anchor | NodeInfo) -> list[NodeInfo]:
+    flattened = []
+    if isinstance(node, NodeInfo):
+        flattened.append(
+            NodeInfo(
+                key=node.key,
+                position=node.position,
+                length=node.length,
+                node_type=node.node_type,
+                modifier=node.modifier,
+            )
         )
-    ]
 
     if not node.children:
         return flattened
@@ -118,12 +128,16 @@ def to_lsp_semantics(nodes: list[NodeInfo]) -> list[int]:
     for node in nodes:
         semantics.extend(
             [
-                node.position.node_line,
+                node.position.line,
                 node.position.offset,
-                node.position.length,
+                node.length,
                 TypeIndex[node.node_type],
                 reduce(operator.or_, node.modifier, 0) if node.modifier else 0,
             ]
         )
 
     return semantics
+
+
+def extract_diagnostics(nodes: list[NodeInfo]) -> list[NodeInfo]:
+    return [node for node in nodes if node.diagnostic]

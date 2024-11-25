@@ -20,9 +20,8 @@ class TestFlatten(unittest.TestCase):
 
             node = semantics.NodeInfo(
                 key=node_key,
-                position=semantics.RelativePosition(
-                    node_line=0, offset=0, length=node_length
-                ),
+                position=semantics.Position(line=0, offset=0),
+                length=node_length,
                 node_type=node_type,
                 modifier=node_modifier,
                 children=None,
@@ -61,9 +60,8 @@ class TestFlatten(unittest.TestCase):
 
             node = semantics.NodeInfo(
                 key=node_key,
-                position=semantics.RelativePosition(
-                    node_line=0, offset=0, length=node_length
-                ),
+                position=semantics.Position(line=0, offset=0),
+                length=node_length,
                 node_type=node_type,
                 modifier=node_modifier,
                 children=children,
@@ -71,9 +69,8 @@ class TestFlatten(unittest.TestCase):
 
             childless_node = semantics.NodeInfo(
                 key=node_key,
-                position=semantics.RelativePosition(
-                    node_line=0, offset=0, length=node_length
-                ),
+                position=semantics.Position(line=0, offset=0),
+                length=node_length,
                 node_type=node_type,
                 modifier=node_modifier,
                 children=None,
@@ -108,9 +105,8 @@ class TestFlattenNode(unittest.TestCase):
 
         node = semantics.NodeInfo(
             key=node_key,
-            position=semantics.RelativePosition(
-                node_line=0, offset=0, length=node_length
-            ),
+            position=semantics.Position(line=0, offset=0),
+            length=node_length,
             node_type=node_type,
             modifier=node_modifier,
             children=None,
@@ -122,9 +118,8 @@ class TestFlattenNode(unittest.TestCase):
             [
                 semantics.NodeInfo(
                     key=node_key,
-                    position=semantics.RelativePosition(
-                        node_line=0, offset=0, length=node_length
-                    ),
+                    position=semantics.Position(line=0, offset=0),
+                    length=node_length,
                     node_type=node_type,
                     modifier=node_modifier,
                     children=None,
@@ -156,9 +151,8 @@ class TestFlattenNode(unittest.TestCase):
 
             node = semantics.NodeInfo(
                 key=node_key,
-                position=semantics.RelativePosition(
-                    node_line=0, offset=0, length=node_length
-                ),
+                position=semantics.Position(line=0, offset=0),
+                length=node_length,
                 node_type=node_type,
                 modifier=node_modifier,
                 children=children,
@@ -166,9 +160,8 @@ class TestFlattenNode(unittest.TestCase):
 
             childless_node = semantics.NodeInfo(
                 key=node_key,
-                position=semantics.RelativePosition(
-                    node_line=0, offset=0, length=node_length
-                ),
+                position=semantics.Position(line=0, offset=0),
+                length=node_length,
                 node_type=node_type,
                 modifier=node_modifier,
                 children=None,

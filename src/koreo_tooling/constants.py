@@ -23,3 +23,4 @@ CRD_API_VERSION = "apiextensions.k8s.io/v1"
 CRD_KIND = "CustomResourceDefinition"
 
 INPUT_NAME_PATTERN = re.compile("inputs.([^.]+).?")
+PARENT_NAME_PATTERN = re.compile("parent.([^.]+).?")
