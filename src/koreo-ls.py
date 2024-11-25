@@ -26,8 +26,10 @@ from koreo_tooling.indexing import (
     TokenTypes,
     _RANGE_KEY,
     _STRUCTURE_KEY,
-    to_lsp_semantics,
+    extract_diagnostics,
+    flatten,
     range_stripper,
+    to_lsp_semantics,
 )
 
 KOREO_LSP_NAME = "koreo-ls"
@@ -106,11 +108,23 @@ def hover(params: types.HoverParams):
 
                 if result.resource_field_errors:
                     hover_content.append("## Field Mismatches")
-                    hover_content.extend(result.resource_field_errors)
+                    hover_content.append("| Field | Actual | Expected |")
+                    hover_content.append("|:-|-:|-:|")
+                    for compare in result.resource_field_errors:
+                        hover_content.append(
+                            f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
+                        )
+                    hover_content.append("\n")
 
                 if result.outcome_fields_errors:
                     hover_content.append("## Outcome Mismatches")
-                    hover_content.extend(result.outcome_fields_errors)
+                    hover_content.append("| Field | Actual | Expected |")
+                    hover_content.append("|:-|-:|-:|")
+                    for compare in result.outcome_fields_errors:
+                        hover_content.append(
+                            f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
+                        )
+                    hover_content.append("\n")
 
         return types.Hover(
             contents=types.MarkupContent(
@@ -602,12 +616,12 @@ async def _handle_file(doc: TextDocument):
 
             if result.resource_field_errors:
                 messages.append(
-                    f"Field errors: {', '.join(result.resource_field_errors)}"
+                    f"Resource: {'; '.join(compare.field for compare in result.resource_field_errors)}"
                 )
 
             if result.outcome_fields_errors:
                 messages.append(
-                    f"Outcome errors: {', '.join(result.outcome_fields_errors)}"
+                    f"Outcome: {'; '.join(compare.field for compare in result.outcome_fields_errors)}"
                 )
 
             __DIAGNOSTICS[doc.path].extend(
