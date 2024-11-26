@@ -64,6 +64,16 @@ async def completions(params: types.CompletionParams):
     return types.CompletionList(is_incomplete=True, items=items)
 
 
+def _input_error_formatter(actual: bool, expected: bool) -> str:
+    if actual and not expected:
+        return "unexpected"
+
+    if not actual and expected:
+        return "*missing*"
+
+    return "_unknown_"
+
+
 @server.feature(types.TEXT_DOCUMENT_HOVER)
 def hover(params: types.HoverParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
@@ -105,6 +115,16 @@ def hover(params: types.HoverParams):
                 if result.messages:
                     hover_content.append("## Failure")
                     hover_content.extend(result.messages)
+
+                if result.input_mismatches:
+                    hover_content.append("## Input Mismatches")
+                    hover_content.append("| Field | Issue | Severity |")
+                    hover_content.append("|:-|-:|:-:|")
+                    for mismatch in result.input_mismatches:
+                        hover_content.append(
+                            f"| `{mismatch.field}` | {_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | {mismatch.severity} |"
+                        )
+                    hover_content.append("\n")
 
                 if result.resource_field_errors:
                     hover_content.append("## Field Mismatches")
@@ -613,6 +633,11 @@ async def _handle_file(doc: TextDocument):
             messages = []
             if result.messages:
                 messages.append(f"Failures: {'; '.join(result.messages)}")
+
+            if result.input_mismatches:
+                messages.append(
+                    f"Inputs: {'; '.join(mismatch.field for mismatch in result.input_mismatches)}"
+                )
 
             if result.resource_field_errors:
                 messages.append(

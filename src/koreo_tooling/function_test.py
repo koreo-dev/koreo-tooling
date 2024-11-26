@@ -1,8 +1,10 @@
+from typing import Any, Literal, NamedTuple
 import asyncio
-from typing import Any, NamedTuple
 
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
+
+from celpy import celtypes
 
 from koreo import cache
 from koreo.result import DepSkip, Ok, PermFail, Retry, Skip, is_unwrapped_ok
@@ -21,12 +23,19 @@ class CompareResult(NamedTuple):
     actual: Any
 
 
+class FieldMismatchResult(NamedTuple):
+    field: str
+    severity: Literal["WARNING", "ERROR"]
+    expected: bool
+    actual: bool
+
+
 class TestResults(NamedTuple):
     success: bool
     messages: list[str] | None
     resource_field_errors: list[CompareResult] | None
     outcome_fields_errors: list[CompareResult] | None
-    missing_inputs: set[str] | None
+    input_mismatches: list[FieldMismatchResult] | None
     actual_resource: dict | None
 
 
@@ -90,39 +99,21 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
             messages=[f"{test.function_under_test}"],
             resource_field_errors=None,
             outcome_fields_errors=None,
-            missing_inputs=None,
+            input_mismatches=None,
             actual_resource=None,
         )
 
-    provided_keys = []
-
-    if test.inputs:
-        provided_keys.extend(f"inputs.{input_key}" for input_key in test.inputs.keys())
-
-    if test.parent:
-        provided_keys.extend(f"parent.{input_key}" for input_key in test.parent.keys())
-
-    first_tier_inputs = set(
-        f"inputs.{constants.INPUT_NAME_PATTERN.match(key).group(1)}"
-        for key in test.function_under_test.dynamic_input_keys
-        if key.startswith("inputs.")
-    )
-    first_tier_inputs.update(
-        f"parent.{constants.PARENT_NAME_PATTERN.match(key).group(1)}"
-        for key in test.function_under_test.dynamic_input_keys
-        if key.startswith("parent.")
+    field_mismatches = _check_inputs(
+        inputs=test.inputs,
+        parent=test.parent,
+        dynamic_input_keys=test.function_under_test.dynamic_input_keys,
     )
 
-    # TODO: This needs to also include the parent keys in the checker
-    wrong_keys = first_tier_inputs.difference(provided_keys)
-    if wrong_keys:
-        return TestResults(
-            success=False,
-            messages=None,
-            resource_field_errors=None,
-            outcome_fields_errors=None,
-            missing_inputs=wrong_keys,
-            actual_resource=None,
+    success = True
+
+    if field_mismatches:
+        success = success and not any(
+            mismatch.severity == "ERROR" for mismatch in field_mismatches
         )
 
     try:
@@ -133,11 +124,10 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
             messages=[f"Unknown {err}."],
             resource_field_errors=None,
             outcome_fields_errors=None,
-            missing_inputs=None,
+            input_mismatches=field_mismatches,
             actual_resource=None,
         )
 
-    success = True
     messages = []
     resource_field_errors = []
     outcome_fields_errors = []
@@ -220,9 +210,56 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
         messages=messages,
         resource_field_errors=resource_field_errors,
         outcome_fields_errors=outcome_fields_errors,
-        missing_inputs=None,
+        input_mismatches=field_mismatches,
         actual_resource=test_outcome.actual_resource,
     )
+
+
+def _check_inputs(
+    inputs: celtypes.MapType | None,
+    parent: celtypes.MapType | None,
+    dynamic_input_keys: set[str],
+) -> list[FieldMismatchResult]:
+    provided_keys = set[str]()
+    if inputs:
+        provided_keys.update(f"inputs.{input_key}" for input_key in inputs.keys())
+
+    if parent:
+        provided_keys.update(f"parent.{input_key}" for input_key in parent.keys())
+
+    first_tier_inputs = set(
+        f"inputs.{constants.INPUT_NAME_PATTERN.match(key).group(1)}"
+        for key in dynamic_input_keys
+        if key.startswith("inputs.")
+    )
+    first_tier_inputs.update(
+        f"parent.{constants.PARENT_NAME_PATTERN.match(key).group(1)}"
+        for key in dynamic_input_keys
+        if key.startswith("parent.")
+    )
+
+    mismatches = []
+    for missing in first_tier_inputs.difference(provided_keys):
+        mismatches.append(
+            FieldMismatchResult(
+                field=missing,
+                severity="ERROR",
+                actual=False,
+                expected=True,
+            )
+        )
+
+    for extra in provided_keys.difference(first_tier_inputs):
+        mismatches.append(
+            FieldMismatchResult(
+                field=extra,
+                severity="WARNING",
+                actual=True,
+                expected=False,
+            )
+        )
+
+    return mismatches
 
 
 def _check_value(actual: dict | None, expected: dict | None) -> list[CompareResult]:
