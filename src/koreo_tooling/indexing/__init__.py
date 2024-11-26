@@ -225,7 +225,7 @@ def _extract_value_semantic_info(
     if node_type == "string" and node.value.startswith("="):
         if node_line == node.end_mark.line:
             cel_nodes = cel_semantics.parse(
-                cel_expression=node.value, seed_line=0, seed_offset=char_offset
+                cel_expression=[node.value], seed_line=0, seed_offset=char_offset
             )
             return (cel_nodes, (node_line, node_column))
 
@@ -243,19 +243,12 @@ def _extract_value_semantic_info(
             )
         ]
 
-        cel_lines = doc.lines[node_line + 1 : node.end_mark.line]
-
-        join_char = "\n"
-        if cel_lines[0][-1] == "\n":
-            join_char = ""
-
         cel_nodes = cel_semantics.parse(
-            cel_expression=join_char.join(cel_lines),
+            cel_expression=doc.lines[node_line + 1 : node.end_mark.line],
             seed_line=1,
             seed_offset=0,
         )
         nodes.extend(cel_nodes)
-
 
         last_node_line = node_line
         last_node_col = 0

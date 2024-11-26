@@ -11,11 +11,11 @@ from koreo_tooling.indexing.cel_semantics import (
 
 class TestParse(unittest.TestCase):
     def test_empty_cel(self):
-        nodes = parse("")
+        nodes = parse([""])
         self.assertListEqual([], nodes)
 
     def test_simple_number(self):
-        nodes = parse("1")
+        nodes = parse(["1"])
 
         expected = [
             NodeInfo(
@@ -30,7 +30,7 @@ class TestParse(unittest.TestCase):
         self.assertListEqual(expected, nodes)
 
     def test_operator(self):
-        nodes = parse("+")
+        nodes = parse(["+"])
 
         expected = [
             NodeInfo(
@@ -45,7 +45,7 @@ class TestParse(unittest.TestCase):
         self.assertListEqual(expected, nodes)
 
     def test_symbol(self):
-        nodes = parse("inputs")
+        nodes = parse(["inputs"])
 
         expected = [
             NodeInfo(
@@ -60,7 +60,7 @@ class TestParse(unittest.TestCase):
         self.assertListEqual(expected, nodes)
 
     def test_quoted(self):
-        nodes = parse("'this is a lot'")
+        nodes = parse(["'this is a lot'"])
 
         expected = [
             NodeInfo(
@@ -89,7 +89,7 @@ class TestParse(unittest.TestCase):
         self.assertListEqual(expected, nodes)
 
     def test_simple_formula(self):
-        nodes = parse("1 + 1")
+        nodes = parse(["1 + 1"])
 
         expected = [
             NodeInfo(
@@ -119,17 +119,14 @@ class TestParse(unittest.TestCase):
 
     def test_mismatched_quote(self):
         with self.assertRaises(RuntimeError):
-            parse("'")
+            parse(["'"])
 
         with self.assertRaises(RuntimeError):
-            parse('"')
+            parse(['"'])
 
     def test_seed_offset_multiline(self):
         nodes = parse(
-            """1
-      +
-      1
-""",
+            ["1", "      +", "      1", ""],
             seed_offset=15,
         )
 
@@ -162,10 +159,7 @@ class TestParse(unittest.TestCase):
 
     def test_seed_line_multiline(self):
         nodes = parse(
-            """      1
-      +
-      1
-""",
+            ["      1", "      + ", "      1 ", ""],
             seed_line=2,
         )
 
@@ -196,8 +190,41 @@ class TestParse(unittest.TestCase):
         self.maxDiff = None
         self.assertListEqual(expected, nodes)
 
+    def test_multiline_with_extra_newlines(self):
+        nodes = parse(
+            ["      1", "", "", "", "      +", "", "", "", "", "", "      1", ""],
+            seed_line=1,
+        )
+
+        expected = [
+            NodeInfo(
+                key="1",
+                position=Position(line=1, offset=6),
+                length=1,
+                node_type="number",
+                modifier=[],
+            ),
+            NodeInfo(
+                key="+",
+                position=Position(line=4, offset=6),
+                length=1,
+                node_type="operator",
+                modifier=[],
+            ),
+            NodeInfo(
+                key="1",
+                position=Position(line=6, offset=6),
+                length=1,
+                node_type="number",
+                modifier=[],
+            ),
+        ]
+
+        self.maxDiff = None
+        self.assertListEqual(expected, nodes)
+
     def test_trailing_comma_single_line(self):
-        nodes = parse('{"key": value,  }')
+        nodes = parse(['{"key": value,  }'])
         expected = [
             # {
             NodeInfo(
@@ -265,12 +292,7 @@ class TestParse(unittest.TestCase):
         self.assertListEqual(expected, nodes)
 
     def test_trailing_comma_multi_line(self):
-        nodes = parse(
-            """{
-  "key": value,
-}
-"""
-        )
+        nodes = parse(["{", '  "key": value,', "}", ""])
         expected = [
             # {
             NodeInfo(
@@ -338,7 +360,7 @@ class TestParse(unittest.TestCase):
         self.assertListEqual(expected, nodes)
 
     def test_complex_white_space(self):
-        nodes = parse("    int('1717' )            +    9")
+        nodes = parse(["    int('1717' )            +    9"])
 
         expected = [
             NodeInfo(
@@ -404,16 +426,18 @@ class TestParse(unittest.TestCase):
 
     def test_complex_multiline(self):
         tokens = parse(
-            """
-{
-  "complicated.key.name": 'value',
-  unquoted: "key",
-  "formula": 1 + 812,
-  function: a.name(),
-  "index": avar[2] + avar["key"],
-  "entry": inputs.map(key, {key: 22})
-}
-"""
+            [
+                "",
+                "{",
+                "  \"complicated.key.name\": 'value',",
+                '  unquoted: "key",',
+                '  "formula": 1 + 812,',
+                "  function: a.name(),",
+                '  "index": avar[2] + avar["key"],',
+                '  "entry": inputs.map(key, {key: 22})',
+                "}",
+                "",
+            ]
         )
 
         expected = [

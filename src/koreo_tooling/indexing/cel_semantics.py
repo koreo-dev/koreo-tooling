@@ -79,7 +79,7 @@ def is_comma(token: Token | None) -> bool:
 
 
 def parse(
-    cel_expression: str, seed_line: int = 0, seed_offset: int = 0
+    cel_expression: list[str], seed_line: int = 0, seed_offset: int = 0
 ) -> list[NodeInfo]:
     """Convert the given expression into a list of tokens"""
     tokens = lex(
@@ -177,16 +177,22 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
     return nodes
 
 
-def lex(cel_expression: str, seed_line: int = 0, seed_offset: int = 0) -> list[Token]:
+def lex(
+    cel_expression: list[str], seed_line: int = 0, seed_offset: int = 0
+) -> list[Token]:
     """Convert the given document into a list of tokens"""
     tokens = []
 
     prev_line = 0
 
-    for current_line, line in enumerate(cel_expression.splitlines(), start=seed_line):
+    for current_line, line in enumerate(cel_expression, start=seed_line):
         prev_offset = 0
         current_offset = seed_offset
         chars_left = len(line)
+
+        if not line.strip():
+            seed_offset = 0
+            continue
 
         while line:
             if (match := SPACE.match(line)) is not None:
@@ -267,7 +273,7 @@ def lex(cel_expression: str, seed_line: int = 0, seed_offset: int = 0) -> list[T
             else:
                 chars_left = n
 
-        seed_offset = 0
         prev_line = current_line
+        seed_offset = 0
 
     return tokens
