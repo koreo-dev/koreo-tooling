@@ -245,28 +245,29 @@ def _extract_value_semantic_info(
 
         cel_lines = doc.lines[node_line + 1 : node.end_mark.line]
 
-        nodes.extend(
-            cel_semantics.parse(
-                cel_expression="\n".join(cel_lines),
-                seed_line=1,
-                seed_offset=0,
-            )
+        join_char = "\n"
+        if cel_lines[0][-1] == "\n":
+            join_char = ""
+
+        cel_nodes = cel_semantics.parse(
+            cel_expression=join_char.join(cel_lines),
+            seed_line=1,
+            seed_offset=0,
         )
+        nodes.extend(cel_nodes)
 
-        last_node_line = node.end_mark.line
+
+        last_node_line = node_line
         last_node_col = 0
-        for line in reversed(cel_lines):
-            stripped = line.lstrip()
-            if stripped:
-                last_node_col = len(line) - len(stripped)
-                break
+        for node in cel_nodes:
+            if node.position.line == 0:
+                last_node_col = node.position.offset
+            else:
+                last_node_col = 0
 
-            last_node_line = last_node_line - 1
+            last_node_line += node.position.line
 
-            if last_node_line <= node_line:
-                break
-
-        return (nodes, (last_node_line - 1, last_node_col))
+        return (nodes, (last_node_line, last_node_col))
 
     if node_line == node.end_mark.line:
         value_len = node.end_mark.column - node_column
