@@ -253,7 +253,20 @@ def _extract_value_semantic_info(
             )
         )
 
-        return (nodes, (node_line + len(cel_lines), 0))
+        last_node_line = node.end_mark.line
+        last_node_col = 0
+        for line in reversed(cel_lines):
+            stripped = line.lstrip()
+            if stripped:
+                last_node_col = len(line) - len(stripped)
+                break
+
+            last_node_line = last_node_line - 1
+
+            if last_node_line <= node_line:
+                break
+
+        return (nodes, (last_node_line - 1, last_node_col))
 
     if node_line == node.end_mark.line:
         value_len = node.end_mark.column - node_column
