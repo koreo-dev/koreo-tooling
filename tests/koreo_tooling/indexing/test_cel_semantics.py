@@ -192,7 +192,20 @@ class TestParse(unittest.TestCase):
 
     def test_multiline_with_extra_newlines(self):
         nodes = parse(
-            ["      1", "", "", "", "      +", "", "", "", "", "", "      1", ""],
+            [
+                "      1",
+                "",
+                "",
+                "",
+                "      +",
+                "",
+                "",
+                "       ",
+                "",
+                "",
+                "      1",
+                "",
+            ],
             seed_line=1,
         )
 
