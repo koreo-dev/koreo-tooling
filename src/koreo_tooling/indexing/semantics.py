@@ -78,7 +78,7 @@ class Anchor(NamedTuple):
 class NodeInfo(NamedTuple):
     key: str
     position: Position
-    # anchor_position: Position
+    anchor_rel: Position
     length: int
     node_type: TokenType = ""
     modifier: list[Modifier] | None = None
@@ -92,7 +92,10 @@ class SemanticStructure(TypedDict):
     sub_structure: NotRequired[dict[str, SemanticStructure]]
 
 
-def flatten(nodes: list[Anchor | NodeInfo]) -> list[NodeInfo]:
+def flatten(nodes: Anchor | NodeInfo | list[Anchor | NodeInfo]) -> list[NodeInfo]:
+    if isinstance(nodes, (Anchor, NodeInfo)):
+        return flatten_node(nodes)
+
     flattened = []
 
     for node in nodes:
@@ -108,9 +111,11 @@ def flatten_node(node: Anchor | NodeInfo) -> list[NodeInfo]:
             NodeInfo(
                 key=node.key,
                 position=node.position,
+                anchor_rel=node.anchor_rel,
                 length=node.length,
                 node_type=node.node_type,
                 modifier=node.modifier,
+                diagnostic=node.diagnostic,
             )
         )
 

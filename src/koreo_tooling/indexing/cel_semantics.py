@@ -21,8 +21,9 @@ KEYWORDS = {"has", "all", "exists", "exists_one", "map", "filter"}
 
 
 class Token(NamedTuple):
-    line: int
-    offset: int
+    position: Position
+    start_rel: Position
+
     text: str
 
     token_type: TokenType
@@ -79,19 +80,26 @@ def is_comma(token: Token | None) -> bool:
 
 
 def parse(
-    cel_expression: list[str], seed_line: int = 0, seed_offset: int = 0
+    cel_expression: list[str],
+    anchor_base_pos: Position,
+    seed_line: int = 0,
+    seed_offset: int = 0,
+    abs_offset: int = 0,
 ) -> list[NodeInfo]:
     """Convert the given expression into a list of tokens"""
     tokens = lex(
         cel_expression=cel_expression,
         seed_line=seed_line,
         seed_offset=seed_offset,
+        abs_offset=abs_offset,
     )
 
-    return _extract_semantic_structure(tokens)
+    return _extract_semantic_structure(tokens, anchor_base_pos)
 
 
-def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
+def _extract_semantic_structure(
+    tokens: list[Token], anchor_base_pos: Position
+) -> list[NodeInfo]:
     """Given a list of tokens, determine their type and modifiers."""
 
     def next(idx):
@@ -129,9 +137,10 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
             nodes.append(
                 NodeInfo(
                     key=token.text,
-                    position=Position(
-                        line=token.line,
-                        offset=token.offset,
+                    position=token.position,
+                    anchor_rel=Position(
+                        line=token.start_rel.line + anchor_base_pos.line,
+                        offset=token.start_rel.offset,
                     ),
                     length=len(token.text),
                     node_type=token.token_type,
@@ -164,9 +173,10 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
         nodes.append(
             NodeInfo(
                 key=token.text,
-                position=Position(
-                    line=token.line,
-                    offset=token.offset,
+                position=token.position,
+                anchor_rel=Position(
+                    line=token.start_rel.line + anchor_base_pos.line,
+                    offset=token.start_rel.offset,
                 ),
                 length=len(token.text),
                 node_type=token_type,
@@ -178,7 +188,10 @@ def _extract_semantic_structure(tokens: list[Token]) -> list[NodeInfo]:
 
 
 def lex(
-    cel_expression: list[str], seed_line: int = 0, seed_offset: int = 0
+    cel_expression: list[str],
+    seed_line: int = 0,
+    seed_offset: int = 0,
+    abs_offset: int = 0,
 ) -> list[Token]:
     """Convert the given document into a list of tokens"""
     tokens = []
@@ -201,25 +214,46 @@ def lex(
                 line = line[match.end() :]
 
             elif (match := QUOTED.match(line)) is not None:
+                quote_group_len = len(match.group("quote"))
+                string_len = len(match.group("string"))
+
                 tokens.extend(
                     [
                         Token(
-                            line=current_line - prev_line,
-                            offset=current_offset - prev_offset,
+                            position=Position(
+                                line=current_line - prev_line,
+                                offset=current_offset - prev_offset,
+                            ),
+                            start_rel=Position(
+                                line=current_line,
+                                offset=abs_offset + current_offset,
+                            ),
                             text=match.group("quote"),
                             token_type="operator",
                             token_modifiers=[],
                         ),
                         Token(
-                            line=0,
-                            offset=1,
+                            position=Position(line=0, offset=quote_group_len),
+                            start_rel=Position(
+                                line=current_line,
+                                offset=abs_offset + current_offset + quote_group_len,
+                            ),
                             text=match.group("string"),
                             token_type="string",
                             token_modifiers=[],
                         ),
                         Token(
-                            line=0,
-                            offset=len(match.group("string")),
+                            position=Position(
+                                line=0,
+                                offset=string_len,
+                            ),
+                            start_rel=Position(
+                                line=current_line,
+                                offset=abs_offset
+                                + current_offset
+                                + quote_group_len
+                                + string_len,
+                            ),
                             text=match.group("quote"),
                             token_type="operator",
                             token_modifiers=[],
@@ -228,15 +262,24 @@ def lex(
                 )
 
                 line = line[match.end() :]
-                prev_offset = current_offset
                 prev_line = current_line
-                current_offset += 1
+                # First quote + quoted string
+                current_offset += quote_group_len + string_len
+                prev_offset = current_offset
+                # Closing quote
+                current_offset += quote_group_len
 
             elif (match := SYMBOL.match(line)) is not None:
                 tokens.append(
                     Token(
-                        line=current_line - prev_line,
-                        offset=current_offset - prev_offset,
+                        position=Position(
+                            line=current_line - prev_line,
+                            offset=current_offset - prev_offset,
+                        ),
+                        start_rel=Position(
+                            line=current_line,
+                            offset=abs_offset + current_offset,
+                        ),
                         text=match.group(0),
                         token_type="",
                         token_modifiers=[],
@@ -251,8 +294,14 @@ def lex(
             elif (match := OP.match(line)) is not None:
                 tokens.append(
                     Token(
-                        line=current_line - prev_line,
-                        offset=current_offset - prev_offset,
+                        position=Position(
+                            line=current_line - prev_line,
+                            offset=current_offset - prev_offset,
+                        ),
+                        start_rel=Position(
+                            line=current_line,
+                            offset=abs_offset + current_offset,
+                        ),
                         text=match.group(0),
                         token_type="operator",
                         token_modifiers=[],
@@ -275,5 +324,6 @@ def lex(
 
         prev_line = current_line
         seed_offset = 0
+        abs_offset = 0
 
     return tokens

@@ -753,10 +753,32 @@ async def _process_file(
             )
             continue
 
-        structure = yaml_block.get(_STRUCTURE_KEY)
+        anchor = yaml_block.get(_STRUCTURE_KEY)
 
-        tokens = to_lsp_semantics(structure)
+        flattened = flatten(anchor)
+
+        tokens = to_lsp_semantics(flattened)
         __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
+
+        semantic_diagnostics = extract_diagnostics(flattened)
+        if semantic_diagnostics:
+            for node in semantic_diagnostics:
+                __DIAGNOSTICS[path].append(
+                    types.Diagnostic(
+                        message=node.diagnostic.message,
+                        severity=types.DiagnosticSeverity.Error,  # TODO: Map internal to LSP
+                        range=types.Range(
+                            start=types.Position(
+                                line=anchor.abs_position.line + node.anchor_rel.line,
+                                character=node.anchor_rel.offset,
+                            ),
+                            end=types.Position(
+                                line=anchor.abs_position.line + node.anchor_rel.line,
+                                character=node.anchor_rel.offset + node.length,
+                            ),
+                        ),
+                    )
+                )
 
         resource_range = yaml_block.get(_RANGE_KEY)
 
@@ -813,7 +835,7 @@ async def _process_file(
                 preparer=preparer,
                 metadata=metadata,
                 spec=range_stripped,
-                _system_data=structure,
+                _system_data=anchor,
             )
 
         except Exception as err:

@@ -33,42 +33,61 @@ _STRUCTURE_KEY = "..structure.."
 class IndexingLoader(SafeLoader):
     def __init__(self, *args, doc, **kwargs):
         super().__init__(*args, **kwargs)
-        self.last_doc_start = (0, 0)
+        self.last_node_abs_start = (0, 0)
+        self.last_node_abs_end = (0, 0)
         self.doc = doc
         self.doc_count = 0
 
     def construct_document(self, node):
-        doc = super().construct_document(node)
+        yaml_doc = super().construct_document(node)
 
-        doc_kind = doc.get("kind")
+        doc_kind = yaml_doc.get("kind")
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
         if not doc_semantics:
             doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(ALL, {})
 
-        doc_metadata = doc.get("metadata", {})
+        doc_metadata = yaml_doc.get("metadata", {})
         doc_name = doc_metadata.get("name")
 
         if not doc_kind:
-            anchor_key = f"{unknown}:{self.doc_count}"
+            anchor_key = f"Unknown:{self.doc_count}"
         elif doc_kind and doc_name:
             anchor_key = f"{doc_kind}:{doc_name}"
         else:
             anchor_key = f"{doc_kind}:{self.doc_count}"
 
-        structure, doc_last_pos = extract_semantic_structure_info(
+        anchor_abs_start = Position(
+            line=node.start_mark.line,
+            offset=node.start_mark.column,
+        )
+
+        last_line, last_col = self.last_node_abs_start
+
+        anchor_rel_start = Position(
+            line=node.start_mark.line - last_line,
+            offset=0 if node.start_mark.line >= last_line else last_col,
+        )
+
+        structure, last_abs_start = extract_semantic_structure_info(
+            anchor_abs_start=anchor_abs_start,
             key_path="",
-            last_token_abs_start=self.last_doc_start,
-            last_node_end_mark=None,
-            node=node,
+            last_token_abs_start=self.last_node_abs_start,
+            yaml_node=node,
             type_hint_map=doc_semantics,
             doc=self.doc,
         )
-        doc[_STRUCTURE_KEY] = structure
-        self.last_doc_start = doc_last_pos
+        yaml_doc[_STRUCTURE_KEY] = Anchor(
+            key=anchor_key,
+            abs_position=anchor_abs_start,
+            rel_position=anchor_rel_start,
+            children=structure,
+        )
+
+        self.last_node_abs_start = last_abs_start
 
         self.doc_count = self.doc_count + 1
 
-        return doc
+        return yaml_doc
 
     def construct_mapping(self, node, deep=False):
         mapping = super().construct_mapping(node=node, deep=deep)
@@ -83,50 +102,34 @@ class IndexingLoader(SafeLoader):
 
 
 def extract_semantic_structure_info(
+    anchor_abs_start: Position,
+    last_token_abs_start: Position,
     key_path: str,
-    last_token_abs_start: tuple[int, int],
-    last_node_end_mark,
-    node,
-    type_hint_map: dict[str, SemanticStructure],
+    yaml_node,
     doc,
+    type_hint_map: dict[str, SemanticStructure],
 ):
     semantic_nodes = []
-    if last_node_end_mark:
-        if last_node_end_mark.line < node.start_mark.line - 1:
-            for line_offset in range(node.start_mark.line - last_node_end_mark.line):
-                line_data = doc.lines[last_node_end_mark.line + line_offset]
-                semantic_nodes.append(
-                    NodeInfo(
-                        key=key_path,
-                        position=RelativePosition(
-                            node_line=line_offset,
-                            offset=0,
-                            length=len(line_data),
-                        ),
-                        node_type="comment",
-                    )
-                )
 
-    if isinstance(node, MappingNode):
+    if isinstance(yaml_node, MappingNode):
         new_last_start = last_token_abs_start
         seen_keys = set[str]()
-        for key, value in node.value:
+        for key, value in yaml_node.value:
             hints = type_hint_map.get(key.value, {})
             if not hints:
                 hints = type_hint_map.get(ALL, {})
 
             node_diagnostic = None
-            # TODO: Harden this.
-            if node.value[0] in seen_keys:
+            if f"{key.value}" in seen_keys:
                 node_diagnostic = NodeDiagnostic(
                     message="Duplicate key", severity=Severity.error
                 )
 
             key_semantic_nodes, new_last_start = _extract_value_semantic_info(
-                key_path=f"{key_path}._{key.value}_",
+                anchor_abs_start=anchor_abs_start,
                 last_token_abs_start=new_last_start,
-                last_node_end_mark=last_node_end_mark,
-                node=key,
+                key_path=f"{key_path}._{key.value}_",
+                yaml_node=key,
                 type_hint=hints.get("type", "keyword"),
                 modifier=hints.get("modifier", []),
                 type_hint_map={},
@@ -134,16 +137,16 @@ def extract_semantic_structure_info(
                 diagnostic=node_diagnostic,
             )
             semantic_nodes.extend(key_semantic_nodes)
-            seen_keys.add(node.value[0])
+            seen_keys.add(f"{key.value}")
 
             sub_structure = hints.get("sub_structure", {})
             value_semantic_info = sub_structure.get(VALUE, {})
 
             value_semantic_nodes, new_last_start = _extract_value_semantic_info(
-                key_path=f"{key_path}.{key.value}",
+                anchor_abs_start=anchor_abs_start,
                 last_token_abs_start=new_last_start,
-                last_node_end_mark=last_node_end_mark,
-                node=value,
+                key_path=f"{key_path}.{key.value}",
+                yaml_node=value,
                 type_hint=value_semantic_info.get("type"),
                 modifier=value_semantic_info.get("modifier", []),
                 type_hint_map=sub_structure,
@@ -153,14 +156,14 @@ def extract_semantic_structure_info(
 
         return semantic_nodes, new_last_start
 
-    if isinstance(node, SequenceNode):
+    if isinstance(yaml_node, SequenceNode):
         new_last_start = last_token_abs_start
-        for idx, value in enumerate(node.value):
+        for idx, value in enumerate(yaml_node.value):
             value_semantic_nodes, new_last_start = _extract_value_semantic_info(
-                key_path=f"{key_path}.{idx}",
+                anchor_abs_start=anchor_abs_start,
                 last_token_abs_start=new_last_start,
-                last_node_end_mark=last_node_end_mark,
-                node=value,
+                key_path=f"{key_path}.{idx}",
+                yaml_node=value,
                 type_hint=None,
                 modifier=[],
                 type_hint_map=type_hint_map,
@@ -172,10 +175,10 @@ def extract_semantic_structure_info(
     value_semantic_info = type_hint_map.get(VALUE, {})
 
     value_semantic_nodes, new_last_start = _extract_value_semantic_info(
-        key_path=key_path,
+        anchor_abs_start=anchor_abs_start,
         last_token_abs_start=last_token_abs_start,
-        last_node_end_mark=last_node_end_mark,
-        node=node,
+        key_path=key_path,
+        yaml_node=yaml_node,
         type_hint=value_semantic_info.get("type"),
         modifier=value_semantic_info.get("modifier", []),
         type_hint_map=type_hint_map,
@@ -186,30 +189,30 @@ def extract_semantic_structure_info(
 
 
 def _extract_value_semantic_info(
+    anchor_abs_start: Position,
+    last_token_abs_start: Position,
     key_path: str,
-    last_token_abs_start: tuple[int, int],
-    last_node_end_mark,
-    node,
+    yaml_node,
     type_hint: TokenType | None,
     modifier: list[Modifier],
     type_hint_map: dict[str, SemanticStructure],
     doc,
     diagnostic: NodeDiagnostic | None = None,
 ):
-    if isinstance(node, (MappingNode, SequenceNode)):
+    if isinstance(yaml_node, (MappingNode, SequenceNode)):
         return extract_semantic_structure_info(
-            key_path=key_path,
+            anchor_abs_start=anchor_abs_start,
             last_token_abs_start=last_token_abs_start,
-            last_node_end_mark=last_node_end_mark,
-            node=node,
-            type_hint_map=type_hint_map,
+            key_path=key_path,
+            yaml_node=yaml_node,
             doc=doc,
+            type_hint_map=type_hint_map,
         )
 
     if type_hint:
         node_type = type_hint
     else:
-        tag_kind = node.tag.rsplit(":", 1)[-1]
+        tag_kind = yaml_node.tag.rsplit(":", 1)[-1]
         if tag_kind in {"int", "float", "bool"}:
             node_type = "number"
         else:
@@ -217,24 +220,48 @@ def _extract_value_semantic_info(
 
     last_line, last_column = last_token_abs_start
 
-    node_line = node.start_mark.line
-    node_column = node.start_mark.column
+    node_line = yaml_node.start_mark.line
+    node_column = yaml_node.start_mark.column
 
-    char_offset = node_column - (0 if node_line > last_line else last_column)
+    if node_type == "string" and yaml_node.value.startswith("="):
+        if node_line == yaml_node.end_mark.line:
+            line_data = doc.lines[node_line]
+            line_len = len(line_data)
 
-    if node_type == "string" and node.value.startswith("="):
-        if node_line == node.end_mark.line:
+            # This is to address lines that are quoted.
+            # The quotes throw off the column position, but are not represented
+            # in the value.
+            eq_char_offset = yaml_node.start_mark.column
+            while True:
+                if line_data[eq_char_offset] == "=":
+                    break
+
+                if eq_char_offset >= line_len:
+                    break
+
+                eq_char_offset += 1
+
+            char_offset = eq_char_offset - (0 if node_line > last_line else last_column)
+
             cel_nodes = cel_semantics.parse(
-                cel_expression=[node.value], seed_line=0, seed_offset=char_offset
+                cel_expression=[yaml_node.value],
+                anchor_base_pos=_compute_rel_position(
+                    line=node_line, offset=node_column, relative_to=anchor_abs_start
+                ),
+                seed_line=0,
+                seed_offset=char_offset,
+                abs_offset=eq_char_offset - char_offset,
             )
             return (cel_nodes, (node_line, node_column))
 
         nodes = [
             NodeInfo(
                 key=key_path,
-                position=Position(
-                    line=node_line - last_line,
-                    offset=char_offset,
+                position=_compute_rel_position(
+                    line=node_line, offset=node_column, relative_to=last_token_abs_start
+                ),
+                anchor_rel=_compute_rel_position(
+                    line=node_line, offset=node_column, relative_to=anchor_abs_start
                 ),
                 length=1,
                 node_type="operator",
@@ -244,26 +271,30 @@ def _extract_value_semantic_info(
         ]
 
         cel_nodes = cel_semantics.parse(
-            cel_expression=doc.lines[node_line + 1 : node.end_mark.line],
+            cel_expression=doc.lines[node_line + 1 : yaml_node.end_mark.line],
+            anchor_base_pos=_compute_rel_position(
+                line=node_line, offset=node_column, relative_to=anchor_abs_start
+            ),
             seed_line=1,
             seed_offset=0,
         )
         nodes.extend(cel_nodes)
 
+        # TODO: Just compute directly from anchor_rel position.
         last_node_line = node_line
         last_node_col = 0
-        for node in cel_nodes:
-            if node.position.line == 0:
-                last_node_col = node.position.offset
+        for yaml_node in cel_nodes:
+            if yaml_node.position.line == 0:
+                last_node_col = yaml_node.position.offset
             else:
                 last_node_col = 0
 
-            last_node_line += node.position.line
+            last_node_line += yaml_node.position.line
 
         return (nodes, (last_node_line, last_node_col))
 
-    if node_line == node.end_mark.line:
-        value_len = node.end_mark.column - node_column
+    if node_line == yaml_node.end_mark.line:
+        value_len = yaml_node.end_mark.column - node_column
     else:
         line_data = doc.lines[node_line]
         value_len = len(line_data) - node_column
@@ -271,8 +302,9 @@ def _extract_value_semantic_info(
     # if key_path == ".spec.materializers.base.spec.two":
     #     raise Exception(f"<{len(node_value_lines)}: {node_value_lines}>")
     # raise Exception(
-    #    f"<{node.start_mark.line}:{node.start_mark.column}>{len(node.value)}<{node.end_mark.line}:{node.end_mark.column}>"
     # )
+
+    char_offset = node_column - (0 if node_line > last_line else last_column)
 
     nodes = []
     while True:
@@ -283,6 +315,9 @@ def _extract_value_semantic_info(
                     line=node_line - last_line,
                     offset=char_offset,
                 ),
+                anchor_rel=_compute_rel_position(
+                    line=node_line, offset=char_offset, relative_to=anchor_abs_start
+                ),
                 length=value_len,
                 node_type=node_type,
                 modifier=modifier,
@@ -290,7 +325,7 @@ def _extract_value_semantic_info(
             )
         )
 
-        if node_line + 1 >= node.end_mark.line:
+        if node_line + 1 >= yaml_node.end_mark.line:
             break
 
         last_line = node_line
@@ -306,6 +341,14 @@ def _extract_value_semantic_info(
     return (
         nodes,
         (node_line, node_column),
+    )
+
+
+def _compute_rel_position(line: int, offset: int, relative_to: Position) -> Position:
+    rel_to_line, rel_to_offset = relative_to
+    rel_line = line - rel_to_line
+    return Position(
+        line=rel_line, offset=offset if line == 0 else (offset - rel_to_offset)
     )
 
 
