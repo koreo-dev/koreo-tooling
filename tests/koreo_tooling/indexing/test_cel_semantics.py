@@ -2,7 +2,7 @@ import unittest
 
 from koreo_tooling.indexing.cel_semantics import (
     NodeDiagnostic,
-    NodeInfo,
+    SemanticNode,
     Position,
     Severity,
     parse,
@@ -20,7 +20,7 @@ class TestParse(unittest.TestCase):
         nodes = parse(["1"], anchor_base_pos=anchor_base_pos)
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=0, offset=0),
                 anchor_rel=anchor_base_pos,
@@ -37,7 +37,7 @@ class TestParse(unittest.TestCase):
         nodes = parse(["+"], anchor_base_pos=anchor_base_pos)
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
@@ -54,7 +54,7 @@ class TestParse(unittest.TestCase):
         nodes = parse(["inputs"], anchor_base_pos=anchor_base_pos)
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="inputs",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
@@ -71,7 +71,7 @@ class TestParse(unittest.TestCase):
         nodes = parse(["'this is a lot'"], anchor_base_pos=anchor_base_pos)
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="'",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
@@ -79,7 +79,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="this is a lot",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=0, offset=1),
@@ -87,7 +87,7 @@ class TestParse(unittest.TestCase):
                 node_type="string",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="'",
                 position=Position(line=0, offset=13),
                 anchor_rel=Position(line=0, offset=14),
@@ -104,7 +104,7 @@ class TestParse(unittest.TestCase):
         nodes = parse(["1 + 1"], anchor_base_pos=anchor_base_pos)
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
@@ -112,7 +112,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=0, offset=2),
@@ -120,7 +120,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=0, offset=4),
@@ -150,7 +150,7 @@ class TestParse(unittest.TestCase):
         )
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=0, offset=15),
                 anchor_rel=Position(line=10, offset=20),
@@ -158,7 +158,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=11, offset=6),
@@ -166,7 +166,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=12, offset=6),
@@ -188,7 +188,7 @@ class TestParse(unittest.TestCase):
         )
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=2, offset=6),
                 anchor_rel=Position(line=7, offset=6),
@@ -196,7 +196,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=8, offset=6),
@@ -204,7 +204,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=9, offset=6),
@@ -239,7 +239,7 @@ class TestParse(unittest.TestCase):
         )
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=14, offset=6),
@@ -247,7 +247,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=4, offset=6),
                 anchor_rel=Position(line=18, offset=6),
@@ -255,7 +255,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=6, offset=6),
                 anchor_rel=Position(line=24, offset=6),
@@ -273,7 +273,7 @@ class TestParse(unittest.TestCase):
         nodes = parse(['{"key": value,  }'], anchor_base_pos=anchor_base_pos)
         expected = [
             # {
-            NodeInfo(
+            SemanticNode(
                 key="{",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=1, offset=0),
@@ -281,7 +281,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=1, offset=1),
@@ -289,7 +289,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=1, offset=2),
@@ -297,7 +297,7 @@ class TestParse(unittest.TestCase):
                 node_type="property",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=1, offset=5),
@@ -305,7 +305,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=1, offset=6),
@@ -313,7 +313,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="value",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=1, offset=8),
@@ -321,7 +321,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=1, offset=13),
@@ -332,7 +332,7 @@ class TestParse(unittest.TestCase):
                     message="Trailing commas are unsupported.", severity=Severity.error
                 ),
             ),
-            NodeInfo(
+            SemanticNode(
                 key="}",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=1, offset=16),
@@ -352,7 +352,7 @@ class TestParse(unittest.TestCase):
         )
         expected = [
             # {
-            NodeInfo(
+            SemanticNode(
                 key="{",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=2, offset=0),
@@ -360,7 +360,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=3, offset=2),
@@ -368,7 +368,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=3, offset=3),
@@ -376,7 +376,7 @@ class TestParse(unittest.TestCase):
                 node_type="property",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=3, offset=6),
@@ -384,7 +384,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=3, offset=7),
@@ -392,7 +392,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="value",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=3, offset=9),
@@ -400,7 +400,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=3, offset=14),
@@ -411,7 +411,7 @@ class TestParse(unittest.TestCase):
                     message="Trailing commas are unsupported.", severity=Severity.error
                 ),
             ),
-            NodeInfo(
+            SemanticNode(
                 key="}",
                 position=Position(line=1, offset=0),
                 anchor_rel=Position(line=4, offset=0),
@@ -431,7 +431,7 @@ class TestParse(unittest.TestCase):
         )
 
         expected = [
-            NodeInfo(
+            SemanticNode(
                 key="int",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=0, offset=4),
@@ -439,7 +439,7 @@ class TestParse(unittest.TestCase):
                 node_type="function",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="(",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=0, offset=7),
@@ -447,7 +447,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="'",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=0, offset=8),
@@ -455,7 +455,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="1717",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=0, offset=9),
@@ -463,7 +463,7 @@ class TestParse(unittest.TestCase):
                 node_type="string",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="'",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=0, offset=13),
@@ -471,7 +471,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=")",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=0, offset=15),
@@ -479,7 +479,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=0, offset=13),
                 anchor_rel=Position(line=0, offset=28),
@@ -487,7 +487,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="9",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=0, offset=33),
@@ -520,7 +520,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             # {
-            NodeInfo(
+            SemanticNode(
                 key="{",
                 position=Position(line=1, offset=0),
                 anchor_rel=Position(line=4, offset=0),
@@ -529,7 +529,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             #   "complicated.key.name": 'value',
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=5, offset=2),
@@ -537,7 +537,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="complicated.key.name",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=3),
@@ -545,7 +545,7 @@ class TestParse(unittest.TestCase):
                 node_type="property",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=20),
                 anchor_rel=Position(line=5, offset=23),
@@ -553,7 +553,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=24),
@@ -561,7 +561,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="'",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=5, offset=26),
@@ -569,7 +569,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="value",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=27),
@@ -577,7 +577,7 @@ class TestParse(unittest.TestCase):
                 node_type="string",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="'",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=5, offset=32),
@@ -585,7 +585,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=33),
@@ -594,7 +594,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             #   unquoted: "key",
-            NodeInfo(
+            SemanticNode(
                 key="unquoted",
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=6, offset=2),
@@ -602,7 +602,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=8),
                 anchor_rel=Position(line=6, offset=10),
@@ -610,7 +610,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=6, offset=12),
@@ -618,7 +618,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=6, offset=13),
@@ -626,7 +626,7 @@ class TestParse(unittest.TestCase):
                 node_type="string",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=6, offset=16),
@@ -634,7 +634,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=6, offset=17),
@@ -643,7 +643,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             #   "formula": 1 + 8,
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=7, offset=2),
@@ -651,7 +651,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="formula",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=7, offset=3),
@@ -659,7 +659,7 @@ class TestParse(unittest.TestCase):
                 node_type="property",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=7),
                 anchor_rel=Position(line=7, offset=10),
@@ -667,7 +667,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=7, offset=11),
@@ -675,7 +675,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="1",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=7, offset=13),
@@ -683,7 +683,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=7, offset=15),
@@ -691,7 +691,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="812",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=7, offset=17),
@@ -699,7 +699,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=7, offset=20),
@@ -708,7 +708,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             #   function: a.name()
-            NodeInfo(
+            SemanticNode(
                 key="function",
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=8, offset=2),
@@ -716,7 +716,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=8),
                 anchor_rel=Position(line=8, offset=10),
@@ -724,7 +724,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="a",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=8, offset=12),
@@ -732,7 +732,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=".",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=13),
@@ -740,7 +740,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="name",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=14),
@@ -748,7 +748,7 @@ class TestParse(unittest.TestCase):
                 node_type="function",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="(",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=8, offset=18),
@@ -756,7 +756,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=")",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=19),
@@ -764,7 +764,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=20),
@@ -773,7 +773,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             #   "index": avar[2] + avar["key"]
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=9, offset=2),
@@ -781,7 +781,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="index",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=3),
@@ -789,7 +789,7 @@ class TestParse(unittest.TestCase):
                 node_type="property",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=9, offset=8),
@@ -797,7 +797,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=9),
@@ -805,7 +805,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="avar",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=9, offset=11),
@@ -813,7 +813,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="[",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=9, offset=15),
@@ -821,7 +821,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="2",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=16),
@@ -829,7 +829,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="]",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=17),
@@ -837,7 +837,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="+",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=9, offset=19),
@@ -845,7 +845,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="avar",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=9, offset=21),
@@ -853,7 +853,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="[",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=9, offset=25),
@@ -861,7 +861,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=26),
@@ -869,7 +869,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=27),
@@ -877,7 +877,7 @@ class TestParse(unittest.TestCase):
                 node_type="string",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=9, offset=30),
@@ -885,7 +885,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="]",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=31),
@@ -893,7 +893,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=32),
@@ -902,7 +902,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             #   "entry": inputs.map(key, {key: 22})
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=10, offset=2),
@@ -910,7 +910,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="entry",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=3),
@@ -918,7 +918,7 @@ class TestParse(unittest.TestCase):
                 node_type="property",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key='"',
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=10, offset=8),
@@ -926,7 +926,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=9),
@@ -934,7 +934,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="inputs",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=11),
@@ -942,7 +942,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=".",
                 position=Position(line=0, offset=6),
                 anchor_rel=Position(line=10, offset=17),
@@ -950,7 +950,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="map",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=18),
@@ -958,7 +958,7 @@ class TestParse(unittest.TestCase):
                 node_type="keyword",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="(",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=10, offset=21),
@@ -966,7 +966,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=22),
@@ -974,7 +974,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=",",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=10, offset=25),
@@ -982,7 +982,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="{",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=27),
@@ -990,7 +990,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=28),
@@ -998,7 +998,7 @@ class TestParse(unittest.TestCase):
                 node_type="variable",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=":",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=10, offset=31),
@@ -1006,7 +1006,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="22",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=33),
@@ -1014,7 +1014,7 @@ class TestParse(unittest.TestCase):
                 node_type="number",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key="}",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=35),
@@ -1022,7 +1022,7 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
             ),
-            NodeInfo(
+            SemanticNode(
                 key=")",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=36),
@@ -1031,7 +1031,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             # }
-            NodeInfo(
+            SemanticNode(
                 key="}",
                 position=Position(line=1, offset=0),
                 anchor_rel=Position(line=11, offset=0),

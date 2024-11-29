@@ -8,10 +8,10 @@ from lsprotocol import types
 
 from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE, VALUE
 from .semantics import (
-    Anchor,
+    SemanticAnchor,
     Modifier,
     NodeDiagnostic,
-    NodeInfo,
+    SemanticNode,
     Position,
     SemanticStructure,
     Severity,
@@ -76,7 +76,7 @@ class IndexingLoader(SafeLoader):
             type_hint_map=doc_semantics,
             doc=self.doc,
         )
-        yaml_doc[_STRUCTURE_KEY] = Anchor(
+        yaml_doc[_STRUCTURE_KEY] = SemanticAnchor(
             key=anchor_key,
             abs_position=anchor_abs_start,
             rel_position=anchor_rel_start,
@@ -255,8 +255,8 @@ def _extract_value_semantic_info(
             return (cel_nodes, (node_line, node_column))
 
         nodes = [
-            NodeInfo(
                 key=key_path,
+            SemanticNode(
                 position=_compute_rel_position(
                     line=node_line, offset=node_column, relative_to=last_token_abs_start
                 ),
@@ -309,8 +309,8 @@ def _extract_value_semantic_info(
     nodes = []
     while True:
         nodes.append(
-            NodeInfo(
                 key=key_path,
+            SemanticNode(
                 position=Position(
                     line=node_line - last_line,
                     offset=char_offset,

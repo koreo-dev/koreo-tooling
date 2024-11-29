@@ -4,7 +4,7 @@ import re
 from .semantics import (
     Modifier,
     NodeDiagnostic,
-    NodeInfo,
+    SemanticNode,
     Position,
     Severity,
     TokenType,
@@ -85,7 +85,7 @@ def parse(
     seed_line: int = 0,
     seed_offset: int = 0,
     abs_offset: int = 0,
-) -> list[NodeInfo]:
+) -> list[SemanticNode]:
     """Convert the given expression into a list of tokens"""
     tokens = lex(
         cel_expression=cel_expression,
@@ -99,7 +99,7 @@ def parse(
 
 def _extract_semantic_structure(
     tokens: list[Token], anchor_base_pos: Position
-) -> list[NodeInfo]:
+) -> list[SemanticNode]:
     """Given a list of tokens, determine their type and modifiers."""
 
     def next(idx):
@@ -113,7 +113,7 @@ def _extract_semantic_structure(
     in_dquote = False
     in_squote = False
 
-    nodes: list[NodeInfo] = []
+    nodes: list[SemanticNode] = []
     for idx, token in enumerate(tokens):
         if token.token_type == "operator":
             node_diagnostic = None
@@ -135,7 +135,7 @@ def _extract_semantic_structure(
                 )
 
             nodes.append(
-                NodeInfo(
+                SemanticNode(
                     key=token.text,
                     position=token.position,
                     anchor_rel=Position(
@@ -171,7 +171,7 @@ def _extract_semantic_structure(
                 token_type = "variable"
 
         nodes.append(
-            NodeInfo(
+            SemanticNode(
                 key=token.text,
                 position=token.position,
                 anchor_rel=Position(

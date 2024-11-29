@@ -68,21 +68,21 @@ class Position(NamedTuple):
     offset: int
 
 
-class Anchor(NamedTuple):
     key: str
+class SemanticAnchor(NamedTuple):
     abs_position: Position
     rel_position: Position
-    children: list[Anchor | NodeInfo] | None = None
+    children: list[SemanticAnchor | SemanticNode] | None = None
 
 
-class NodeInfo(NamedTuple):
     key: str
+class SemanticNode(NamedTuple):
     position: Position
     anchor_rel: Position
     length: int
     node_type: TokenType = ""
     modifier: list[Modifier] | None = None
-    children: list[NodeInfo] | None = None
+    children: list[SemanticNode] | None = None
     diagnostic: NodeDiagnostic | None = None
 
 
@@ -92,8 +92,10 @@ class SemanticStructure(TypedDict):
     sub_structure: NotRequired[dict[str, SemanticStructure]]
 
 
-def flatten(nodes: Anchor | NodeInfo | list[Anchor | NodeInfo]) -> list[NodeInfo]:
-    if isinstance(nodes, (Anchor, NodeInfo)):
+def flatten(
+    nodes: SemanticAnchor | SemanticNode | list[SemanticAnchor | SemanticNode],
+) -> list[SemanticNode]:
+    if isinstance(nodes, (SemanticAnchor, SemanticNode)):
         return flatten_node(nodes)
 
     flattened = []
@@ -104,20 +106,10 @@ def flatten(nodes: Anchor | NodeInfo | list[Anchor | NodeInfo]) -> list[NodeInfo
     return flattened
 
 
-def flatten_node(node: Anchor | NodeInfo) -> list[NodeInfo]:
+def flatten_node(node: SemanticAnchor | SemanticNode) -> list[SemanticNode]:
     flattened = []
-    if isinstance(node, NodeInfo):
-        flattened.append(
-            NodeInfo(
-                key=node.key,
-                position=node.position,
-                anchor_rel=node.anchor_rel,
-                length=node.length,
-                node_type=node.node_type,
-                modifier=node.modifier,
-                diagnostic=node.diagnostic,
-            )
-        )
+    if isinstance(node, SemanticNode):
+        flattened.append(node._replace(children=None))
 
     if not node.children:
         return flattened
@@ -128,7 +120,7 @@ def flatten_node(node: Anchor | NodeInfo) -> list[NodeInfo]:
     return flattened
 
 
-def to_lsp_semantics(nodes: list[NodeInfo]) -> list[int]:
+def to_lsp_semantics(nodes: list[SemanticNode]) -> list[int]:
     semantics = []
     for node in nodes:
         semantics.extend(
@@ -144,5 +136,49 @@ def to_lsp_semantics(nodes: list[NodeInfo]) -> list[int]:
     return semantics
 
 
-def extract_diagnostics(nodes: list[NodeInfo]) -> list[NodeInfo]:
+def extract_diagnostics(nodes: list[SemanticNode]) -> list[SemanticNode]:
     return [node for node in nodes if node.diagnostic]
+
+
+def generate_key_range_index(
+    nodes: SemanticAnchor | SemanticNode | list[SemanticAnchor | SemanticNode],
+    anchor: SemanticAnchor | None = None,
+) -> list:
+    index = []
+
+    if isinstance(nodes, SemanticAnchor):
+        if nodes.key:
+            # TODO: Range?
+            index.append((nodes.key, nodes.abs_position))
+
+        if nodes.children:
+            index.extend(generate_key_range_index(nodes=nodes.children, anchor=nodes))
+
+        return index
+
+    if isinstance(nodes, SemanticNode):
+        if nodes.key and anchor:
+            index.append((nodes.key, _compute_range(nodes, anchor=anchor)))
+
+        if nodes.children:
+            index.extend(generate_key_range_index(nodes=nodes.children, anchor=anchor))
+
+        return index
+
+    for node in nodes:
+        index.extend(generate_key_range_index(nodes=node, anchor=anchor))
+
+    return index
+
+
+def _compute_range(node: SemanticNode, anchor: SemanticAnchor) -> types.Range:
+    return types.Range(
+        start=types.Position(
+            line=anchor.abs_position.line + node.anchor_rel.line,
+            character=node.anchor_rel.offset,
+        ),
+        end=types.Position(
+            line=anchor.abs_position.line + node.anchor_rel.line,
+            character=node.anchor_rel.offset + node.length,
+        ),
+    )

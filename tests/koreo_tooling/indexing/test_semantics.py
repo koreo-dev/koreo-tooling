@@ -18,7 +18,7 @@ class TestFlatten(unittest.TestCase):
                 [modifier for modifier in semantics.Modifier], k=random.randint(0, 3)
             )
 
-            node = semantics.NodeInfo(
+            node = semantics.SemanticNode(
                 key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
@@ -59,7 +59,7 @@ class TestFlatten(unittest.TestCase):
                     children.append(child_node)
                     child_nodes.extend(child_expected_nodes)
 
-            node = semantics.NodeInfo(
+            node = semantics.SemanticNode(
                 key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
@@ -69,7 +69,7 @@ class TestFlatten(unittest.TestCase):
                 children=children,
             )
 
-            childless_node = semantics.NodeInfo(
+            childless_node = semantics.SemanticNode(
                 key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
@@ -106,7 +106,7 @@ class TestFlattenNode(unittest.TestCase):
             [modifier for modifier in semantics.Modifier], k=random.randint(0, 3)
         )
 
-        node = semantics.NodeInfo(
+        node = semantics.SemanticNode(
             key=node_key,
             position=semantics.Position(line=0, offset=0),
             anchor_rel=semantics.Position(line=0, offset=0),
@@ -120,7 +120,7 @@ class TestFlattenNode(unittest.TestCase):
 
         self.assertListEqual(
             [
-                semantics.NodeInfo(
+                semantics.SemanticNode(
                     key=node_key,
                     position=semantics.Position(line=0, offset=0),
                     anchor_rel=semantics.Position(line=0, offset=0),
@@ -154,7 +154,7 @@ class TestFlattenNode(unittest.TestCase):
                     children.append(child_node)
                     child_nodes.extend(child_expected_nodes)
 
-            node = semantics.NodeInfo(
+            node = semantics.SemanticNode(
                 key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
@@ -164,7 +164,7 @@ class TestFlattenNode(unittest.TestCase):
                 children=children,
             )
 
-            childless_node = semantics.NodeInfo(
+            childless_node = semantics.SemanticNode(
                 key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
