@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from .semantics import Modifier, SemanticStructure
 
 
@@ -46,6 +47,38 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
             "sub_structure": {
                 "staticResource": {
                     "sub_structure": {
+                        "managedResource": {
+                            "sub_structure": {
+                                "apiVersion": {
+                                    "type": "parameter",
+                                    "sub_structure": {
+                                        VALUE: {
+                                            "type": "namespace",
+                                        },
+                                    },
+                                },
+                                "kind": {
+                                    "type": "parameter",
+                                    "sub_structure": {
+                                        VALUE: {
+                                            "type": "type",
+                                        },
+                                    },
+                                },
+                                "plural": {
+                                    "type": "parameter",
+                                    "sub_structure": {
+                                        VALUE: {"type": "number"},
+                                    },
+                                },
+                                "namespaced": {
+                                    "type": "parameter",
+                                    "sub_structure": {
+                                        VALUE: {"type": "number"},
+                                    },
+                                },
+                            },
+                        },
                         "behavior": {
                             "sub_structure": {
                                 "load": {
@@ -72,6 +105,15 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                                         VALUE: {"type": "enumMember"},
                                     },
                                 },
+                            },
+                        },
+                    },
+                },
+                "dynamicResource": {
+                    "sub_structure": {
+                        "key": {
+                            "type": "property",
+                            "sub_structure": {
                             },
                         },
                     },
@@ -188,6 +230,19 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                                 },
                             },
                         },
+                        "workflowRef": {
+                            "type": "property",
+                            "sub_structure": {
+                                "name": {
+                                    "type": "property",
+                                    "sub_structure": {
+                                        VALUE: {
+                                            "type": "class",
+                                        },
+                                    },
+                                },
+                            },
+                        },
                         "inputs": {
                             "type": "property",
                             "sub_structure": {
@@ -197,6 +252,170 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                                         VALUE: {"type": "argument"},
                                     },
                                 }
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+    "FunctionTest": {
+        "apiVersion": {
+            "sub_structure": {
+                VALUE: {
+                    "type": "namespace",
+                },
+            },
+        },
+        "kind": {
+            "sub_structure": {
+                VALUE: {
+                    "type": "type",
+                },
+            },
+        },
+        "metadata": {
+            "sub_structure": {
+                "name": {
+                    "sub_structure": {
+                        VALUE: {
+                            "type": "function",
+                            "modifier": [Modifier.definition],
+                        },
+                    },
+                },
+                "namespace": {
+                    "sub_structure": {
+                        VALUE: {
+                            "type": "namespace",
+                        },
+                    },
+                },
+            },
+        },
+        "spec": {
+            "sub_structure": {
+                "functionRef": {
+                    "type": "property",
+                    "sub_structure": {
+                        "name": {
+                            "type": "property",
+                            "sub_structure": {
+                                VALUE: {
+                                    "type": "function",
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+    "ResourceTemplate": {
+        "apiVersion": {
+            "sub_structure": {
+                VALUE: {
+                    "type": "namespace",
+                },
+            },
+        },
+        "kind": {
+            "sub_structure": {
+                VALUE: {
+                    "type": "type",
+                },
+            },
+        },
+        "metadata": {
+            "sub_structure": {
+                "name": {
+                    "sub_structure": {
+                        VALUE: {
+                            "type": "function",
+                            "modifier": [Modifier.definition],
+                        },
+                    },
+                },
+                "namespace": {
+                    "sub_structure": {
+                        VALUE: {
+                            "type": "namespace",
+                        },
+                    },
+                },
+            },
+        },
+        "spec": {
+            "sub_structure": {
+                "behavior": {
+                    "sub_structure": {
+                        "load": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {"type": "enumMember"},
+                            },
+                        },
+                        "create": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {"type": "number"},
+                            },
+                        },
+                        "update": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {"type": "enumMember"},
+                            },
+                        },
+                        "delete": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {"type": "enumMember"},
+                            },
+                        },
+                    },
+                },
+                "managedResource": {
+                    "sub_structure": {
+                        "apiVersion": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {
+                                    "type": "namespace",
+                                },
+                            },
+                        },
+                        "kind": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {
+                                    "type": "type",
+                                },
+                            },
+                        },
+                        "plural": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {"type": "number"},
+                            },
+                        },
+                        "namespaced": {
+                            "type": "parameter",
+                            "sub_structure": {
+                                VALUE: {"type": "number"},
+                            },
+                        },
+                    },
+                },
+                "functionRef": {
+                    "type": "property",
+                    "sub_structure": {
+                        "name": {
+                            "type": "property",
+                            "sub_structure": {
+                                VALUE: {
+                                    "type": "function",
+                                },
                             },
                         },
                     },
