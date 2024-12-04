@@ -655,12 +655,6 @@ async def _handle_file(doc: TextDocument):
         if await _process_file(doc=doc):
             return
     except Exception as err:
-        server.window_log_message(
-            params=types.LogMessageParams(
-                type=types.MessageType.Error,
-                message=f"Error parsing file ({doc.path}): {err}",
-            )
-        )
         return
 
     _process_workflows(path=doc.path)
