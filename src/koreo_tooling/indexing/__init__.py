@@ -30,7 +30,6 @@ from .semantics import (
 
 from . import cel_semantics
 
-_RANGE_KEY = "..range.."
 _STRUCTURE_KEY = "..structure.."
 
 
@@ -91,17 +90,6 @@ class IndexingLoader(SafeLoader):
         self.doc_count = self.doc_count + 1
 
         return yaml_doc
-
-    def construct_mapping(self, node, deep=False):
-        mapping = super().construct_mapping(node=node, deep=deep)
-        mapping[_RANGE_KEY] = types.Range(
-            start=types.Position(
-                line=node.start_mark.line, character=node.start_mark.column
-            ),
-            end=types.Position(line=node.end_mark.line, character=node.end_mark.column),
-        )
-
-        return mapping
 
 
 def extract_semantic_structure_info(
@@ -407,20 +395,3 @@ def _compute_rel_position(line: int, offset: int, relative_to: Position) -> Posi
     return Position(
         line=rel_line, offset=offset if rel_line > 0 else (offset - rel_to_offset)
     )
-
-
-STRIP_KEYS = set([_RANGE_KEY])
-
-
-def range_stripper(resource: Any):
-    if isinstance(resource, dict):
-        return {
-            key: range_stripper(value)
-            for key, value in resource.items()
-            if key not in STRIP_KEYS
-        }
-
-    if isinstance(resource, list):
-        return [range_stripper(value) for value in resource]
-
-    return resource

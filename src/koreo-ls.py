@@ -28,13 +28,11 @@ from koreo_tooling.indexing import (
     IndexingLoader,
     TokenModifiers,
     TokenTypes,
-    _RANGE_KEY,
     _STRUCTURE_KEY,
     compute_abs_range,
     anchor_path_search,
     extract_diagnostics,
     flatten,
-    range_stripper,
     to_lsp_semantics,
     generate_key_range_index,
 )
@@ -965,27 +963,33 @@ async def _process_file(
                     types.Diagnostic(
                         message=node.diagnostic.message,
                         severity=types.DiagnosticSeverity.Error,  # TODO: Map internal to LSP
-                        range=types.Range(
-                            start=types.Position(
-                                line=semantic_anchor.abs_position.line
-                                + node.anchor_rel.line,
-                                character=node.anchor_rel.offset,
-                            ),
-                            end=types.Position(
-                                line=semantic_anchor.abs_position.line
-                                + node.anchor_rel.line,
-                                character=node.anchor_rel.offset + node.length,
-                            ),
-                        ),
+                        range=compute_abs_range(node, semantic_anchor),
                     )
                 )
-
-        resource_range = yaml_block.get(_RANGE_KEY)
 
         if api_version not in {
             constants.API_VERSION,
             constants.CRD_API_VERSION,
         }:
+            api_version_block = _key_value_range_extract(
+                path_key="apiVersion",
+                search_nodes=semantic_anchor.children,
+                doc_path=path,
+                anchor=semantic_anchor,
+            )
+            if api_version_block:
+                resource_range = compute_abs_range(api_version_block, semantic_anchor)
+            else:
+                resource_range = types.Range(
+                    start=types.Position(
+                        line=semantic_anchor.abs_position.line,
+                        character=semantic_anchor.abs_position.offset,
+                    ),
+                    end=types.Position(
+                        line=semantic_anchor.abs_position.line,
+                        character=len(doc.lines[semantic_anchor.abs_position.line]),
+                    ),
+                )
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"'{kind}.{api_version}' is not a Koreo Resource.",
@@ -996,6 +1000,25 @@ async def _process_file(
             continue
 
         if kind not in constants.PREPARE_MAP and kind != constants.CRD_KIND:
+            kind_version_block = _key_value_range_extract(
+                path_key="kind",
+                search_nodes=semantic_anchor.children,
+                doc_path=path,
+                anchor=semantic_anchor,
+            )
+            if kind_version_block:
+                resource_range = compute_abs_range(kind_version_block, semantic_anchor)
+            else:
+                resource_range = types.Range(
+                    start=types.Position(
+                        line=semantic_anchor.abs_position.line,
+                        character=semantic_anchor.abs_position.offset,
+                    ),
+                    end=types.Position(
+                        line=semantic_anchor.abs_position.line,
+                        character=len(doc.lines[semantic_anchor.abs_position.line]),
+                    ),
+                )
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"'{kind}' is not a supported Koreo Resource.",
@@ -1018,15 +1041,34 @@ async def _process_file(
         }
 
         try:
-            range_stripped = range_stripper(copy.deepcopy(raw_spec))
             await cache.prepare_and_cache(
                 resource_class=resource_class,
                 preparer=preparer,
                 metadata=metadata,
-                spec=range_stripped,
+                spec=raw_spec,
                 _system_data=cached_system_data,
             )
         except Exception as err:
+            resource_name_label = _nested_key_value_range_extract(
+                path_parts=["metadata", "name"],
+                search_nodes=semantic_anchor.children,
+                doc_path=path,
+                anchor=semantic_anchor,
+            )
+            if resource_name_label:
+                resource_range = compute_abs_range(resource_name_label, semantic_anchor)
+            else:
+                resource_range = types.Range(
+                    start=types.Position(
+                        line=semantic_anchor.abs_position.line,
+                        character=semantic_anchor.abs_position.offset,
+                    ),
+                    end=types.Position(
+                        line=semantic_anchor.abs_position.line,
+                        character=len(doc.lines[semantic_anchor.abs_position.line]),
+                    ),
+                )
+
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"FAILED TO Extract ('{kind}.{api_version}') from {metadata.get('name')} ({err}).",
@@ -1387,6 +1429,28 @@ def _key_value_range_extract(
         return None
 
     return value
+
+
+def _nested_key_value_range_extract(
+    path_parts: list[str], search_nodes: Sequence, doc_path: str, anchor
+):
+    while path_parts:
+        next_path, *path_parts = path_parts
+        next_node = _key_value_range_extract(
+            path_key=next_path,
+            search_nodes=search_nodes,
+            doc_path=doc_path,
+            anchor=anchor,
+        )
+        if not next_node:
+            return None
+
+        if not path_parts:
+            return next_node
+
+        search_nodes = next_node.children
+
+    return None
 
 
 if __name__ == "__main__":
