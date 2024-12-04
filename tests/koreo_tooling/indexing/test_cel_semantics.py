@@ -21,7 +21,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=0, offset=0),
                 anchor_rel=anchor_base_pos,
                 length=1,
@@ -38,7 +38,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
                 length=1,
@@ -55,7 +55,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="inputs",
+                path_key="inputs",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
                 length=6,
@@ -72,7 +72,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="'",
+                path_key="'",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
                 length=1,
@@ -80,7 +80,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="this is a lot",
+                path_key="this is a lot",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=0, offset=1),
                 length=13,
@@ -88,7 +88,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="'",
+                path_key="'",
                 position=Position(line=0, offset=13),
                 anchor_rel=Position(line=0, offset=14),
                 length=1,
@@ -105,7 +105,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=0, offset=0),
                 length=1,
@@ -113,7 +113,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=0, offset=2),
                 length=1,
@@ -121,7 +121,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=0, offset=4),
                 length=1,
@@ -151,7 +151,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=0, offset=15),
                 anchor_rel=Position(line=10, offset=20),
                 length=1,
@@ -159,7 +159,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=11, offset=6),
                 length=1,
@@ -167,7 +167,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=12, offset=6),
                 length=1,
@@ -189,7 +189,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=2, offset=6),
                 anchor_rel=Position(line=7, offset=6),
                 length=1,
@@ -197,7 +197,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=8, offset=6),
                 length=1,
@@ -205,7 +205,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=9, offset=6),
                 length=1,
@@ -240,7 +240,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=1, offset=6),
                 anchor_rel=Position(line=14, offset=6),
                 length=1,
@@ -248,7 +248,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=4, offset=6),
                 anchor_rel=Position(line=18, offset=6),
                 length=1,
@@ -256,7 +256,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=6, offset=6),
                 anchor_rel=Position(line=24, offset=6),
                 length=1,
@@ -274,7 +274,7 @@ class TestParse(unittest.TestCase):
         expected = [
             # {
             SemanticNode(
-                key="{",
+                path_key="{",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=1, offset=0),
                 length=1,
@@ -282,7 +282,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=1, offset=1),
                 length=1,
@@ -290,7 +290,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="key",
+                path_key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=1, offset=2),
                 length=3,
@@ -298,7 +298,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=1, offset=5),
                 length=1,
@@ -306,7 +306,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=1, offset=6),
                 length=1,
@@ -314,7 +314,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="value",
+                path_key="value",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=1, offset=8),
                 length=5,
@@ -322,7 +322,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=1, offset=13),
                 length=1,
@@ -333,7 +333,7 @@ class TestParse(unittest.TestCase):
                 ),
             ),
             SemanticNode(
-                key="}",
+                path_key="}",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=1, offset=16),
                 length=1,
@@ -353,7 +353,7 @@ class TestParse(unittest.TestCase):
         expected = [
             # {
             SemanticNode(
-                key="{",
+                path_key="{",
                 position=Position(line=0, offset=0),
                 anchor_rel=Position(line=2, offset=0),
                 length=1,
@@ -361,7 +361,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=3, offset=2),
                 length=1,
@@ -369,7 +369,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="key",
+                path_key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=3, offset=3),
                 length=3,
@@ -377,7 +377,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=3, offset=6),
                 length=1,
@@ -385,7 +385,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=3, offset=7),
                 length=1,
@@ -393,7 +393,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="value",
+                path_key="value",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=3, offset=9),
                 length=5,
@@ -401,7 +401,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=3, offset=14),
                 length=1,
@@ -412,7 +412,7 @@ class TestParse(unittest.TestCase):
                 ),
             ),
             SemanticNode(
-                key="}",
+                path_key="}",
                 position=Position(line=1, offset=0),
                 anchor_rel=Position(line=4, offset=0),
                 length=1,
@@ -432,7 +432,7 @@ class TestParse(unittest.TestCase):
 
         expected = [
             SemanticNode(
-                key="int",
+                path_key="int",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=0, offset=4),
                 length=3,
@@ -440,7 +440,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="(",
+                path_key="(",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=0, offset=7),
                 length=1,
@@ -448,7 +448,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="'",
+                path_key="'",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=0, offset=8),
                 length=1,
@@ -456,7 +456,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="1717",
+                path_key="1717",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=0, offset=9),
                 length=4,
@@ -464,7 +464,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="'",
+                path_key="'",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=0, offset=13),
                 length=1,
@@ -472,7 +472,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=")",
+                path_key=")",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=0, offset=15),
                 length=1,
@@ -480,7 +480,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=0, offset=13),
                 anchor_rel=Position(line=0, offset=28),
                 length=1,
@@ -488,7 +488,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="9",
+                path_key="9",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=0, offset=33),
                 length=1,
@@ -521,7 +521,7 @@ class TestParse(unittest.TestCase):
         expected = [
             # {
             SemanticNode(
-                key="{",
+                path_key="{",
                 position=Position(line=1, offset=0),
                 anchor_rel=Position(line=4, offset=0),
                 length=1,
@@ -530,7 +530,7 @@ class TestParse(unittest.TestCase):
             ),
             #   "complicated.key.name": 'value',
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=5, offset=2),
                 length=1,
@@ -538,7 +538,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="complicated.key.name",
+                path_key="complicated.key.name",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=3),
                 length=20,
@@ -546,7 +546,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=20),
                 anchor_rel=Position(line=5, offset=23),
                 length=1,
@@ -554,7 +554,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=24),
                 length=1,
@@ -562,7 +562,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="'",
+                path_key="'",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=5, offset=26),
                 length=1,
@@ -570,7 +570,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="value",
+                path_key="value",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=27),
                 length=5,
@@ -578,7 +578,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="'",
+                path_key="'",
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=5, offset=32),
                 length=1,
@@ -586,7 +586,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=5, offset=33),
                 length=1,
@@ -595,7 +595,7 @@ class TestParse(unittest.TestCase):
             ),
             #   unquoted: "key",
             SemanticNode(
-                key="unquoted",
+                path_key="unquoted",
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=6, offset=2),
                 length=8,
@@ -603,7 +603,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=8),
                 anchor_rel=Position(line=6, offset=10),
                 length=1,
@@ -611,7 +611,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=6, offset=12),
                 length=1,
@@ -619,7 +619,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="key",
+                path_key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=6, offset=13),
                 length=3,
@@ -627,7 +627,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=6, offset=16),
                 length=1,
@@ -635,7 +635,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=6, offset=17),
                 length=1,
@@ -644,7 +644,7 @@ class TestParse(unittest.TestCase):
             ),
             #   "formula": 1 + 8,
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=7, offset=2),
                 length=1,
@@ -652,7 +652,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="formula",
+                path_key="formula",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=7, offset=3),
                 length=7,
@@ -660,7 +660,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=7),
                 anchor_rel=Position(line=7, offset=10),
                 length=1,
@@ -668,7 +668,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=7, offset=11),
                 length=1,
@@ -676,7 +676,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="1",
+                path_key="1",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=7, offset=13),
                 length=1,
@@ -684,7 +684,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=7, offset=15),
                 length=1,
@@ -692,7 +692,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="812",
+                path_key="812",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=7, offset=17),
                 length=3,
@@ -700,7 +700,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=7, offset=20),
                 length=1,
@@ -709,7 +709,7 @@ class TestParse(unittest.TestCase):
             ),
             #   function: a.name()
             SemanticNode(
-                key="function",
+                path_key="function",
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=8, offset=2),
                 length=8,
@@ -717,7 +717,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=8),
                 anchor_rel=Position(line=8, offset=10),
                 length=1,
@@ -725,7 +725,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="a",
+                path_key="a",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=8, offset=12),
                 length=1,
@@ -733,7 +733,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=".",
+                path_key=".",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=13),
                 length=1,
@@ -741,7 +741,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="name",
+                path_key="name",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=14),
                 length=4,
@@ -749,7 +749,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="(",
+                path_key="(",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=8, offset=18),
                 length=1,
@@ -757,7 +757,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=")",
+                path_key=")",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=19),
                 length=1,
@@ -765,7 +765,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=8, offset=20),
                 length=1,
@@ -774,7 +774,7 @@ class TestParse(unittest.TestCase):
             ),
             #   "index": avar[2] + avar["key"]
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=9, offset=2),
                 length=1,
@@ -782,7 +782,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="index",
+                path_key="index",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=3),
                 length=5,
@@ -790,7 +790,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=9, offset=8),
                 length=1,
@@ -798,7 +798,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=9),
                 length=1,
@@ -806,7 +806,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="avar",
+                path_key="avar",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=9, offset=11),
                 length=4,
@@ -814,7 +814,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="[",
+                path_key="[",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=9, offset=15),
                 length=1,
@@ -822,7 +822,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="2",
+                path_key="2",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=16),
                 length=1,
@@ -830,7 +830,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="]",
+                path_key="]",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=17),
                 length=1,
@@ -838,7 +838,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="+",
+                path_key="+",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=9, offset=19),
                 length=1,
@@ -846,7 +846,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="avar",
+                path_key="avar",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=9, offset=21),
                 length=4,
@@ -854,7 +854,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="[",
+                path_key="[",
                 position=Position(line=0, offset=4),
                 anchor_rel=Position(line=9, offset=25),
                 length=1,
@@ -862,7 +862,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=26),
                 length=1,
@@ -870,7 +870,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="key",
+                path_key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=27),
                 length=3,
@@ -878,7 +878,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=9, offset=30),
                 length=1,
@@ -886,7 +886,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="]",
+                path_key="]",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=31),
                 length=1,
@@ -894,7 +894,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=9, offset=32),
                 length=1,
@@ -903,7 +903,7 @@ class TestParse(unittest.TestCase):
             ),
             #   "entry": inputs.map(key, {key: 22})
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=1, offset=2),
                 anchor_rel=Position(line=10, offset=2),
                 length=1,
@@ -911,7 +911,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="entry",
+                path_key="entry",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=3),
                 length=5,
@@ -919,7 +919,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key='"',
+                path_key='"',
                 position=Position(line=0, offset=5),
                 anchor_rel=Position(line=10, offset=8),
                 length=1,
@@ -927,7 +927,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=9),
                 length=1,
@@ -935,7 +935,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="inputs",
+                path_key="inputs",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=11),
                 length=6,
@@ -943,7 +943,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=".",
+                path_key=".",
                 position=Position(line=0, offset=6),
                 anchor_rel=Position(line=10, offset=17),
                 length=1,
@@ -951,7 +951,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="map",
+                path_key="map",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=18),
                 length=3,
@@ -959,7 +959,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="(",
+                path_key="(",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=10, offset=21),
                 length=1,
@@ -967,7 +967,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="key",
+                path_key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=22),
                 length=3,
@@ -975,7 +975,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=",",
+                path_key=",",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=10, offset=25),
                 length=1,
@@ -983,7 +983,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="{",
+                path_key="{",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=27),
                 length=1,
@@ -991,7 +991,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="key",
+                path_key="key",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=28),
                 length=3,
@@ -999,7 +999,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=":",
+                path_key=":",
                 position=Position(line=0, offset=3),
                 anchor_rel=Position(line=10, offset=31),
                 length=1,
@@ -1007,7 +1007,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="22",
+                path_key="22",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=33),
                 length=2,
@@ -1015,7 +1015,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key="}",
+                path_key="}",
                 position=Position(line=0, offset=2),
                 anchor_rel=Position(line=10, offset=35),
                 length=1,
@@ -1023,7 +1023,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
             ),
             SemanticNode(
-                key=")",
+                path_key=")",
                 position=Position(line=0, offset=1),
                 anchor_rel=Position(line=10, offset=36),
                 length=1,
@@ -1032,7 +1032,7 @@ class TestParse(unittest.TestCase):
             ),
             # }
             SemanticNode(
-                key="}",
+                path_key="}",
                 position=Position(line=1, offset=0),
                 anchor_rel=Position(line=11, offset=0),
                 length=1,

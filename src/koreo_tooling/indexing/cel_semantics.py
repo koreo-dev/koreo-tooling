@@ -136,7 +136,7 @@ def _extract_semantic_structure(
 
             nodes.append(
                 SemanticNode(
-                    key=token.text,
+                    path_key=token.text,
                     position=token.position,
                     anchor_rel=Position(
                         line=token.start_rel.line + anchor_base_pos.line,
@@ -172,7 +172,7 @@ def _extract_semantic_structure(
 
         nodes.append(
             SemanticNode(
-                key=token.text,
+                path_key=token.text,
                 position=token.position,
                 anchor_rel=Position(
                     line=token.start_rel.line + anchor_base_pos.line,

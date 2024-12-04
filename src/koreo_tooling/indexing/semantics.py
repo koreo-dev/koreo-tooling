@@ -1,8 +1,19 @@
 from __future__ import annotations
 from functools import reduce
-from typing import Literal, NamedTuple, NotRequired, TypedDict, get_args
+from typing import (
+    Any,
+    Literal,
+    NamedTuple,
+    NotRequired,
+    Protocol,
+    Sequence,
+    TypedDict,
+    get_args,
+)
 import enum
 import operator
+
+from lsprotocol import types
 
 TokenType = Literal[
     "",
@@ -68,34 +79,54 @@ class Position(NamedTuple):
     offset: int
 
 
-    key: str
 class SemanticAnchor(NamedTuple):
+    key: str | None
     abs_position: Position
     rel_position: Position
-    children: list[SemanticAnchor | SemanticNode] | None = None
+    children: Sequence[SemanticBlock | SemanticNode] | None = None
 
 
-    key: str
+class SemanticBlock(NamedTuple):
+    path_key: str | None
+    index_key: str | None
+    anchor_rel_start: Position
+    anchor_rel_end: Position
+    children: Sequence[SemanticBlock | SemanticNode] | None = None
+
+
 class SemanticNode(NamedTuple):
     position: Position
     anchor_rel: Position
     length: int
+    path_key: str | None = None
+    index_key: str | None = None
     node_type: TokenType = ""
     modifier: list[Modifier] | None = None
-    children: list[SemanticNode] | None = None
+    children: Sequence[SemanticBlock | SemanticNode] | None = None
     diagnostic: NodeDiagnostic | None = None
+
+
+class IndexFn(Protocol):
+    def __call__(self, value: Any) -> str | None: ...
 
 
 class SemanticStructure(TypedDict):
     type: NotRequired[TokenType]
     modifier: NotRequired[list[Modifier]]
+    path_key_fn: NotRequired[IndexFn]
+    index_key_fn: NotRequired[IndexFn]
     sub_structure: NotRequired[dict[str, SemanticStructure]]
 
 
 def flatten(
-    nodes: SemanticAnchor | SemanticNode | list[SemanticAnchor | SemanticNode],
-) -> list[SemanticNode]:
-    if isinstance(nodes, (SemanticAnchor, SemanticNode)):
+    nodes: (
+        SemanticAnchor
+        | SemanticBlock
+        | SemanticNode
+        | Sequence[SemanticAnchor | SemanticNode]
+    ),
+) -> Sequence[SemanticNode]:
+    if isinstance(nodes, (SemanticAnchor, SemanticBlock, SemanticNode)):
         return flatten_node(nodes)
 
     flattened = []
@@ -106,7 +137,9 @@ def flatten(
     return flattened
 
 
-def flatten_node(node: SemanticAnchor | SemanticNode) -> list[SemanticNode]:
+def flatten_node(
+    node: SemanticAnchor | SemanticBlock | SemanticNode,
+) -> Sequence[SemanticNode]:
     flattened = []
     if isinstance(node, SemanticNode):
         flattened.append(node._replace(children=None))
@@ -120,7 +153,7 @@ def flatten_node(node: SemanticAnchor | SemanticNode) -> list[SemanticNode]:
     return flattened
 
 
-def to_lsp_semantics(nodes: list[SemanticNode]) -> list[int]:
+def to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Sequence[int]:
     semantics = []
     for node in nodes:
         semantics.extend(
@@ -136,34 +169,48 @@ def to_lsp_semantics(nodes: list[SemanticNode]) -> list[int]:
     return semantics
 
 
-def extract_diagnostics(nodes: list[SemanticNode]) -> list[SemanticNode]:
+def extract_diagnostics(nodes: Sequence[SemanticNode]) -> Sequence[SemanticNode]:
     return [node for node in nodes if node.diagnostic]
 
 
 def generate_key_range_index(
-    nodes: SemanticAnchor | SemanticNode | list[SemanticAnchor | SemanticNode],
+    nodes: (
+        SemanticAnchor
+        | SemanticBlock
+        | SemanticNode
+        | Sequence[SemanticBlock | SemanticNode]
+    ),
     anchor: SemanticAnchor | None = None,
-) -> list:
+) -> Sequence[tuple[str, Position]]:
     index = []
 
-    if isinstance(nodes, SemanticAnchor):
-        if nodes.key:
-            # TODO: Range?
-            index.append((nodes.key, nodes.abs_position))
+    match nodes:
+        case SemanticAnchor(key=key, abs_position=abs_position, children=children):
+            if key:
+                index.append((key, abs_position))
 
-        if nodes.children:
-            index.extend(generate_key_range_index(nodes=nodes.children, anchor=nodes))
+            if children:
+                index.extend(generate_key_range_index(nodes=children, anchor=nodes))
 
-        return index
+            return index
 
-    if isinstance(nodes, SemanticNode):
-        if nodes.key and anchor:
-            index.append((nodes.key, _compute_range(nodes, anchor=anchor)))
+        case SemanticBlock(index_key=index_key, children=children):
+            if index_key and anchor:
+                index.append((index_key, compute_abs_range(nodes, anchor=anchor)))
 
-        if nodes.children:
-            index.extend(generate_key_range_index(nodes=nodes.children, anchor=anchor))
+            if children:
+                index.extend(generate_key_range_index(nodes=children, anchor=anchor))
 
-        return index
+            return index
+
+        case SemanticNode(index_key=index_key, children=children):
+            if index_key and anchor:
+                index.append((index_key, compute_abs_range(nodes, anchor=anchor)))
+
+            if children:
+                index.extend(generate_key_range_index(nodes=children, anchor=anchor))
+
+            return index
 
     for node in nodes:
         index.extend(generate_key_range_index(nodes=node, anchor=anchor))
@@ -171,14 +218,79 @@ def generate_key_range_index(
     return index
 
 
-def _compute_range(node: SemanticNode, anchor: SemanticAnchor) -> types.Range:
-    return types.Range(
-        start=types.Position(
-            line=anchor.abs_position.line + node.anchor_rel.line,
-            character=node.anchor_rel.offset,
-        ),
-        end=types.Position(
-            line=anchor.abs_position.line + node.anchor_rel.line,
-            character=node.anchor_rel.offset + node.length,
-        ),
-    )
+def anchor_path_search(
+    path_parts: Sequence[str],
+    _search_nodes: (
+        Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None
+    ) = None,
+) -> Sequence[SemanticNode]:
+    if not _search_nodes:
+        return []
+
+    search_part, *remaining_parts = path_parts
+
+    index = []
+    for node in _search_nodes:
+        match node:
+            case SemanticAnchor(key=key):
+                if not key or key != search_part:
+                    continue
+
+            case SemanticBlock(path_key=key):
+                if key and key != search_part:
+                    continue
+
+            case SemanticNode(path_key=key):
+                if not key or key != search_part:
+                    continue
+
+        if not remaining_parts and key:
+            index.append(node)
+
+            continue
+
+        if not node.children:
+            continue
+
+        index.extend(
+            anchor_path_search(
+                path_parts=remaining_parts,
+                _search_nodes=node.children,
+            )
+        )
+
+    return index
+
+
+def compute_abs_range(
+    node: SemanticBlock | SemanticNode, anchor: SemanticAnchor
+) -> types.Range:
+    match node:
+        case SemanticNode(anchor_rel=anchor_rel, length=length):
+            return types.Range(
+                start=types.Position(
+                    line=anchor.abs_position.line + anchor_rel.line,
+                    character=anchor_rel.offset,
+                ),
+                end=types.Position(
+                    line=anchor.abs_position.line + anchor_rel.line,
+                    character=anchor_rel.offset + length,
+                ),
+            )
+
+        case SemanticBlock(
+            anchor_rel_start=anchor_rel_start, anchor_rel_end=anchor_rel_end
+        ):
+            return types.Range(
+                start=types.Position(
+                    line=anchor.abs_position.line + anchor_rel_start.line,
+                    character=anchor_rel_start.offset,
+                ),
+                end=types.Position(
+                    line=anchor.abs_position.line + anchor_rel_end.line,
+                    character=anchor_rel_end.offset,
+                ),
+            )
+
+    # This should be impossible
+    raise Exception(f"Bad node type ({type(node)})")

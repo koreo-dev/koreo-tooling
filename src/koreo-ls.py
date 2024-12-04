@@ -1,7 +1,9 @@
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 import copy
 import os
+import re
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
@@ -14,7 +16,9 @@ from pygls.workspace import TextDocument
 from lsprotocol import types
 
 from koreo import cache
-from koreo.result import is_unwrapped_ok
+from koreo.function.structure import Function
+from koreo.function_test.structure import FunctionTest
+from koreo.result import is_unwrapped_ok, is_not_ok
 from koreo.workflow.structure import Workflow, ErrorStep
 
 from koreo_tooling import constants
@@ -26,10 +30,13 @@ from koreo_tooling.indexing import (
     TokenTypes,
     _RANGE_KEY,
     _STRUCTURE_KEY,
+    compute_abs_range,
+    anchor_path_search,
     extract_diagnostics,
     flatten,
     range_stripper,
     to_lsp_semantics,
+    generate_key_range_index,
 )
 
 KOREO_LSP_NAME = "koreo-ls"
@@ -78,38 +85,84 @@ def _input_error_formatter(actual: bool, expected: bool) -> str:
 def hover(params: types.HoverParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_key = None
-    last_key = None
-    last_key_start_line = 0
-    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
-        range_start_line, range_end_line = _range_key_to_lines(ref_range)
-        if range_start_line > params.position.line:
-            continue
-
-        if (
-            range_start_line > last_key_start_line
-            and range_end_line >= params.position.line
-        ):
-            last_key = ref_range
-            last_key_start_line = range_start_line
-
-    if not last_key:
+    resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
+    if not resource_info:
         return None
 
-    resource_key = __RANGE_REF_INDEX[doc.path][last_key]
-    if not resource_key:
-        return None
+    resource_key, resource_key_range = resource_info
 
-    if resource_key.startswith("FunctionTest"):
+    workflow_match = WORKFLOW_NAME.match(resource_key)
+    if workflow_match:
+        workflow_name = workflow_match.group("name")
+
+        hover_content = [f"# {workflow_name}"]
+
+        workflow = cache.get_resource_from_cache(
+            resource_class=Workflow, cache_key=workflow_name
+        )
+
+        if not workflow:
+            hover_content.append(f"Workflow {workflow_name} not in Koreo Cache")
+        elif not is_unwrapped_ok(workflow):
+            hover_content.append("Workflow not ready")
+            hover_content.append(f"{workflow.message}")
+        elif is_not_ok(workflow.steps_ready):
+            hover_content.append("Workflow steps not ready")
+            hover_content.append(f"{workflow.steps_ready.message}")
+        else:
+            hover_content.append("*Ready*")
+
+        return types.Hover(
+            contents=types.MarkupContent(
+                kind=types.MarkupKind.Markdown,
+                value="\n".join(hover_content),
+            ),
+            range=resource_key_range,
+        )
+
+    if resource_key.startswith("Function:"):
+        function_name = resource_key.split(":")[1]
+
+        hover_content = [f"# {function_name}"]
+
+        function = cache.get_resource_from_cache(
+            resource_class=Function, cache_key=function_name
+        )
+
+        if is_unwrapped_ok(function):
+            hover_content.append("*Ready*")
+        else:
+            hover_content.append("Function not ready")
+            hover_content.append(f"{function.message}")
+
+        return types.Hover(
+            contents=types.MarkupContent(
+                kind=types.MarkupKind.Markdown,
+                value="\n".join(hover_content),
+            ),
+            range=resource_key_range,
+        )
+
+    if resource_key.startswith("FunctionTest:"):
         test_name = resource_key.split(":")[1]
         result = __TEST_RESULTS[doc.path].get(test_name)
         hover_content = []
         if not result:
-            hover_content.append(f"*Not ran*")
+            hover_content.append(f"*Test has not ran*")
         else:
-
             if result.success:
                 hover_content.append(f"# *Success*")
+
+                if result.input_mismatches:
+                    hover_content.append("## Unused Inputs")
+                    hover_content.append("| Field | Issue | Severity |")
+                    hover_content.append("|:-|-:|:-:|")
+                    for mismatch in result.input_mismatches:
+                        hover_content.append(
+                            f"| `{mismatch.field}` | {_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | {mismatch.severity} |"
+                        )
+                    hover_content.append("\n")
+
             else:
                 hover_content.append("# *Error*")
                 if result.messages:
@@ -157,18 +210,7 @@ def hover(params: types.HoverParams):
             ),
         )
 
-    hover_content = [f"# {resource_key}"]
-
-    return types.Hover(
-        contents=types.MarkupContent(
-            kind=types.MarkupKind.Markdown,
-            value="\n".join(hover_content),
-        ),
-        range=types.Range(
-            start=types.Position(line=params.position.line, character=0),
-            end=types.Position(line=params.position.line + 1, character=0),
-        ),
-    )
+    return None
 
 
 @server.feature(types.TEXT_DOCUMENT_INLAY_HINT)
@@ -182,29 +224,29 @@ def inlay_hints(params: types.InlayHintParams):
     start_line = params.range.start.line
     end_line = params.range.end.line
 
-    resource_keys: list[tuple[str, str]] = []
-
-    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
-        range_start_line, range_end_line = _range_key_to_lines(ref_range)
-        if range_end_line < start_line:
+    visible_tests = []
+    for path, maybe_resource, maybe_range in __SEMANTIC_RANGE_INDEX:
+        if path != doc.path:
             continue
 
-        if range_start_line > end_line:
+        if not isinstance(maybe_range, types.Range):
+            # TODO: Get anchors setting a range
             continue
 
-        resource_keys.append((__RANGE_REF_INDEX[doc.path][ref_range], ref_range))
+        if not (start_line <= maybe_range.start.line <= end_line):
+            continue
 
-    test_keys = [
-        (key, range)
-        for (key, range) in resource_keys
-        if key.startswith("FunctionTest:")
-    ]
-    if not test_keys:
+        match = FUNCTION_TEST_NAME.match(maybe_resource)
+        if not match:
+            continue
+
+        visible_tests.append((match.group("name"), maybe_range))
+
+    if not visible_tests:
         return []
 
     inlays = []
-    for test_key, ref_range in test_keys:
-        test_name = test_key.split(":")[1]
+    for test_name, name_range in visible_tests:
         result = __TEST_RESULTS[doc.path].get(test_name)
 
         if not result:
@@ -214,8 +256,7 @@ def inlay_hints(params: types.InlayHintParams):
         else:
             inlay = "Error"
 
-        range_start_line, _ = _range_key_to_lines(ref_range)
-        char = len(doc.lines[range_start_line])
+        char = len(doc.lines[name_range.end.line])
 
         inlays.append(
             types.InlayHint(
@@ -223,7 +264,7 @@ def inlay_hints(params: types.InlayHintParams):
                 kind=types.InlayHintKind.Type,
                 padding_left=True,
                 padding_right=True,
-                position=types.Position(line=range_start_line, character=char),
+                position=types.Position(line=name_range.end.line, character=char),
             )
         )
 
@@ -237,6 +278,7 @@ def code_lens(params: types.CodeLensParams):
     This method will read the whole document and identify each sum in the document and
     tell the language client to insert a code lens at each location.
     """
+    return None
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     test_results = __TEST_RESULTS[doc.path]
@@ -267,7 +309,7 @@ def code_lens(params: types.CodeLensParams):
         if not function_test_spec:
             continue
 
-        if test_result.missing_inputs:
+        if test_result.input_mismatches and False:
             inputs = function_test_spec.get("inputs")
             if not inputs:
                 continue
@@ -512,38 +554,44 @@ async def change_processor(params):
     await _handle_file(doc=doc)
 
 
+def _lookup_current_line_info(path: str, line: int) -> tuple[str, types.Range] | None:
+    for maybe_path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
+        if maybe_path != path:
+            continue
+
+        if not isinstance(maybe_range, types.Range):
+            # TODO: Get anchors setting a range
+            continue
+
+        if maybe_range.start.line == line:
+            return (maybe_key, maybe_range)
+
+    return None
+
+
 @server.feature(types.TEXT_DOCUMENT_DEFINITION)
 async def goto_definitiion(params: types.DefinitionParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_key = None
-    last_key = None
-    last_key_start_line = 0
-    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
-        range_start_line, range_end_line = _range_key_to_lines(ref_range)
-        if range_start_line > params.position.line:
-            continue
-
-        if (
-            range_start_line > last_key_start_line
-            and range_end_line >= params.position.line
-        ):
-            last_key = ref_range
-            last_key_start_line = range_start_line
-
-    if not last_key:
+    resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
+    if not resource_info:
         return []
 
-    resource_key = __RANGE_REF_INDEX[doc.path][last_key]
-    if not resource_key:
-        return []
+    resource_key, _ = resource_info
 
-    definition_index = __RESOURCE_RANGE_INDEX[resource_key]
+    resource_key_root = resource_key.rsplit(":", 1)[0]
+    search_key = f"{resource_key_root}:def"
 
     definitions = []
-    for def_path, def_ranges in definition_index.items():
-        for def_range in def_ranges:
-            definitions.append(types.Location(uri=def_path, range=def_range))
+    for path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
+        if not isinstance(maybe_range, types.Range):
+            # TODO: Get anchors setting a range
+            continue
+
+        if maybe_key != search_key:
+            continue
+
+        definitions.append(types.Location(uri=path, range=maybe_range))
 
     return definitions
 
@@ -552,43 +600,30 @@ async def goto_definitiion(params: types.DefinitionParams):
 async def goto_reference(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_key = None
-    last_key = None
-    last_key_start_line = 0
-    for ref_range in __RANGE_REF_INDEX[doc.path].keys():
-        range_start_line, range_end_line = _range_key_to_lines(ref_range)
-        if range_start_line > params.position.line:
+    resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
+    if not resource_info:
+        return []
+
+    resource_key, _ = resource_info
+
+    resource_key_root = resource_key.rsplit(":", 1)[0]
+    reference_key = f"{resource_key_root}:ref"
+    definition_key = f"{resource_key_root}:def"
+
+    references: list[types.Location] = []
+    definitions: list[types.Location] = []
+    for path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
+        if not isinstance(maybe_range, types.Range):
+            # TODO: Get anchors setting a range
             continue
 
-        if (
-            range_start_line > last_key_start_line
-            and range_end_line >= params.position.line
-        ):
-            last_key = ref_range
-            last_key_start_line = range_start_line
+        if maybe_key == reference_key:
+            references.append(types.Location(uri=path, range=maybe_range))
 
-    if not last_key:
-        return []
+        if maybe_key == definition_key:
+            definitions.append(types.Location(uri=path, range=maybe_range))
 
-    resource_key = __RANGE_REF_INDEX[doc.path][last_key]
-    if not resource_key:
-        return []
-
-    uses = __REF_RANGE_INDEX[resource_key]
-
-    references = []
-
-    for ref_path, ref_ranges in uses.items():
-        for ref_range in ref_ranges:
-            references.append(types.Location(uri=ref_path, range=ref_range))
-
-    definition_index = __RESOURCE_RANGE_INDEX[resource_key]
-
-    for def_path, def_ranges in definition_index.items():
-        for def_range in def_ranges:
-            references.append(types.Location(uri=def_path, range=def_range))
-
-    return references
+    return references + definitions
 
 
 @server.feature(
@@ -604,11 +639,21 @@ async def semantic_tokens_full(params: types.ReferenceParams):
     return types.SemanticTokens(data=tokens)
 
 
+PATH_GUARD: dict[str, int | None] = {}
+
+
 async def _handle_file(doc: TextDocument):
+    guard_value = PATH_GUARD.get(doc.path)
+    if doc.path in PATH_GUARD and guard_value and guard_value >= (doc.version or -1):
+        return
+
+    PATH_GUARD[doc.path] = doc.version if doc.version is not None else -1
+
     _reset_file_state(doc.path)
 
     try:
-        await _process_file(doc=doc)
+        if await _process_file(doc=doc):
+            return
     except Exception as err:
         server.window_log_message(
             params=types.LogMessageParams(
@@ -620,45 +665,13 @@ async def _handle_file(doc: TextDocument):
 
     _process_workflows(path=doc.path)
 
-    test_results = await run_function_tests(
-        server=server,
-        path_resources=__PATH_RESOURCE_INDEX[doc.path],
-    )
-    __TEST_RESULTS[doc.path] = test_results
-    if test_results:
-        for test_key, result in test_results.items():
-            if result.success:
-                continue
+    test_diagnostics = await _run_function_test(doc=doc)
 
-            messages = []
-            if result.messages:
-                messages.append(f"Failures: {'; '.join(result.messages)}")
+    if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
+        return
 
-            if result.input_mismatches:
-                messages.append(
-                    f"Inputs: {'; '.join(mismatch.field for mismatch in result.input_mismatches)}"
-                )
-
-            if result.resource_field_errors:
-                messages.append(
-                    f"Resource: {'; '.join(compare.field for compare in result.resource_field_errors)}"
-                )
-
-            if result.outcome_fields_errors:
-                messages.append(
-                    f"Outcome: {'; '.join(compare.field for compare in result.outcome_fields_errors)}"
-                )
-
-            __DIAGNOSTICS[doc.path].extend(
-                types.Diagnostic(
-                    message=";".join(messages),
-                    severity=types.DiagnosticSeverity.Error,
-                    range=range,
-                )
-                for range in __RESOURCE_RANGE_INDEX[f"FunctionTest:{test_key}"][
-                    doc.path
-                ]
-            )
+    if test_diagnostics:
+        __DIAGNOSTICS[doc.path].extend(test_diagnostics)
 
     duplicate_diagnostics = _check_for_duplicate_resources(path=doc.path)
     if duplicate_diagnostics:
@@ -671,10 +684,209 @@ async def _handle_file(doc: TextDocument):
     )
 
 
+async def _run_function_test(doc: TextDocument):
+    if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
+        return []
+
+    test_range_map = {}
+    tests = set[str]()
+    functions = set[str]()
+    for resource_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
+        if resource_path != doc.path:
+            continue
+
+        if match := FUNCTION_TEST_NAME.match(resource_key):
+            test_name = match.group("name")
+            tests.add(test_name)
+            test_range_map[test_name] = resource_range
+
+        elif match := FUNCTION_NAME.match(resource_key):
+            functions.add(match.group("name"))
+
+    test_results = await run_function_tests(
+        server=server,
+        tests_to_run=tests,
+        functions_to_test=functions,
+    )
+
+    if not test_results:
+        return []
+
+    if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
+        return []
+
+    __TEST_RESULTS[doc.path] = test_results
+
+    test_diagnostics = []
+    for test_key, result in test_results.items():
+        if result.success:
+            continue
+
+        # TODO: Add support for reporting within Functions
+        if test_key not in tests:
+            continue
+
+        cached_resource = cache.get_resource_system_data_from_cache(
+            resource_class=FunctionTest, cache_key=test_key
+        )
+        if not (
+            cached_resource and cached_resource.resource and cached_resource.system_data
+        ):
+            continue
+
+        anchor = cached_resource.system_data.get("anchor")
+        if not anchor:
+            continue
+
+        if result.messages:
+            test_diagnostics.append(
+                types.Diagnostic(
+                    message=f"Failures: {'; '.join(result.messages)}",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=test_range_map[test_key],
+                )
+            )
+
+        test_spec_block = _block_range_extract(
+            path_key="spec",
+            search_nodes=anchor.children,
+            doc_path=doc.path,
+            anchor=anchor,
+        )
+        if not test_spec_block:
+            continue
+
+        if result.input_mismatches:
+            inputs_block = _block_range_extract(
+                path_key="inputs",
+                search_nodes=test_spec_block.children,
+                doc_path=doc.path,
+                anchor=anchor,
+            )
+            if not inputs_block:
+                test_diagnostics.append(
+                    types.Diagnostic(
+                        message="Input expected, but none provided.",
+                        severity=types.DiagnosticSeverity.Warning,
+                        range=compute_abs_range(test_spec_block, anchor),
+                    )
+                )
+            else:
+                for mismatch in result.input_mismatches:
+                    if not mismatch.expected and mismatch.actual:
+                        input_block = _block_range_extract(
+                            path_key=mismatch.field,
+                            search_nodes=inputs_block.children,
+                            doc_path=doc.path,
+                            anchor=anchor,
+                        )
+                        if not input_block:
+                            continue
+
+                        test_diagnostics.append(
+                            types.Diagnostic(
+                                message=f"Input ('{mismatch.field}') not expected.",
+                                severity=types.DiagnosticSeverity.Warning,
+                                range=compute_abs_range(input_block, anchor),
+                            )
+                        )
+
+                    elif mismatch.expected and not mismatch.actual:
+                        test_diagnostics.append(
+                            types.Diagnostic(
+                                message=f"Missing input ('{mismatch.field}').",
+                                severity=types.DiagnosticSeverity.Error,
+                                range=compute_abs_range(inputs_block, anchor),
+                            )
+                        )
+
+        if result.resource_field_errors:
+            resource_block = _block_range_extract(
+                path_key="expectedResource",
+                search_nodes=test_spec_block.children,
+                doc_path=doc.path,
+                anchor=anchor,
+            )
+            if not resource_block:
+                test_diagnostics.append(
+                    types.Diagnostic(
+                        message="Resource unexpectedly modified.",
+                        severity=types.DiagnosticSeverity.Error,
+                        range=compute_abs_range(test_spec_block, anchor),
+                    )
+                )
+            else:
+                for mismatch in result.resource_field_errors:
+                    mismatch_block = _block_range_extract(
+                        path_key=mismatch.field,
+                        search_nodes=resource_block.children,
+                        doc_path=doc.path,
+                        anchor=anchor,
+                    )
+                    if not mismatch_block:
+                        test_diagnostics.append(
+                            types.Diagnostic(
+                                message=f"Missing value for '{mismatch.field}'",
+                                severity=types.DiagnosticSeverity.Error,
+                                range=compute_abs_range(resource_block, anchor),
+                            )
+                        )
+                    else:
+                        test_diagnostics.append(
+                            types.Diagnostic(
+                                message=f"Actual: '{mismatch.actual}'",
+                                severity=types.DiagnosticSeverity.Error,
+                                range=compute_abs_range(mismatch_block, anchor),
+                            )
+                        )
+
+        if result.outcome_fields_errors:
+            outcome_block = _block_range_extract(
+                path_key="expectedOkValue",
+                search_nodes=test_spec_block.children,
+                doc_path=doc.path,
+                anchor=anchor,
+            )
+            if not outcome_block:
+                test_diagnostics.append(
+                    types.Diagnostic(
+                        message="Outcome unexpectedly reached.",
+                        severity=types.DiagnosticSeverity.Error,
+                        range=compute_abs_range(test_spec_block, anchor),
+                    )
+                )
+            else:
+                for mismatch in result.outcome_fields_errors:
+                    mismatch_block = _block_range_extract(
+                        path_key=mismatch.field,
+                        search_nodes=outcome_block.children,
+                        doc_path=doc.path,
+                        anchor=anchor,
+                    )
+                    if not mismatch_block:
+                        test_diagnostics.append(
+                            types.Diagnostic(
+                                message=f"Missing value for '{mismatch.field}'",
+                                severity=types.DiagnosticSeverity.Error,
+                                range=compute_abs_range(outcome_block, anchor),
+                            )
+                        )
+                    else:
+                        test_diagnostics.append(
+                            types.Diagnostic(
+                                message=f"Actual: '{mismatch.actual}'",
+                                severity=types.DiagnosticSeverity.Error,
+                                range=compute_abs_range(mismatch_block, anchor),
+                            )
+                        )
+
+    return test_diagnostics
+
+
+__DIAGNOSTICS = defaultdict[str, list[types.Diagnostic]](list[types.Diagnostic])
 __TEST_RESULTS = defaultdict[str, dict[str, TestResults]](defaultdict[str, TestResults])
-__RANGE_INDEX = defaultdict[str, dict[str, dict]](defaultdict[str, dict])
-__RANGE_REF_INDEX = defaultdict[str, dict[str, str]](defaultdict[str, str])
 __SEMANTIC_TOKEN_INDEX = defaultdict[str, list[int]](list)
+__SEMANTIC_RANGE_INDEX: list[tuple[str, str, types.Range]] = []
 
 
 def _range_key(resource_range: types.Range):
@@ -688,33 +900,17 @@ def _range_key_to_lines(key: str) -> tuple[int, int]:
     return (start_line, end_line)
 
 
-__DIAGNOSTICS = defaultdict[str, list[types.Diagnostic]](list[types.Diagnostic])
-
-__RESOURCE_RANGE_INDEX = defaultdict[str, dict[str, list[types.Range]]](
-    lambda: defaultdict[str, list[types.Range]](list[types.Range])
-)
-
-__PATH_RESOURCE_INDEX = defaultdict[str, set[str]](set[str])
-
-__REF_RANGE_INDEX = defaultdict[str, dict[str, list[types.Range]]](
-    lambda: defaultdict[str, list[types.Range]](list[types.Range])
-)
-__PATH_REF_INDEX = defaultdict[str, set[str]](set[str])
-
-
 def _reset_file_state(path_key: str):
-    for resource_key in __PATH_RESOURCE_INDEX[path_key]:
-        del __RESOURCE_RANGE_INDEX[resource_key][path_key]
+    global __SEMANTIC_RANGE_INDEX
 
-    for resource_key in __PATH_REF_INDEX[path_key]:
-        del __REF_RANGE_INDEX[resource_key][path_key]
-
-    __PATH_RESOURCE_INDEX[path_key] = set()
-    __PATH_REF_INDEX[path_key] = set()
-    __DIAGNOSTICS[path_key] = []
-    __RANGE_INDEX[path_key] = {}
-    __RANGE_REF_INDEX[path_key] = {}
+    __SEMANTIC_RANGE_INDEX = [
+        (path, node_key, node_range)
+        for path, node_key, node_range in __SEMANTIC_RANGE_INDEX
+        if path != path_key
+    ]
     __SEMANTIC_TOKEN_INDEX[path_key] = []
+
+    __DIAGNOSTICS[path_key] = []
     __TEST_RESULTS[path_key] = {}
 
 
@@ -734,13 +930,14 @@ def _load_all_yamls(stream, Loader, doc):
 async def _process_file(
     doc: TextDocument,
 ):
-    has_errors = False
-
     path = doc.path
 
 
     yaml_blocks = _load_all_yamls(doc.source, Loader=IndexingLoader, doc=doc)
     for yaml_block in yaml_blocks:
+        if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
+            return True
+
         try:
             api_version = yaml_block.get("apiVersion")
             kind = yaml_block.get("kind")
@@ -753,10 +950,17 @@ async def _process_file(
             )
             continue
 
-        anchor = yaml_block.get(_STRUCTURE_KEY)
+        semantic_anchor = yaml_block.get(_STRUCTURE_KEY)
 
-        flattened = flatten(anchor)
+        block_ranges = [
+            (path, node_key, node_range)
+            for node_key, node_range in generate_key_range_index(semantic_anchor)
+        ]
 
+
+        __SEMANTIC_RANGE_INDEX.extend(block_ranges)
+
+        flattened = flatten(semantic_anchor)
         tokens = to_lsp_semantics(flattened)
         __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
 
@@ -769,11 +973,13 @@ async def _process_file(
                         severity=types.DiagnosticSeverity.Error,  # TODO: Map internal to LSP
                         range=types.Range(
                             start=types.Position(
-                                line=anchor.abs_position.line + node.anchor_rel.line,
+                                line=semantic_anchor.abs_position.line
+                                + node.anchor_rel.line,
                                 character=node.anchor_rel.offset,
                             ),
                             end=types.Position(
-                                line=anchor.abs_position.line + node.anchor_rel.line,
+                                line=semantic_anchor.abs_position.line
+                                + node.anchor_rel.line,
                                 character=node.anchor_rel.offset + node.length,
                             ),
                         ),
@@ -796,7 +1002,6 @@ async def _process_file(
             continue
 
         if kind not in constants.PREPARE_MAP and kind != constants.CRD_KIND:
-            has_errors = True
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"'{kind}' is not a supported Koreo Resource.",
@@ -811,22 +1016,12 @@ async def _process_file(
         metadata = yaml_block.get("metadata", {})
         metadata["resourceVersion"] = nanoid.generate(size=10)
 
-        name = metadata.get("name")
-
-        resource_index_key = f"{kind}:{name}"
-
-        # resource_line = int(getattr(yaml_block, "__line__", 0))
-
-        __RESOURCE_RANGE_INDEX[resource_index_key][path].append(resource_range)
-        __PATH_RESOURCE_INDEX[path].add(resource_index_key)
-
         raw_spec = yaml_block.get("spec", {})
 
-        __RANGE_INDEX[path][_range_key(resource_range)] = raw_spec
-
-        __RANGE_REF_INDEX[path][
-            _range_key(metadata.get(_RANGE_KEY))
-        ] = resource_index_key
+        cached_system_data = {
+            "path": path,
+            "anchor": semantic_anchor,
+        }
 
         try:
             range_stripped = range_stripper(copy.deepcopy(raw_spec))
@@ -835,12 +1030,9 @@ async def _process_file(
                 preparer=preparer,
                 metadata=metadata,
                 spec=range_stripped,
-                _system_data=anchor,
+                _system_data=cached_system_data,
             )
-
         except Exception as err:
-            has_errors = True
-
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"FAILED TO Extract ('{kind}.{api_version}') from {metadata.get('name')} ({err}).",
@@ -851,111 +1043,203 @@ async def _process_file(
 
             raise
 
-    return has_errors
+    return False
+
+
+WORKFLOW_NAME = re.compile("Workflow:(?P<name>[^:]*)?:def")
+FUNCTION_NAME = re.compile("Function:(?P<name>.*)?:def")
+FUNCTION_TEST_NAME = re.compile("FunctionTest:(?P<name>.*)?:def")
+RESOURCE_DEF = re.compile("([A-Z][a-zA-Z0-9.]*):(.*):def")
 
 
 def _check_for_duplicate_resources(path: str):
+    counts: defaultdict[str, tuple[int, bool, list[tuple]]] = defaultdict(
+        lambda: (0, False, [])
+    )
+
+    for resource_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
+        if not RESOURCE_DEF.match(resource_key):
+            continue
+
+        count, seen_in_path, locations = counts[resource_key]
+        locations.append((resource_path, resource_range))
+        counts[resource_key] = (
+            count + 1,
+            seen_in_path or resource_path == path,
+            locations,
+        )
+
     duplicate_diagnostics: list[types.Diagnostic] = []
 
-    for resource_index_key in __PATH_RESOURCE_INDEX[path]:
-        for resource_range in __RESOURCE_RANGE_INDEX[resource_index_key][path]:
-            duplicate_diagnostic = _check_for_duplicate_resource(
-                path, resource_range, resource_index_key
+    for resource_key, (count, seen_in_path, locations) in counts.items():
+        if count <= 1 or not seen_in_path:
+            continue
+
+        for resource_path, resource_range in locations:
+            if resource_path != path:
+                continue
+
+            duplicate_diagnostics.append(
+                types.Diagnostic(
+                    message=f"Mulitiple instances of {resource_key}.",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=resource_range,
+                )
             )
-            if duplicate_diagnostic:
-                duplicate_diagnostics.append(duplicate_diagnostic)
 
     return duplicate_diagnostics
 
 
-def _check_for_duplicate_resource(
-    path: str, resource_range: types.Range, resource_index_key: str
-):
-    for check_path, ranges in __RESOURCE_RANGE_INDEX[resource_index_key].items():
-        for check_range in ranges:
-            if check_path == path and check_range == resource_range:
-                continue
-
-            return types.Diagnostic(
-                message=f"Mulitiple instances of {resource_index_key}.",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-
-    return None
-
-
 def _process_workflows(path: str):
-
-    for resource_key in __PATH_RESOURCE_INDEX[path]:
-        if not resource_key.startswith("Workflow:"):
+    for maybe_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
+        if maybe_path != path:
             continue
 
-        for resource_range in __RESOURCE_RANGE_INDEX[resource_key][path]:
-            koreo_cache_key = resource_key.split(":", 1)[1]
+        match = WORKFLOW_NAME.match(resource_key)
+        if not match:
+            continue
 
-            workflow = cache.get_resource_from_cache(
-                resource_class=Workflow, cache_key=koreo_cache_key
-            )
+        koreo_cache_key = match.group("name")
 
-            if not workflow:
-                server.window_log_message(
-                    params=types.LogMessageParams(
-                        type=types.MessageType.Error,
-                        message=f"Failed to find Workflow ('{koreo_cache_key}') in Koreo cache ('{resource_key}').",
-                    )
+        cached_resource = cache.get_resource_system_data_from_cache(
+            resource_class=Workflow, cache_key=koreo_cache_key
+        )
+
+        if not cached_resource or not cached_resource.resource:
+            __DIAGNOSTICS[path].append(
+                types.Diagnostic(
+                    message=f"Workflow not yet prepared ({koreo_cache_key}) or not in Koreo cache.",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=resource_range,
                 )
-                continue
-
-            _process_workflow(
-                path=path,
-                resource_range=resource_range,
-                raw_spec=__RANGE_INDEX[path][_range_key(resource_range)],
-                workflow=workflow,
             )
+            continue
+
+        _process_workflow(
+            path=path,
+            resource_range=resource_range,
+            workflow_name=koreo_cache_key,
+            workflow=cached_resource.resource,
+            raw_spec=cached_resource.spec,
+            koreo_metadata=cached_resource.system_data,
+        )
 
 
 def _process_workflow(
     path: str,
     resource_range: types.Range,
-    raw_spec: dict,
+    workflow_name: str,
     workflow: Workflow,
+    raw_spec: dict,
+    koreo_metadata: dict | None,
 ) -> bool:
+    has_step_error = False
+
+    if not koreo_metadata:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message=f"Workflow ('{workflow_name}') missing in Koreo Cache (this _should_ be impossible).",
+                severity=types.DiagnosticSeverity.Error,
+                range=resource_range,
+            )
+        )
+        return True
+
+    semantic_path = koreo_metadata.get("path", "")
+    if semantic_path != path:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message=(
+                    f"Duplicate Workflow ('{workflow_name}') detected in "
+                    f"('{semantic_path}'), skipping further analysis."
+                ),
+                severity=types.DiagnosticSeverity.Error,
+                range=resource_range,
+            )
+        )
+        return True
+
+    semantic_anchor = koreo_metadata.get("anchor")
+    if not semantic_anchor:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message=f"Unknown error processing Workflow ('{workflow_name}'), semantic analysis data missing from Koreo cache.",
+                severity=types.DiagnosticSeverity.Error,
+                range=resource_range,
+            )
+        )
+        return True
+
+    spec_block = _block_range_extract(
+        path_key="spec",
+        search_nodes=semantic_anchor.children,
+        doc_path=path,
+        anchor=semantic_anchor,
+    )
+    if not spec_block:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message="Missing `spec`",
+                severity=types.DiagnosticSeverity.Error,
+                range=resource_range,
+            )
+        )
+        return True
+
+    steps_block = _block_range_extract(
+        path_key="steps",
+        search_nodes=spec_block.children,
+        doc_path=path,
+        anchor=semantic_anchor,
+    )
+    if not steps_block:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message="Missing `spec.steps`",
+                severity=types.DiagnosticSeverity.Error,
+                range=compute_abs_range(spec_block, semantic_anchor),
+            )
+        )
+        return True
+
     if not is_unwrapped_ok(workflow.steps_ready):
         __DIAGNOSTICS[path].append(
             types.Diagnostic(
                 message=f"Workflow is not ready ({workflow.steps_ready.message}).",
                 severity=types.DiagnosticSeverity.Warning,
-                range=types.Range(
-                    start=resource_range.start,
-                    end=types.Position(line=resource_range.start.line + 5, character=0),
-                ),
+                range=resource_range,
             )
         )
 
-    has_step_error = False
+    step_specs = {
+        step_spec.get("label"): step_spec for step_spec in raw_spec.get("steps", [])
+    }
 
-    step_label_counts = defaultdict[str, int](lambda: 0)
-    for step in workflow.steps:
-        step_label_counts[step.label] += 1
-
-    raw_steps = raw_spec.get("steps", [])
-
-    for idx, step in enumerate(workflow.steps):
-        raw_step = raw_steps[idx]
-        step_range = raw_step.get(_RANGE_KEY)
-
-        step_error = _process_workflow_step(path, step_range, step, raw_step)
-
-        if step_label_counts[step.label] > 1:
-            has_step_error = True
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"Duplicate step label",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=step_range,
-                )
+    if not step_specs and workflow.steps:
+        __DIAGNOSTICS[path].append(
+            types.Diagnostic(
+                message=f"Workflow steps are malformed.",
+                severity=types.DiagnosticSeverity.Warning,
+                range=resource_range,
             )
+        )
+        return True
+
+    for step in workflow.steps:
+        step_block = _block_range_extract(
+            path_key=f"Step:{step.label}",
+            search_nodes=steps_block.children,
+            doc_path=path,
+            anchor=semantic_anchor,
+        )
+        if not step_block:
+            continue
+
+        step_spec = step_specs.get(step.label)
+
+        step_error = _process_workflow_step(
+            path, step, step_block, step_spec, semantic_anchor
+        )
 
         has_step_error = has_step_error or step_error
 
@@ -964,25 +1248,31 @@ def _process_workflow(
             types.Diagnostic(
                 message=f"Workflow steps are not ready.",
                 severity=types.DiagnosticSeverity.Error,
-                range=types.Range(
-                    start=resource_range.start,
-                    end=types.Position(line=resource_range.start.line + 5, character=0),
-                ),
+                range=resource_range,
             )
         )
 
     return has_step_error
 
 
-def _process_workflow_step(path, step_range, step, raw_step):
+def _process_workflow_step(path, step, step_semantic_block, step_spec, semantic_anchor):
     has_error = False
 
     if isinstance(step, ErrorStep):
+        label_block = _key_value_range_extract(
+            path_key="label",
+            search_nodes=step_semantic_block.children,
+            doc_path=path,
+            anchor=semantic_anchor,
+        )
+        if not label_block:
+            return True
+
         __DIAGNOSTICS[path].append(
             types.Diagnostic(
                 message=f"Step ('{step.label}') not ready {step.outcome.message}.",
                 severity=types.DiagnosticSeverity.Warning,
-                range=step_range,
+                range=compute_abs_range(label_block, semantic_anchor),
             )
         )
         return True
@@ -995,51 +1285,114 @@ def _process_workflow_step(path, step_range, step, raw_step):
         if key.startswith("inputs")
     )
 
-    ref_name = None
-    ref_range = None
+    raw_inputs = step_spec.get("inputs", {})
 
-    function_ref_block = raw_step.get("functionRef")
-    if function_ref_block:
-        ref_name = f"Function:{function_ref_block.get("name")}"
-        ref_range = function_ref_block.get(_RANGE_KEY, step_range)
-
-    workflow_ref_block = raw_step.get("workflowRef")
-    if workflow_ref_block:
-        ref_name = f"Workflow:{function_ref_block.get("name")}"
-        ref_range = workflow_ref_block.get(_RANGE_KEY, step_range)
-
-    if ref_name and ref_range:
-        __PATH_REF_INDEX[path].add(ref_name)
-        __REF_RANGE_INDEX[ref_name][path].append(ref_range)
-        __RANGE_REF_INDEX[path][_range_key(ref_range)] = ref_name
-
-    raw_inputs = raw_step.get("inputs", {})
-    inputs_range = raw_inputs.get(_RANGE_KEY, step_range)
+    inputs_block = _block_range_extract(
+        path_key="inputs",
+        search_nodes=step_semantic_block.children,
+        doc_path=path,
+        anchor=semantic_anchor,
+    )
 
     inputs = call_arg_compare(step.provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
         if not expected and provided:
+            has_error = True
+
+            if not inputs_block:
+                continue
+            input_block = _block_range_extract(
+                path_key=argument,
+                search_nodes=inputs_block.children,
+                doc_path=path,
+                anchor=semantic_anchor,
+            )
+            if not input_block:
+                continue
+
             raw_arg = raw_inputs.get(argument)
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"Input ('{argument}') not expected. {raw_arg}.",
                     severity=types.DiagnosticSeverity.Warning,
-                    range=inputs_range,
+                    range=compute_abs_range(input_block, semantic_anchor),
                 )
             )
-            has_error = True
 
         elif expected and not provided:
+            has_error = True
+
+            if not inputs_block:
+                continue
+
             __DIAGNOSTICS[path].append(
                 types.Diagnostic(
                     message=f"Missing input ('{argument}').",
                     severity=types.DiagnosticSeverity.Error,
-                    range=inputs_range,
+                    range=compute_abs_range(inputs_block, semantic_anchor),
                 )
             )
-            has_error = True
 
     return has_error
+
+
+def _block_range_extract(path_key: str, search_nodes: Sequence, doc_path: str, anchor):
+    matches = anchor_path_search([path_key], _search_nodes=search_nodes)
+
+    if not matches:
+        return None
+
+    match, *extras = matches
+
+    if extras:
+        for match in matches:
+            __DIAGNOSTICS[doc_path].append(
+                types.Diagnostic(
+                    message=f"Multiple instances of ('{path_key}').",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=compute_abs_range(match, anchor),
+                )
+            )
+
+        return None
+
+    return match
+
+
+def _key_value_range_extract(
+    path_key: str, search_nodes: Sequence, doc_path: str, anchor
+):
+    yaml_key = _block_range_extract(
+        path_key=path_key, search_nodes=search_nodes, doc_path=doc_path, anchor=anchor
+    )
+    if not yaml_key:
+        return None
+
+    if not yaml_key.children:
+        __DIAGNOSTICS[doc_path].append(
+            types.Diagnostic(
+                message=f"Missing value for ('{path_key}').",
+                severity=types.DiagnosticSeverity.Warning,
+                range=compute_abs_range(yaml_key, anchor),
+            )
+        )
+        return None
+
+    value, *extras = yaml_key.children
+
+    if extras:
+        for child in yaml_key.children:
+            __DIAGNOSTICS[doc_path].append(
+                types.Diagnostic(
+                    message=f"Multiple instances of ('{path_key}').",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=compute_abs_range(child, anchor),
+                )
+            )
+
+        return None
+
+    return value
 
 
 if __name__ == "__main__":

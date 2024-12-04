@@ -41,20 +41,16 @@ class TestResults(NamedTuple):
 
 async def run_function_tests(
     server: LanguageServer,
-    path_resources: set[str],
+    tests_to_run: set[str],
+    functions_to_test: set[str],
 ) -> dict[str, TestResults]:
-    tests_to_run = set[str]()
-    for resource_key in path_resources:
-        if resource_key.startswith("FunctionTest:"):
-            test_name = resource_key.split(":", 1)[1]
-            tests_to_run.add(test_name)
+    function_tests = set[str]()
+    for function_name in functions_to_test:
+        function_tests.update(get_function_tests(function_name))
 
-        if resource_key.startswith("Function:"):
-            function_name = resource_key.split(":", 1)[1]
-            function_tests = get_function_tests(function_name)
-            tests_to_run.update(function_tests)
+    all_tests = tests_to_run.union(function_tests)
 
-    if not tests_to_run:
+    if not all_tests:
         return {}
 
     tasks = []

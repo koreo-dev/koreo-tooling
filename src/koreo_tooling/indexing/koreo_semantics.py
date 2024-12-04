@@ -29,6 +29,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                 "name": {
                     "sub_structure": {
                         VALUE: {
+                            "index_key_fn": lambda value: f"Function:{value}:def",
                             "type": "function",
                             "modifier": [Modifier.definition],
                         },
@@ -114,6 +115,13 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                         "key": {
                             "type": "property",
                             "sub_structure": {
+                                VALUE: {
+                                    "index_key_fn": lambda value: (
+                                        None
+                                        if value.startswith("=")
+                                        else f"ResourceTemplate:{value}:ref"
+                                    ),
+                                },
                             },
                         },
                     },
@@ -166,6 +174,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                     "type": "keyword",
                     "sub_structure": {
                         VALUE: {
+                            "index_key_fn": lambda value: f"Workflow:{value}:def",
                             "type": "class",
                             "modifier": [Modifier.definition],
                         },
@@ -208,50 +217,55 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                     },
                 },
                 "steps": {
-                    "type": "keyword",
                     "sub_structure": {
-                        "label": {
-                            "type": "property",
+                        VALUE: {
+                            "path_key_fn": lambda value: f"Step:{''.join(name.value for key, name in value if key.value == 'label')}",
                             "sub_structure": {
-                                VALUE: {
-                                    "type": "event",
-                                    "modifier": [Modifier.definition],
-                                },
-                            },
-                        },
-                        "functionRef": {
-                            "type": "property",
-                            "sub_structure": {
-                                "name": {
-                                    "type": "property",
-                                    "sub_structure": {
-                                        VALUE: {"type": "function"},
-                                    },
-                                },
-                            },
-                        },
-                        "workflowRef": {
-                            "type": "property",
-                            "sub_structure": {
-                                "name": {
+                                "label": {
                                     "type": "property",
                                     "sub_structure": {
                                         VALUE: {
-                                            "type": "class",
+                                            "type": "event",
+                                            "modifier": [Modifier.definition],
                                         },
                                     },
                                 },
-                            },
-                        },
-                        "inputs": {
-                            "type": "property",
-                            "sub_structure": {
-                                ALL: {
-                                    "type": "variable",
+                                "functionRef": {
+                                    "type": "property",
                                     "sub_structure": {
-                                        VALUE: {"type": "argument"},
+                                        "name": {
+                                            "type": "property",
+                                            "sub_structure": {
+                                                VALUE: {
+                                                    "index_key_fn": lambda value: f"Function:{value}:ref",
+                                                    "type": "function",
+                                                },
+                                            },
+                                        },
                                     },
-                                }
+                                },
+                                "workflowRef": {
+                                    "type": "property",
+                                    "sub_structure": {
+                                        "name": {
+                                            "type": "property",
+                                            "sub_structure": {
+                                                VALUE: {
+                                                    "index_key_fn": lambda value: f"Workflow:{value}:ref",
+                                                    "type": "class",
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                "inputs": {
+                                    "type": "property",
+                                    "sub_structure": {
+                                        ALL: {
+                                            "type": "variable",
+                                        }
+                                    },
+                                },
                             },
                         },
                     },
@@ -279,6 +293,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                 "name": {
                     "sub_structure": {
                         VALUE: {
+                            "index_key_fn": lambda value: f"FunctionTest:{value}:def",
                             "type": "function",
                             "modifier": [Modifier.definition],
                         },
@@ -302,6 +317,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                             "type": "property",
                             "sub_structure": {
                                 VALUE: {
+                                    "index_key_fn": lambda value: f"Function:{value}:ref",
                                     "type": "function",
                                 },
                             },
@@ -331,6 +347,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                 "name": {
                     "sub_structure": {
                         VALUE: {
+                            "index_key_fn": lambda value: f"ResourceTemplate:{value}:def",
                             "type": "function",
                             "modifier": [Modifier.definition],
                         },
@@ -414,6 +431,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
                             "type": "property",
                             "sub_structure": {
                                 VALUE: {
+                                    "index_key_fn": lambda value: f"Function:{value}:ref",
                                     "type": "function",
                                 },
                             },
