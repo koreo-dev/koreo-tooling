@@ -1,13 +1,12 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from functools import reduce
 from typing import (
     Any,
     Literal,
     NamedTuple,
-    NotRequired,
     Protocol,
     Sequence,
-    TypedDict,
     get_args,
 )
 import enum
@@ -87,7 +86,7 @@ class SemanticAnchor(NamedTuple):
 
 
 class SemanticBlock(NamedTuple):
-    path_key: str | None
+    local_key: str | None
     index_key: str | None
     anchor_rel_start: Position
     anchor_rel_end: Position
@@ -98,7 +97,7 @@ class SemanticNode(NamedTuple):
     position: Position
     anchor_rel: Position
     length: int
-    path_key: str | None = None
+    local_key: str | None = None
     index_key: str | None = None
     node_type: TokenType = ""
     modifier: list[Modifier] | None = None
@@ -110,12 +109,16 @@ class IndexFn(Protocol):
     def __call__(self, value: Any) -> str | None: ...
 
 
-class SemanticStructure(TypedDict):
-    type: NotRequired[TokenType]
-    modifier: NotRequired[list[Modifier]]
-    path_key_fn: NotRequired[IndexFn]
-    index_key_fn: NotRequired[IndexFn]
-    sub_structure: NotRequired[dict[str, SemanticStructure]]
+type SemanticStructureMap = dict[str, SemanticStructure]
+
+
+@dataclass
+class SemanticStructure:
+    type: TokenType = ""
+    modifier: list[Modifier] | None = None
+    local_key_fn: IndexFn | None = None
+    index_key_fn: IndexFn | None = None
+    sub_structure: SemanticStructureMap | SemanticStructure | None = None
 
 
 def flatten(
@@ -218,48 +221,48 @@ def generate_key_range_index(
     return index
 
 
-def anchor_path_search(
-    path_parts: Sequence[str],
-    _search_nodes: (
-        Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None
-    ) = None,
-) -> Sequence[SemanticNode]:
-    if not _search_nodes:
+def anchor_local_key_search(
+    search_key: str,
+    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None = None,
+) -> Sequence[SemanticAnchor | SemanticBlock | SemanticNode]:
+    if not search_nodes or not search_key:
         return []
 
-    search_part, *remaining_parts = path_parts
-
     index = []
-    for node in _search_nodes:
+    for node in search_nodes:
         match node:
             case SemanticAnchor(key=key):
-                if not key or key != search_part:
-                    continue
+                if key and key == search_key:
+                    index.append(node)
 
-            case SemanticBlock(path_key=key):
-                if key and key != search_part:
-                    continue
+            case SemanticBlock(local_key=local_key):
+                if local_key and local_key == search_key:
+                    index.append(node)
 
-            case SemanticNode(path_key=key):
-                if not key or key != search_part:
-                    continue
-
-        if not remaining_parts and key:
-            index.append(node)
-
-            continue
+            case SemanticNode(local_key=local_key):
+                if search_key and search_key == local_key:
+                    index.append(node)
 
         if not node.children:
             continue
 
         index.extend(
-            anchor_path_search(
-                path_parts=remaining_parts,
-                _search_nodes=node.children,
+            anchor_local_key_search(
+                search_key=search_key,
+                search_nodes=node.children,
             )
         )
 
     return index
+
+
+def compute_abs_position(
+    rel_position: Position, abs_position: Position, length: int = 0
+) -> types.Position:
+    return types.Position(
+        line=abs_position.line + rel_position.line,
+        character=rel_position.offset + length,
+    )
 
 
 def compute_abs_range(

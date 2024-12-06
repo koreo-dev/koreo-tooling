@@ -8,474 +8,323 @@ VALUE = "."
 ALL = "*"
 
 
-SEMANTIC_TYPE_STRUCTURE: dict[str, dict[str, SemanticStructure]] = {
-    "Function": {
-        "apiVersion": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "namespace",
-                },
-            },
+def step_path_indexer(value) -> str:
+    try:
+        return (
+            f"Step:{''.join(name.value for key, name in value if key.value == 'label')}"
+        )
+    except Exception as err:
+        raise Exception(f"Failed to process '{value}', with {err}")
+
+
+_api_version: SemanticStructure = SemanticStructure(
+    sub_structure=SemanticStructure(
+        type="namespace",
+    )
+)
+
+_kind: SemanticStructure = SemanticStructure(
+    sub_structure=SemanticStructure(
+        type="type",
+    ),
+)
+
+_namespace: SemanticStructure = SemanticStructure(
+    sub_structure=SemanticStructure(
+        type="namespace",
+    ),
+)
+
+_function_ref: SemanticStructure = SemanticStructure(
+    type="property",
+    sub_structure=SemanticStructure(
+        sub_structure={
+            "name": SemanticStructure(
+                type="property",
+                sub_structure=SemanticStructure(
+                    index_key_fn=lambda value: f"Function:{value}:ref",
+                    type="function",
+                ),
+            ),
         },
-        "kind": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "type",
-                },
-            },
+    ),
+)
+
+_workflow_ref: SemanticStructure = SemanticStructure(
+    type="property",
+    sub_structure={
+        "name": SemanticStructure(
+            type="property",
+            sub_structure=SemanticStructure(
+                index_key_fn=lambda value: f"Workflow:{value}:ref",
+                type="class",
+            ),
+        ),
+    },
+)
+
+_managed_resource: SemanticStructure = SemanticStructure(
+    type="property",
+    sub_structure={
+        "apiVersion": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="namespace"),
+        ),
+        "kind": SemanticStructure(
+            type="parameter", sub_structure=SemanticStructure(type="type")
+        ),
+        "plural": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(
+                type="number",
+            ),
+        ),
+        "namespaced": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="number"),
+        ),
+    },
+)
+
+_behavior: SemanticStructure = SemanticStructure(
+    sub_structure={
+        "load": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="enumMember"),
+        ),
+        "create": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(
+                type="number",
+            ),
+        ),
+        "update": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="enumMember"),
+        ),
+        "delete": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="enumMember"),
+        ),
+    },
+)
+
+_function_inputs: SemanticStructure = SemanticStructure(
+    type="property",
+    local_key_fn=lambda value: "inputs",
+    sub_structure=SemanticStructure(
+        local_key_fn=lambda value: "InputValues",
+        sub_structure={
+            ALL: SemanticStructure(
+                local_key_fn=lambda value: f"input:{value}", type="variable"
+            )
         },
-        "metadata": {
-            "sub_structure": {
-                "name": {
-                    "sub_structure": {
-                        VALUE: {
-                            "index_key_fn": lambda value: f"Function:{value}:def",
-                            "type": "function",
-                            "modifier": [Modifier.definition],
-                        },
-                    },
+    ),
+)
+
+SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
+    "Function": SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure={
+                    "name": SemanticStructure(
+                        sub_structure=SemanticStructure(
+                            index_key_fn=lambda value: f"Function:{value}:def",
+                            type="function",
+                            modifier=[Modifier.definition],
+                        ),
+                    ),
+                    "namespace": _namespace,
                 },
-                "namespace": {
-                    "sub_structure": {
-                        VALUE: {
-                            "type": "namespace",
+            ),
+            "spec": SemanticStructure(
+                sub_structure={
+                    "staticResource": SemanticStructure(
+                        type="property",
+                        sub_structure={
+                            "managedResource": _managed_resource,
+                            "behavior": _behavior,
                         },
-                    },
-                },
-            },
-        },
-        "spec": {
-            "sub_structure": {
-                "staticResource": {
-                    "sub_structure": {
-                        "managedResource": {
-                            "sub_structure": {
-                                "apiVersion": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {
-                                            "type": "namespace",
-                                        },
-                                    },
-                                },
-                                "kind": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {
-                                            "type": "type",
-                                        },
-                                    },
-                                },
-                                "plural": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {"type": "number"},
-                                    },
-                                },
-                                "namespaced": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {"type": "number"},
-                                    },
-                                },
-                            },
-                        },
-                        "behavior": {
-                            "sub_structure": {
-                                "load": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {"type": "enumMember"},
-                                    },
-                                },
-                                "create": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {"type": "number"},
-                                    },
-                                },
-                                "update": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {"type": "enumMember"},
-                                    },
-                                },
-                                "delete": {
-                                    "type": "parameter",
-                                    "sub_structure": {
-                                        VALUE: {"type": "enumMember"},
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-                "dynamicResource": {
-                    "sub_structure": {
-                        "key": {
-                            "type": "property",
-                            "sub_structure": {
-                                VALUE: {
-                                    "index_key_fn": lambda value: (
+                    ),
+                    "dynamicResource": SemanticStructure(
+                        type="property",
+                        sub_structure={
+                            "key": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(
+                                    type="function",
+                                    index_key_fn=lambda value: (
                                         None
                                         if value.startswith("=")
                                         else f"ResourceTemplate:{value}:ref"
                                     ),
+                                ),
+                            ),
+                        },
+                    ),
+                    "inputValidators": SemanticStructure(
+                        sub_structure={
+                            "type": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(type="class"),
+                            ),
+                            "message": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(type="string"),
+                            ),
+                            "test": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(type="string"),
+                            ),
+                        },
+                    ),
+                    "outcome": SemanticStructure(
+                        sub_structure={
+                            "okValue": SemanticStructure(
+                                sub_structure=SemanticStructure(type="string")
+                            ),
+                        },
+                    ),
+                },
+            ),
+        },
+    ),
+    "Workflow": SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure=SemanticStructure(
+                    sub_structure={
+                        "name": SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                index_key_fn=lambda value: f"Workflow:{value}:def",
+                                type="class",
+                                modifier=[Modifier.definition],
+                            ),
+                        ),
+                        "namespace": _namespace,
+                    },
+                ),
+            ),
+            "spec": SemanticStructure(
+                sub_structure={
+                    "crdRef": SemanticStructure(
+                        type="typeParameter",
+                        sub_structure={
+                            "apiGroup": SemanticStructure(
+                                type="parameter",
+                                sub_structure=SemanticStructure(type="namespace"),
+                            ),
+                            "version": SemanticStructure(
+                                type="parameter",
+                                sub_structure=SemanticStructure(type="string"),
+                            ),
+                            "kind": SemanticStructure(
+                                type="parameter",
+                                sub_structure=SemanticStructure(type="class"),
+                            ),
+                        },
+                    ),
+                    "steps": SemanticStructure(
+                        sub_structure=SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                local_key_fn=step_path_indexer,
+                                sub_structure={
+                                    "label": SemanticStructure(
+                                        type="property",
+                                        sub_structure=SemanticStructure(
+                                            local_key_fn=lambda value: f"label:{value}",
+                                            type="event",
+                                            modifier=[Modifier.definition],
+                                        ),
+                                    ),
+                                    "functionRef": _function_ref,
+                                    "workflowRef": _workflow_ref,
+                                    "inputs": _function_inputs,
                                 },
-                            },
-                        },
-                    },
+                            ),
+                        ),
+                    ),
                 },
-                "inputValidators": {
-                    "sub_structure": {
-                        "type": {
-                            "type": "property",
-                            "sub_structure": {
-                                VALUE: {"type": "class"},
-                            },
-                        },
-                        "message": {
-                            "type": "property",
-                            "sub_structure": {
-                                VALUE: {"type": "string"},
-                            },
-                        },
-                        "test": {
-                            "type": "property",
-                            "sub_structure": {
-                                VALUE: {"type": "string"},
-                            },
-                        },
-                    },
-                },
-                "outcome": {
-                    "sub_structure": {
-                        "okValue": {
-                            "sub_structure": {
-                                VALUE: {"type": "string"},
-                            },
-                        },
-                    },
-                },
-            },
+            ),
         },
-    },
-    "Workflow": {
-        "apiVersion": {
-            "sub_structure": {
-                VALUE: {"type": "namespace"},
-            },
-        },
-        "kind": {"sub_structure": {VALUE: {"type": "type"}}},
-        "metadata": {
-            "type": "keyword",
-            "sub_structure": {
-                "name": {
-                    "type": "keyword",
-                    "sub_structure": {
-                        VALUE: {
-                            "index_key_fn": lambda value: f"Workflow:{value}:def",
-                            "type": "class",
-                            "modifier": [Modifier.definition],
-                        },
+    ),
+    "FunctionTest": SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure=SemanticStructure(
+                    sub_structure={
+                        "name": SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                index_key_fn=lambda value: f"FunctionTest:{value}:def",
+                                type="function",
+                                modifier=[Modifier.definition],
+                            ),
+                        ),
+                        "namespace": _namespace,
                     },
+                ),
+            ),
+            "spec": SemanticStructure(
+                local_key_fn=lambda value: "spec",
+                sub_structure={
+                    "functionRef": _function_ref,
+                    "inputs": _function_inputs,
+                    "expectedOkValue": SemanticStructure(
+                        local_key_fn=lambda value: "expectedOkValue",
+                    ),
                 },
-                "namespace": {
-                    "type": "keyword",
-                    "sub_structure": {
-                        VALUE: {
-                            "type": "namespace",
-                        },
+            ),
+        },
+    ),
+    "ResourceTemplate": SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure=SemanticStructure(
+                    sub_structure={
+                        "name": SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                index_key_fn=lambda value: f"ResourceTemplate:{value}:def",
+                                type="function",
+                                modifier=[Modifier.definition],
+                            ),
+                        ),
+                        "namespace": _namespace,
                     },
+                ),
+            ),
+            "spec": SemanticStructure(
+                sub_structure={
+                    "behavior": _behavior,
+                    "managedResource": _managed_resource,
+                    "template": SemanticStructure(type="property"),
                 },
-            },
+            ),
         },
-        "spec": {
-            "type": "keyword",
-            "sub_structure": {
-                "crdRef": {
-                    "type": "typeParameter",
-                    "sub_structure": {
-                        "apiGroup": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "namespace"},
-                            },
-                        },
-                        "version": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "string"},
-                            },
-                        },
-                        "kind": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "class"},
-                            },
-                        },
+    ),
+    ALL: SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure=SemanticStructure(
+                    sub_structure={
+                        "name": SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                modifier=[Modifier.definition],
+                            ),
+                        ),
+                        "namespace": _namespace,
                     },
-                },
-                "steps": {
-                    "sub_structure": {
-                        VALUE: {
-                            "path_key_fn": lambda value: f"Step:{''.join(name.value for key, name in value if key.value == 'label')}",
-                            "sub_structure": {
-                                "label": {
-                                    "type": "property",
-                                    "sub_structure": {
-                                        VALUE: {
-                                            "type": "event",
-                                            "modifier": [Modifier.definition],
-                                        },
-                                    },
-                                },
-                                "functionRef": {
-                                    "type": "property",
-                                    "sub_structure": {
-                                        "name": {
-                                            "type": "property",
-                                            "sub_structure": {
-                                                VALUE: {
-                                                    "index_key_fn": lambda value: f"Function:{value}:ref",
-                                                    "type": "function",
-                                                },
-                                            },
-                                        },
-                                    },
-                                },
-                                "workflowRef": {
-                                    "type": "property",
-                                    "sub_structure": {
-                                        "name": {
-                                            "type": "property",
-                                            "sub_structure": {
-                                                VALUE: {
-                                                    "index_key_fn": lambda value: f"Workflow:{value}:ref",
-                                                    "type": "class",
-                                                },
-                                            },
-                                        },
-                                    },
-                                },
-                                "inputs": {
-                                    "type": "property",
-                                    "sub_structure": {
-                                        ALL: {
-                                            "type": "variable",
-                                        }
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+                ),
+            ),
         },
-    },
-    "FunctionTest": {
-        "apiVersion": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "namespace",
-                },
-            },
-        },
-        "kind": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "type",
-                },
-            },
-        },
-        "metadata": {
-            "sub_structure": {
-                "name": {
-                    "sub_structure": {
-                        VALUE: {
-                            "index_key_fn": lambda value: f"FunctionTest:{value}:def",
-                            "type": "function",
-                            "modifier": [Modifier.definition],
-                        },
-                    },
-                },
-                "namespace": {
-                    "sub_structure": {
-                        VALUE: {
-                            "type": "namespace",
-                        },
-                    },
-                },
-            },
-        },
-        "spec": {
-            "sub_structure": {
-                "functionRef": {
-                    "type": "property",
-                    "sub_structure": {
-                        "name": {
-                            "type": "property",
-                            "sub_structure": {
-                                VALUE: {
-                                    "index_key_fn": lambda value: f"Function:{value}:ref",
-                                    "type": "function",
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-    },
-    "ResourceTemplate": {
-        "apiVersion": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "namespace",
-                },
-            },
-        },
-        "kind": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "type",
-                },
-            },
-        },
-        "metadata": {
-            "sub_structure": {
-                "name": {
-                    "sub_structure": {
-                        VALUE: {
-                            "index_key_fn": lambda value: f"ResourceTemplate:{value}:def",
-                            "type": "function",
-                            "modifier": [Modifier.definition],
-                        },
-                    },
-                },
-                "namespace": {
-                    "sub_structure": {
-                        VALUE: {
-                            "type": "namespace",
-                        },
-                    },
-                },
-            },
-        },
-        "spec": {
-            "sub_structure": {
-                "behavior": {
-                    "sub_structure": {
-                        "load": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "enumMember"},
-                            },
-                        },
-                        "create": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "number"},
-                            },
-                        },
-                        "update": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "enumMember"},
-                            },
-                        },
-                        "delete": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "enumMember"},
-                            },
-                        },
-                    },
-                },
-                "managedResource": {
-                    "sub_structure": {
-                        "apiVersion": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {
-                                    "type": "namespace",
-                                },
-                            },
-                        },
-                        "kind": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {
-                                    "type": "type",
-                                },
-                            },
-                        },
-                        "plural": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "number"},
-                            },
-                        },
-                        "namespaced": {
-                            "type": "parameter",
-                            "sub_structure": {
-                                VALUE: {"type": "number"},
-                            },
-                        },
-                    },
-                },
-                "functionRef": {
-                    "type": "property",
-                    "sub_structure": {
-                        "name": {
-                            "type": "property",
-                            "sub_structure": {
-                                VALUE: {
-                                    "index_key_fn": lambda value: f"Function:{value}:ref",
-                                    "type": "function",
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-    },
-    ALL: {
-        "apiVersion": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "namespace",
-                },
-            },
-        },
-        "kind": {
-            "sub_structure": {
-                VALUE: {
-                    "type": "type",
-                },
-            },
-        },
-        "metadata": {
-            "sub_structure": {
-                "name": {
-                    "sub_structure": {
-                        VALUE: {
-                            "modifier": [Modifier.definition],
-                        },
-                    },
-                },
-                "namespace": {
-                    "sub_structure": {
-                        VALUE: {
-                            "type": "namespace",
-                        },
-                    },
-                },
-            },
-        },
-        ALL: {
-            "type": "keyword",
-        },
-    },
+    ),
 }

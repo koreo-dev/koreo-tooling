@@ -29,8 +29,12 @@ from koreo_tooling.indexing import (
     TokenModifiers,
     TokenTypes,
     _STRUCTURE_KEY,
+    SemanticAnchor,
+    SemanticBlock,
+    SemanticNode,
     compute_abs_range,
-    anchor_path_search,
+    compute_abs_position,
+    anchor_local_key_search,
     extract_diagnostics,
     flatten,
     to_lsp_semantics,
@@ -276,113 +280,56 @@ def code_lens(params: types.CodeLensParams):
     This method will read the whole document and identify each sum in the document and
     tell the language client to insert a code lens at each location.
     """
-    return None
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     test_results = __TEST_RESULTS[doc.path]
     if not test_results:
         return []
 
-    doc_function_tests = {
-        resource_index_key: [
-            __RANGE_INDEX[doc.path][_range_key(resource_range)]
-            for resource_range in __RESOURCE_RANGE_INDEX[resource_index_key][doc.path]
-        ]
-        for resource_index_key in __PATH_RESOURCE_INDEX[doc.path]
-        if resource_index_key.startswith("FunctionTest:")
-    }
-
     lens = []
     for test_name, test_result in test_results.items():
         if test_result.success:
             continue
 
-        test_key = f"FunctionTest:{test_name}"
+        cached = cache.get_resource_system_data_from_cache(
+            resource_class=FunctionTest, cache_key=test_name
+        )
 
-        function_test_specs = doc_function_tests.get(test_key)
-        if not function_test_specs:
+        if not (cached and cached.resource and cached.system_data):
             continue
 
-        function_test_spec = function_test_specs.pop()
-        if not function_test_spec:
+        if cached.system_data.get("path") != doc.path:
             continue
 
-        if test_result.input_mismatches and False:
-            inputs = function_test_spec.get("inputs")
-            if not inputs:
+        test_anchor = cached.system_data.get("anchor")
+        if not test_anchor:
+            continue
+
+        if test_result.input_mismatches:
+            inputs_block = _nested_key_value_range_extract(
+                path_parts=["spec", "inputs"],
+                search_nodes=test_anchor.children,
+                doc_path=doc.path,
+                anchor=test_anchor,
+            )
+            if not inputs_block:
                 continue
 
-            inputs_range = inputs.get(_RANGE_KEY)
-
             code_lens = types.CodeLens(
-                range=inputs_range,
+                range=compute_abs_range(inputs_block, test_anchor),
                 command=types.Command(
                     title="Generate inputs",
                     command="codeLens.completeInputs",
                     arguments=[
                         {
-                            "path": doc.path,
                             "uri": params.text_document.uri,
                             "version": doc.version,
-                            "range": _range_key(inputs_range),
-                            "missing_inputs": list(test_result.missing_inputs),
                             "test_name": test_name,
                         }
                     ],
                 ),
             )
             lens.append(code_lens)
-            continue
-
-        ref_range = function_test_spec.get(_RANGE_KEY)
-
-        range_start_line = ref_range.start.line
-        range_end_line = ref_range.end.line
-
-        expected_resource_line = None
-        expected_resource_char = None
-
-        wrong_lines = []
-        for line_offset in range(range_end_line - range_start_line):
-            line_data = doc.lines[range_start_line + line_offset]
-            line_data_stripped = line_data.lstrip()
-
-            if line_data_stripped.startswith("expectedResource"):
-                expected_resource_line = range_start_line + line_offset
-                expected_resource_char = len(line_data) - len(line_data_stripped)
-                break
-            wrong_lines.append(line_data)
-
-        if expected_resource_line is None:
-            continue
-
-        range_ = types.Range(
-            start=types.Position(
-                line=expected_resource_line, character=expected_resource_char + 16
-            ),
-            end=types.Position(
-                line=expected_resource_line, character=expected_resource_char + 30
-            ),
-        )
-
-        code_lens = types.CodeLens(
-            range=range_,
-            command=types.Command(
-                title="Auto-complete resource def",
-                command="codeLens.fillexpectedResource",
-                arguments=[
-                    {
-                        "path": doc.path,
-                        "uri": params.text_document.uri,
-                        "version": doc.version,
-                        "line": expected_resource_line,
-                        "indent": expected_resource_char,
-                        "test_name": test_name,
-                    }
-                ],
-            ),
-        )
-        lens.append(code_lens)
 
     return lens
 
@@ -395,43 +342,82 @@ def code_lens_inputs_action(args):
     edit_args = args[0]
 
     doc_uri = edit_args["uri"]
-    inputs_range_key = edit_args["range"]
-    missing_inputs = edit_args["missing_inputs"]
-
-    raise Exception(f"{inputs_range_key}: {missing_inputs}")
+    doc_version = edit_args["version"]
+    test_name = edit_args["test_name"]
 
     doc = server.workspace.get_text_document(doc_uri)
+    if doc.version != doc_version:
+        return
 
-    start_line, end_line = _range_key_to_lines(inputs_range_key)
+    doc_path = doc.path
 
-    start_line = expected_resource_line + 1
-    end_line = start_line
-    end_char = 0
-    indent = expected_resource_indent + 2
+    test_result = __TEST_RESULTS[doc_path][test_name]
+    if not test_result.input_mismatches:
+        return
 
-    while end_line < len(doc.lines):
-        line_data = doc.lines[end_line]
-        first_char = len(line_data) - len(line_data.lstrip())
-
-        if first_char <= expected_resource_indent:
-            break
-
-        # In case they're using other than 2 indent
-        indent = min(indent, first_char)
-
-        end_line += 1
-
-    end_line -= 1
-    end_char = len(doc.lines[end_line])
-
-    test_result = __TEST_RESULTS[edit_args["path"]][edit_args["test_name"]]
-
-    indent = " " * indent
-
-    actual_resource = "\n".join(
-        f"{indent}{line}"
-        for line in yaml.dump(test_result.actual_resource).splitlines()
+    cached = cache.get_resource_system_data_from_cache(
+        resource_class=FunctionTest, cache_key=test_name
     )
+    if not (cached and cached.resource and cached.system_data):
+        return
+
+    test_anchor = cached.system_data.get("anchor")
+    if not test_anchor:
+        return
+
+    inputs_block = _nested_key_value_range_extract(
+        path_parts=["spec", "inputs"],
+        search_nodes=test_anchor.children,
+        doc_path=doc.path,
+        anchor=test_anchor,
+    )
+    if not inputs_block:
+        return
+
+    inputs_value_block = _block_range_extract(
+        search_key="InputValues",
+        search_nodes=inputs_block.children,
+        doc_path=doc.path,
+        anchor=test_anchor,
+    )
+    if not inputs_value_block:
+        return
+
+    spec_inputs = copy.deepcopy(cached.spec.get("inputs"))
+
+
+    if not spec_inputs:
+        spec_inputs = {
+            mismatch.field.split(".", 1)[-1]: "TODO"
+            for mismatch in test_result.input_mismatches
+        }
+    else:
+        for mismatch in test_result.input_mismatches:
+            field_name = mismatch.field.split(".", 1)[-1]
+            if mismatch.actual and not mismatch.expected:
+                del spec_inputs[field_name]
+
+            if not mismatch.actual and mismatch.expected:
+                spec_inputs[field_name] = "TODO"
+
+    formated_inputs = f"\n{"\n".join(
+        f"{(inputs_block.anchor_rel.offset + 2) * ' '}{line}"
+        for line in yaml.dump(spec_inputs).splitlines()
+    )}\n"
+
+    match inputs_value_block:
+        case SemanticAnchor(abs_position=abs_position):
+            end_pos = abs_position
+
+        case SemanticBlock(anchor_rel_end=anchor_rel_end):
+            end_pos = types.Position(
+                line=anchor_rel_end.line + test_anchor.abs_position.line, character=0
+            )
+
+        case SemanticNode(anchor_rel=anchor_rel, length=length):
+            end_pos = compute_abs_position(
+                anchor_rel, test_anchor.abs_position, length=length
+            )
 
     edit = types.TextDocumentEdit(
         text_document=types.OptionalVersionedTextDocumentIdentifier(
@@ -440,10 +426,14 @@ def code_lens_inputs_action(args):
         ),
         edits=[
             types.TextEdit(
-                new_text=actual_resource,
+                new_text=formated_inputs,
                 range=types.Range(
-                    start=types.Position(line=start_line, character=0),
-                    end=types.Position(line=end_line, character=end_char),
+                    start=compute_abs_position(
+                        inputs_block.anchor_rel,
+                        test_anchor.abs_position,
+                        length=inputs_block.length + 1,
+                    ),
+                    end=end_pos,
                 ),
             )
         ],
@@ -695,6 +685,9 @@ async def _run_function_test(doc: TextDocument):
         elif match := FUNCTION_NAME.match(resource_key):
             functions.add(match.group("name"))
 
+    if not (tests or functions):
+        return []
+
     test_results = await run_function_tests(
         server=server,
         tests_to_run=tests,
@@ -740,7 +733,7 @@ async def _run_function_test(doc: TextDocument):
             )
 
         test_spec_block = _block_range_extract(
-            path_key="spec",
+            search_key="spec",
             search_nodes=anchor.children,
             doc_path=doc.path,
             anchor=anchor,
@@ -750,7 +743,7 @@ async def _run_function_test(doc: TextDocument):
 
         if result.input_mismatches:
             inputs_block = _block_range_extract(
-                path_key="inputs",
+                search_key="inputs",
                 search_nodes=test_spec_block.children,
                 doc_path=doc.path,
                 anchor=anchor,
@@ -763,12 +756,30 @@ async def _run_function_test(doc: TextDocument):
                         range=compute_abs_range(test_spec_block, anchor),
                     )
                 )
+
+            if not inputs_block:
+                test_diagnostics.append(
+                    types.Diagnostic(
+                        message="Input expected, but none provided.",
+                        severity=types.DiagnosticSeverity.Warning,
+                        range=compute_abs_range(test_spec_block, anchor),
+                    )
+                )
             else:
+                input_values_block = _block_range_extract(
+                    search_key="InputValues",
+                    search_nodes=inputs_block.children,
+                    doc_path=doc.path,
+                    anchor=anchor,
+                )
+                if not input_values_block:
+                    continue
+
                 for mismatch in result.input_mismatches:
                     if not mismatch.expected and mismatch.actual:
                         input_block = _block_range_extract(
-                            path_key=mismatch.field,
-                            search_nodes=inputs_block.children,
+                            search_key=f"input:{mismatch.field.split(".", 1)[-1]}",
+                            search_nodes=input_values_block.children,
                             doc_path=doc.path,
                             anchor=anchor,
                         )
@@ -794,7 +805,7 @@ async def _run_function_test(doc: TextDocument):
 
         if result.resource_field_errors:
             resource_block = _block_range_extract(
-                path_key="expectedResource",
+                search_key="expectedResource",
                 search_nodes=test_spec_block.children,
                 doc_path=doc.path,
                 anchor=anchor,
@@ -810,7 +821,7 @@ async def _run_function_test(doc: TextDocument):
             else:
                 for mismatch in result.resource_field_errors:
                     mismatch_block = _block_range_extract(
-                        path_key=mismatch.field,
+                        search_key=mismatch.field,
                         search_nodes=resource_block.children,
                         doc_path=doc.path,
                         anchor=anchor,
@@ -834,7 +845,7 @@ async def _run_function_test(doc: TextDocument):
 
         if result.outcome_fields_errors:
             outcome_block = _block_range_extract(
-                path_key="expectedOkValue",
+                search_key="expectedOkValue",
                 search_nodes=test_spec_block.children,
                 doc_path=doc.path,
                 anchor=anchor,
@@ -850,7 +861,7 @@ async def _run_function_test(doc: TextDocument):
             else:
                 for mismatch in result.outcome_fields_errors:
                     mismatch_block = _block_range_extract(
-                        path_key=mismatch.field,
+                        search_key=mismatch.field,
                         search_nodes=outcome_block.children,
                         doc_path=doc.path,
                         anchor=anchor,
@@ -879,17 +890,6 @@ __DIAGNOSTICS = defaultdict[str, list[types.Diagnostic]](list[types.Diagnostic])
 __TEST_RESULTS = defaultdict[str, dict[str, TestResults]](defaultdict[str, TestResults])
 __SEMANTIC_TOKEN_INDEX = defaultdict[str, list[int]](list)
 __SEMANTIC_RANGE_INDEX: list[tuple[str, str, types.Range]] = []
-
-
-def _range_key(resource_range: types.Range):
-    return f"{resource_range.start.line}.{resource_range.start.line}:{resource_range.end.line}.{resource_range.end.line}"
-
-
-def _range_key_to_lines(key: str) -> tuple[int, int]:
-    start, end = key.split(":")
-    start_line = int(start.split(".")[0])
-    end_line = int(end.split(".")[0])
-    return (start_line, end_line)
 
 
 def _reset_file_state(path_key: str):
@@ -1206,38 +1206,6 @@ def _process_workflow(
         )
         return True
 
-    spec_block = _block_range_extract(
-        path_key="spec",
-        search_nodes=semantic_anchor.children,
-        doc_path=path,
-        anchor=semantic_anchor,
-    )
-    if not spec_block:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message="Missing `spec`",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-        )
-        return True
-
-    steps_block = _block_range_extract(
-        path_key="steps",
-        search_nodes=spec_block.children,
-        doc_path=path,
-        anchor=semantic_anchor,
-    )
-    if not steps_block:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message="Missing `spec.steps`",
-                severity=types.DiagnosticSeverity.Error,
-                range=compute_abs_range(spec_block, semantic_anchor),
-            )
-        )
-        return True
-
     if not is_unwrapped_ok(workflow.steps_ready):
         __DIAGNOSTICS[path].append(
             types.Diagnostic(
@@ -1263,8 +1231,8 @@ def _process_workflow(
 
     for step in workflow.steps:
         step_block = _block_range_extract(
-            path_key=f"Step:{step.label}",
-            search_nodes=steps_block.children,
+            search_key=f"Step:{step.label}",
+            search_nodes=semantic_anchor.children,
             doc_path=path,
             anchor=semantic_anchor,
         )
@@ -1295,8 +1263,8 @@ def _process_workflow_step(path, step, step_semantic_block, step_spec, semantic_
     has_error = False
 
     if isinstance(step, ErrorStep):
-        label_block = _key_value_range_extract(
-            path_key="label",
+        label_block = _block_range_extract(
+            search_key=f"label:{step.label}",
             search_nodes=step_semantic_block.children,
             doc_path=path,
             anchor=semantic_anchor,
@@ -1324,7 +1292,7 @@ def _process_workflow_step(path, step, step_semantic_block, step_spec, semantic_
     raw_inputs = step_spec.get("inputs", {})
 
     inputs_block = _block_range_extract(
-        path_key="inputs",
+        search_key="inputs",
         search_nodes=step_semantic_block.children,
         doc_path=path,
         anchor=semantic_anchor,
@@ -1338,7 +1306,7 @@ def _process_workflow_step(path, step, step_semantic_block, step_spec, semantic_
             if not inputs_block:
                 continue
             input_block = _block_range_extract(
-                path_key=argument,
+                search_key=f"input:{argument}",
                 search_nodes=inputs_block.children,
                 doc_path=path,
                 anchor=semantic_anchor,
@@ -1372,8 +1340,10 @@ def _process_workflow_step(path, step, step_semantic_block, step_spec, semantic_
     return has_error
 
 
-def _block_range_extract(path_key: str, search_nodes: Sequence, doc_path: str, anchor):
-    matches = anchor_path_search([path_key], _search_nodes=search_nodes)
+def _block_range_extract(
+    search_key: str, search_nodes: Sequence, doc_path: str, anchor
+):
+    matches = anchor_local_key_search(search_key, search_nodes=search_nodes)
 
     if not matches:
         return None
@@ -1384,7 +1354,7 @@ def _block_range_extract(path_key: str, search_nodes: Sequence, doc_path: str, a
         for match in matches:
             __DIAGNOSTICS[doc_path].append(
                 types.Diagnostic(
-                    message=f"Multiple instances of ('{path_key}').",
+                    message=f"Multiple instances of ('{search_key}').",
                     severity=types.DiagnosticSeverity.Error,
                     range=compute_abs_range(match, anchor),
                 )
@@ -1399,7 +1369,7 @@ def _key_value_range_extract(
     path_key: str, search_nodes: Sequence, doc_path: str, anchor
 ):
     yaml_key = _block_range_extract(
-        path_key=path_key, search_nodes=search_nodes, doc_path=doc_path, anchor=anchor
+        search_key=path_key, search_nodes=search_nodes, doc_path=doc_path, anchor=anchor
     )
     if not yaml_key:
         return None
@@ -1420,7 +1390,7 @@ def _key_value_range_extract(
         for child in yaml_key.children:
             __DIAGNOSTICS[doc_path].append(
                 types.Diagnostic(
-                    message=f"Multiple instances of ('{path_key}').",
+                    message=f"Multiple children of ('{path_key}').",
                     severity=types.DiagnosticSeverity.Error,
                     range=compute_abs_range(child, anchor),
                 )
@@ -1436,8 +1406,8 @@ def _nested_key_value_range_extract(
 ):
     while path_parts:
         next_path, *path_parts = path_parts
-        next_node = _key_value_range_extract(
-            path_key=next_path,
+        next_node = _block_range_extract(
+            search_key=next_path,
             search_nodes=search_nodes,
             doc_path=doc_path,
             anchor=anchor,
@@ -1449,7 +1419,6 @@ def _nested_key_value_range_extract(
             return next_node
 
         search_nodes = next_node.children
-
     return None
 
 

@@ -55,7 +55,7 @@ async def run_function_tests(
 
     tasks = []
     async with asyncio.TaskGroup() as task_group:
-        for test_key in tests_to_run:
+        for test_key in all_tests:
             test = cache.get_resource_from_cache(
                 resource_class=FunctionTest, cache_key=test_key
             )
