@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Sequence
+from typing import Sequence
 
 from yaml.loader import SafeLoader
 from yaml.nodes import MappingNode, SequenceNode

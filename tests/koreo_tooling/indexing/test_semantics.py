@@ -1,7 +1,6 @@
 import random
 import unittest
 
-import nanoid
 
 from koreo_tooling.indexing import semantics
 
@@ -11,7 +10,6 @@ class TestFlatten(unittest.TestCase):
         expected_nodes = []
 
         def _node_factory():
-            node_key = nanoid.generate(size=10)
             node_length = random.randint(5, 50)
             node_type = random.choice(semantics.TokenTypes)
             node_modifier = random.choices(
@@ -40,7 +38,6 @@ class TestFlatten(unittest.TestCase):
     def test_children(self):
 
         def _node_factory(depth: int = 0):
-            node_key = f"{depth}.{nanoid.generate(size=10)}"
             node_length = random.randint(5, 50)
             node_type = random.choice(semantics.TokenTypes)
             node_modifier = random.choices(
@@ -96,7 +93,6 @@ class TestFlatten(unittest.TestCase):
 
 class TestFlattenNode(unittest.TestCase):
     def test_no_children(self):
-        node_key = nanoid.generate(size=10)
         node_length = random.randint(5, 50)
         node_type = random.choice(semantics.TokenTypes)
         node_modifier = random.choices(
@@ -131,7 +127,6 @@ class TestFlattenNode(unittest.TestCase):
     def test_children(self):
 
         def _node_factory(depth: int = 0):
-            node_key = f"{depth}.{nanoid.generate(size=10)}"
             node_length = random.randint(5, 50)
             node_type = random.choice(semantics.TokenTypes)
             node_modifier = random.choices(
