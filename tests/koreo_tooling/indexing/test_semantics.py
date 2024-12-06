@@ -19,7 +19,6 @@ class TestFlatten(unittest.TestCase):
             )
 
             node = semantics.SemanticNode(
-                path_key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
                 length=node_length,
@@ -60,7 +59,6 @@ class TestFlatten(unittest.TestCase):
                     child_nodes.extend(child_expected_nodes)
 
             node = semantics.SemanticNode(
-                path_key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
                 length=node_length,
@@ -70,7 +68,6 @@ class TestFlatten(unittest.TestCase):
             )
 
             childless_node = semantics.SemanticNode(
-                path_key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
                 length=node_length,
@@ -107,7 +104,6 @@ class TestFlattenNode(unittest.TestCase):
         )
 
         node = semantics.SemanticNode(
-            path_key=node_key,
             position=semantics.Position(line=0, offset=0),
             anchor_rel=semantics.Position(line=0, offset=0),
             length=node_length,
@@ -121,7 +117,6 @@ class TestFlattenNode(unittest.TestCase):
         self.assertListEqual(
             [
                 semantics.SemanticNode(
-                    path_key=node_key,
                     position=semantics.Position(line=0, offset=0),
                     anchor_rel=semantics.Position(line=0, offset=0),
                     length=node_length,
@@ -155,7 +150,6 @@ class TestFlattenNode(unittest.TestCase):
                     child_nodes.extend(child_expected_nodes)
 
             node = semantics.SemanticNode(
-                path_key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
                 length=node_length,
@@ -165,7 +159,6 @@ class TestFlattenNode(unittest.TestCase):
             )
 
             childless_node = semantics.SemanticNode(
-                path_key=node_key,
                 position=semantics.Position(line=0, offset=0),
                 anchor_rel=semantics.Position(line=0, offset=0),
                 length=node_length,
