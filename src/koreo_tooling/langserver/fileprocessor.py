@@ -39,7 +39,7 @@ class ProccessResults(NamedTuple):
 
 async def process_file(
     doc: TextDocument,
-) -> ProccessResults | None:
+) -> ProccessResults:
     path = doc.path
     pash = hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()
 

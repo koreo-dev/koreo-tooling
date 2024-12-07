@@ -8,6 +8,7 @@ import os
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
 import yaml
+import nanoid
 
 
 from pygls.lsp.server import LanguageServer
@@ -568,7 +569,7 @@ async def semantic_tokens_full(params: types.ReferenceParams):
 
 
 __PATH_GUARD_SEM: dict[str, Semaphore] = {}
-__PATH_GUARD: dict[str, int] = {}
+__PATH_GUARD: dict[str, tuple[int, str]] = {}
 
 
 async def _handle_file(doc: TextDocument):
@@ -577,44 +578,71 @@ async def _handle_file(doc: TextDocument):
     if doc.path not in __PATH_GUARD_SEM:
         __PATH_GUARD_SEM[doc.path] = Semaphore(1)
 
+    run_id = nanoid.generate(size=5)
+
     async with __PATH_GUARD_SEM[doc.path]:
-        if doc.path in __PATH_GUARD and doc_version <= __PATH_GUARD[doc.path]:
+        if doc.path in __PATH_GUARD and doc_version <= __PATH_GUARD[doc.path][0]:
             return
 
-        __PATH_GUARD[doc.path] = doc_version
+        __PATH_GUARD[doc.path] = (doc_version, run_id)
 
-        await _guarded_handle_file(doc)
+    await _guarded_handle_file(doc, doc_version, run_id)
 
 
-async def _guarded_handle_file(doc: TextDocument):
-    _reset_file_state(doc.path)
+async def _guarded_handle_file(doc: TextDocument, doc_version: int, run_id: str):
 
     diagnostics = []
 
     try:
-        process_diagnostics = await _process_file(doc=doc)
-        if process_diagnostics:
-            diagnostics.extend(process_diagnostics)
+        processing_result = await _process_file(doc=doc)
+        if processing_result.diagnostics:
+            diagnostics.extend(processing_result.diagnostics)
     except Exception as err:
         return
 
-    diagnostics.extend(_process_workflows(path=doc.path))
-    diagnostics.extend(await _run_function_test(doc=doc))
-    diagnostics.extend(_check_for_duplicate_resources(path=doc.path))
-
-    server.text_document_publish_diagnostics(
-        types.PublishDiagnosticsParams(
-            uri=doc.uri, version=doc.version, diagnostics=diagnostics
+    diagnostics.extend(
+        _process_workflows(
+            path=doc.path, semantic_range_index=processing_result.semantic_range_index
         )
     )
 
+    test_diagnostics, test_results = await _run_function_test(doc=doc)
+    diagnostics.extend(test_diagnostics)
 
-def _process_workflows(path: str) -> list[types.Diagnostic]:
+    async with __PATH_GUARD_SEM[doc.path]:
+        if doc.path in __PATH_GUARD and __PATH_GUARD[doc.path] != (doc_version, run_id):
+            return
+
+        _reset_file_state(doc.path)
+
+        if processing_result.semantic_tokens:
+            __SEMANTIC_TOKEN_INDEX[doc.path] = processing_result.semantic_tokens
+        else:
+            # Will this break anything?
+            __SEMANTIC_TOKEN_INDEX[doc.path] = []
+
+        if processing_result.semantic_range_index:
+            __SEMANTIC_RANGE_INDEX.extend(processing_result.semantic_range_index)
+
+        __TEST_RESULTS[doc.path] = test_results
+
+        diagnostics.extend(_check_for_duplicate_resources(path=doc.path))
+
+        server.text_document_publish_diagnostics(
+            types.PublishDiagnosticsParams(
+                uri=doc.uri, version=doc.version, diagnostics=diagnostics
+            )
+        )
+
+
+def _process_workflows(
+    path: str, semantic_range_index: Sequence[tuple[str, str, types.Range]] | None
+) -> list[types.Diagnostic]:
+    if not semantic_range_index:
+        return []
+
     workflows = []
-    for maybe_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
-        if maybe_path != path:
-            continue
-
+    for _, resource_key, resource_range in semantic_range_index:
         match = constants.WORKFLOW_NAME.match(resource_key)
         if not match:
             continue
@@ -624,7 +652,9 @@ def _process_workflows(path: str) -> list[types.Diagnostic]:
     return process_workflows(path=path, workflows=workflows)
 
 
-async def _run_function_test(doc: TextDocument) -> list[types.Diagnostic]:
+async def _run_function_test(
+    doc: TextDocument,
+) -> tuple[list[types.Diagnostic], dict[str, TestResults]]:
     test_range_map = {}
     tests_to_run = set[str]()
     functions_to_test = set[str]()
@@ -641,7 +671,7 @@ async def _run_function_test(doc: TextDocument) -> list[types.Diagnostic]:
             functions_to_test.add(match.group("name"))
 
     if not (tests_to_run or functions_to_test):
-        return []
+        return ([], {})
 
     test_results = await run_function_tests(
         tests_to_run=tests_to_run,
@@ -649,17 +679,18 @@ async def _run_function_test(doc: TextDocument) -> list[types.Diagnostic]:
         test_range_map=test_range_map,
     )
 
-    if test_results.results:
-        __TEST_RESULTS[doc.path] = test_results.results
+    results = test_results.results
+    if not results:
+        results = {}
 
     if test_results.logs:
         for log in test_results.logs:
             server.window_log_message(params=log)
 
     if test_results.diagnostics:
-        return test_results.diagnostics
+        return (test_results.diagnostics, results)
 
-    return []
+    return ([], results)
 
 
 __TEST_RESULTS = defaultdict[str, dict[str, TestResults]](dict)
@@ -688,23 +719,11 @@ async def _process_file(
 ):
     results = await process_file(doc=doc)
 
-    if not results:
-        return
-
-    if results.semantic_range_index:
-        __SEMANTIC_RANGE_INDEX.extend(results.semantic_range_index)
-
-    if results.semantic_tokens:
-        __SEMANTIC_TOKEN_INDEX[doc.path] = results.semantic_tokens
-
     if results.logs:
         for log in results.logs:
             server.window_log_message(params=log)
 
-        return results.diagnostics
-
-    if results.diagnostics:
-        return results.diagnostics
+    return results
 
 
 def _check_for_duplicate_resources(path: str):
