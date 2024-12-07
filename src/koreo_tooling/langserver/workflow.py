@@ -169,26 +169,14 @@ def _process_workflow_step(
     step, step_semantic_block, step_spec, semantic_anchor
 ) -> ProcessResult:
     if isinstance(step, ErrorStep):
-        label_block = block_range_extract(
-            search_key=f"label:{step.label}",
-            search_nodes=step_semantic_block.children,
-            anchor=semantic_anchor,
-        )
-        match label_block:
-            case None:
-                return ProcessResult(error=True)
-            case list(label_diagnostics):
-                return ProcessResult(error=True, diagnostics=label_diagnostics)
-
         return ProcessResult(
             error=True,
-            diagnostics=[
-                types.Diagnostic(
-                    message=f"Step ('{step.label}') not ready {step.outcome.message}.",
-                    severity=types.DiagnosticSeverity.Warning,
-                    range=compute_abs_range(label_block, semantic_anchor),
-                )
-            ],
+            diagnostics=_step_label_error_diagnostic(
+                label=step.label,
+                step_semantic_block=step_semantic_block,
+                semantic_anchor=semantic_anchor,
+                message=f"Not ready {step.outcome.message}.",
+            ),
         )
 
     # These are just the "top level" direct inputs. No consideration to
@@ -266,4 +254,36 @@ def _process_workflow_step(
                 )
             )
 
+    if has_error:
+        diagnostics.extend(
+            _step_label_error_diagnostic(
+                label=step.label,
+                step_semantic_block=step_semantic_block,
+                semantic_anchor=semantic_anchor,
+                message="Step has errors",
+            )
+        )
     return ProcessResult(error=has_error, diagnostics=diagnostics)
+
+
+def _step_label_error_diagnostic(
+    label: str, step_semantic_block, semantic_anchor, message: str
+) -> list[types.Diagnostic]:
+    label_block = block_range_extract(
+        search_key=f"label:{label}",
+        search_nodes=step_semantic_block.children,
+        anchor=semantic_anchor,
+    )
+    match label_block:
+        case None:
+            return []
+        case list(label_diagnostics):
+            return label_diagnostics
+
+    return [
+        types.Diagnostic(
+            message=message,
+            severity=types.DiagnosticSeverity.Warning,
+            range=compute_abs_range(label_block, semantic_anchor),
+        )
+    ]
