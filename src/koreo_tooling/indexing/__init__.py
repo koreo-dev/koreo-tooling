@@ -32,6 +32,9 @@ class IndexingLoader(SafeLoader):
 
     def construct_document(self, node: Node):
         yaml_doc = super().construct_document(node)
+        if not yaml_doc:
+            self.doc_count = self.doc_count + 1
+            return
 
         doc_kind = yaml_doc.get("kind")
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
