@@ -1,10 +1,9 @@
 from asyncio import Semaphore
 from collections import defaultdict
 from pathlib import Path
-from typing import Sequence
+from typing import NamedTuple, Sequence
 import copy
 import os
-import re
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
@@ -18,7 +17,6 @@ from lsprotocol import types
 from koreo import cache
 from koreo.function.structure import Function
 from koreo.function_test.structure import FunctionTest
-from koreo.result import is_unwrapped_ok, is_not_ok
 from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
@@ -33,10 +31,13 @@ from koreo_tooling.indexing import (
     compute_abs_position,
 )
 
+from koreo_tooling.indexing.semantics import generate_local_range_index
+
 from koreo_tooling.langserver.fileprocessor import process_file
 from koreo_tooling.langserver.workflow import process_workflows
 from koreo_tooling.langserver.function_test import run_function_tests
 from koreo_tooling.langserver.rangers import block_range_extract
+from koreo_tooling.langserver.hover import handle_hover
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -70,146 +71,29 @@ async def completions(params: types.CompletionParams):
     return types.CompletionList(is_incomplete=True, items=items)
 
 
-def _input_error_formatter(actual: bool, expected: bool) -> str:
-    if actual and not expected:
-        return "unexpected"
-
-    if not actual and expected:
-        return "*missing*"
-
-    return "_unknown_"
-
-
 @server.feature(types.TEXT_DOCUMENT_HOVER)
 def hover(params: types.HoverParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
-    if not resource_info:
+    if not resource_info.index_match:
         return None
 
-    resource_key, resource_key_range = resource_info
+    hover_result = handle_hover(
+        resource_key=resource_info.index_match.key,
+        resource_key_range=resource_info.index_match.range,
+        local_resource=resource_info.local_match,
+        test_results=__TEST_RESULTS[doc.path],
+    )
 
-    workflow_match = constants.WORKFLOW_NAME.match(resource_key)
-    if workflow_match:
-        workflow_name = workflow_match.group("name")
+    if not hover_result:
+        return None
 
-        hover_content = [f"# {workflow_name}"]
+    if hover_result.logs:
+        for log in hover_result.logs:
+            server.window_log_message(params=log)
 
-        workflow = cache.get_resource_from_cache(
-            resource_class=Workflow, cache_key=workflow_name
-        )
-
-        if not workflow:
-            hover_content.append(f"Workflow {workflow_name} not in Koreo Cache")
-        elif not is_unwrapped_ok(workflow):
-            hover_content.append("Workflow not ready")
-            hover_content.append(f"{workflow.message}")
-        elif is_not_ok(workflow.steps_ready):
-            hover_content.append("Workflow steps not ready")
-            hover_content.append(f"{workflow.steps_ready.message}")
-        else:
-            hover_content.append("*Ready*")
-
-        return types.Hover(
-            contents=types.MarkupContent(
-                kind=types.MarkupKind.Markdown,
-                value="\n".join(hover_content),
-            ),
-            range=resource_key_range,
-        )
-
-    if resource_key.startswith("Function:"):
-        function_name = resource_key.split(":")[1]
-
-        hover_content = [f"# {function_name}"]
-
-        function = cache.get_resource_from_cache(
-            resource_class=Function, cache_key=function_name
-        )
-
-        if is_unwrapped_ok(function):
-            hover_content.append("*Ready*")
-        else:
-            hover_content.append("Function not ready")
-            hover_content.append(f"{function.message}")
-
-        return types.Hover(
-            contents=types.MarkupContent(
-                kind=types.MarkupKind.Markdown,
-                value="\n".join(hover_content),
-            ),
-            range=resource_key_range,
-        )
-
-    if resource_key.startswith("FunctionTest:"):
-        test_name = resource_key.split(":")[1]
-        result = __TEST_RESULTS[doc.path].get(test_name)
-        hover_content = []
-        if not result:
-            hover_content.append(f"*Test has not ran*")
-        else:
-            if result.success:
-                hover_content.append(f"# *Success*")
-
-                if result.input_mismatches:
-                    hover_content.append("## Unused Inputs")
-                    hover_content.append("| Field | Issue | Severity |")
-                    hover_content.append("|:-|-:|:-:|")
-                    for mismatch in result.input_mismatches:
-                        hover_content.append(
-                            f"| `{mismatch.field}` | {_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | {mismatch.severity} |"
-                        )
-                    hover_content.append("\n")
-
-            else:
-                hover_content.append("# *Error*")
-                if result.messages:
-                    hover_content.append("## Failure")
-                    hover_content.extend(result.messages)
-
-                if result.input_mismatches:
-                    hover_content.append("## Input Mismatches")
-                    hover_content.append("| Field | Issue | Severity |")
-                    hover_content.append("|:-|-:|:-:|")
-                    for mismatch in result.input_mismatches:
-                        hover_content.append(
-                            f"| `{mismatch.field}` | {_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | {mismatch.severity} |"
-                        )
-                    hover_content.append("\n")
-
-                if result.resource_field_errors:
-                    hover_content.append("## Field Mismatches")
-                    hover_content.append("| Field | Actual | Expected |")
-                    hover_content.append("|:-|-:|-:|")
-                    for compare in result.resource_field_errors:
-                        hover_content.append(
-                            f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
-                        )
-                    hover_content.append("\n")
-
-                if result.outcome_fields_errors:
-                    hover_content.append("## Outcome Mismatches")
-                    hover_content.append("| Field | Actual | Expected |")
-                    hover_content.append("|:-|-:|-:|")
-                    for compare in result.outcome_fields_errors:
-                        hover_content.append(
-                            f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
-                        )
-                    hover_content.append("\n")
-
-        return types.Hover(
-            contents=types.MarkupContent(
-                kind=types.MarkupKind.Markdown,
-                value="\n".join(hover_content),
-            ),
-            range=types.Range(
-                start=types.Position(line=params.position.line, character=0),
-                end=types.Position(line=params.position.line + 1, character=0),
-            ),
-        )
-
-    return None
+    return hover_result.hover
 
 
 @server.feature(types.TEXT_DOCUMENT_INLAY_HINT)
@@ -552,19 +436,68 @@ async def change_processor(params):
     await _handle_file(doc=doc)
 
 
-def _lookup_current_line_info(path: str, line: int) -> tuple[str, types.Range] | None:
+class ResourceMatch(NamedTuple):
+    key: str
+    range: types.Range
+
+
+class CurrentLineInfo(NamedTuple):
+    index_match: ResourceMatch | None = None
+    local_match: ResourceMatch | None = None
+
+
+def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
+    possible_match: tuple[str, types.Range] | None = None
     for maybe_path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
         if maybe_path != path:
             continue
 
         if not isinstance(maybe_range, types.Range):
-            # TODO: Get anchors setting a range
             continue
 
         if maybe_range.start.line == line:
-            return (maybe_key, maybe_range)
+            return CurrentLineInfo(
+                index_match=ResourceMatch(key=maybe_key, range=maybe_range)
+            )
 
-    return None
+        if maybe_range.start.line <= line <= maybe_range.end.line:
+            possible_match = ResourceMatch(key=maybe_key, range=maybe_range)
+
+    if not possible_match:
+        return CurrentLineInfo()
+
+    if match := constants.WORKFLOW_ANCHOR.match(possible_match.key):
+        cached = cache.get_resource_system_data_from_cache(
+            resource_class=Workflow, cache_key=match.group("name")
+        )
+    elif match := constants.FUNCTION_ANCHOR.match(possible_match.key):
+        cached = cache.get_resource_system_data_from_cache(
+            resource_class=Function, cache_key=match.group("name")
+        )
+    elif match := constants.FUNCTION_TEST_ANCHOR.match(possible_match.key):
+        cached = cache.get_resource_system_data_from_cache(
+            resource_class=FunctionTest, cache_key=match.group("name")
+        )
+    else:
+        return CurrentLineInfo()
+
+    if not cached or not cached.system_data or "anchor" not in cached.system_data:
+        return CurrentLineInfo()
+
+    anchor: SemanticAnchor = cached.system_data.get("anchor")
+    anchor_index = generate_local_range_index(nodes=anchor.children, anchor=anchor)
+
+    for maybe_key, maybe_range in anchor_index:
+        if not isinstance(maybe_range, types.Range):
+            continue
+
+        if maybe_range.start.line == line:
+            return CurrentLineInfo(
+                index_match=possible_match,
+                local_match=ResourceMatch(key=maybe_key, range=maybe_range),
+            )
+
+    return CurrentLineInfo()
 
 
 @server.feature(types.TEXT_DOCUMENT_DEFINITION)
@@ -572,12 +505,10 @@ async def goto_definitiion(params: types.DefinitionParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
-    if not resource_info:
+    if not resource_info.index_match:
         return []
 
-    resource_key, _ = resource_info
-
-    resource_key_root = resource_key.rsplit(":", 1)[0]
+    resource_key_root = resource_info.index_match.key.rsplit(":", 1)[0]
     search_key = f"{resource_key_root}:def"
 
     definitions = []
@@ -599,12 +530,10 @@ async def goto_reference(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
     resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
-    if not resource_info:
+    if not resource_info.index_match:
         return []
 
-    resource_key, _ = resource_info
-
-    resource_key_root = resource_key.rsplit(":", 1)[0]
+    resource_key_root = resource_info.index_match.key.rsplit(":", 1)[0]
     reference_key = f"{resource_key_root}:ref"
     definition_key = f"{resource_key_root}:def"
 
@@ -707,7 +636,7 @@ async def _run_function_test(doc: TextDocument) -> list[types.Diagnostic]:
             tests_to_run.add(test_name)
             test_range_map[test_name] = resource_range
 
-        elif match := FUNCTION_NAME.match(resource_key):
+        elif match := constants.FUNCTION_NAME.match(resource_key):
             functions_to_test.add(match.group("name"))
 
     if not (tests_to_run or functions_to_test):
@@ -777,17 +706,13 @@ async def _process_file(
         return results.diagnostics
 
 
-FUNCTION_NAME = re.compile("Function:(?P<name>.*)?:def")
-RESOURCE_DEF = re.compile("([A-Z][a-zA-Z0-9.]*):(.*):def")
-
-
 def _check_for_duplicate_resources(path: str):
     counts: defaultdict[str, tuple[int, bool, list[tuple]]] = defaultdict(
         lambda: (0, False, [])
     )
 
     for resource_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
-        if not RESOURCE_DEF.match(resource_key):
+        if not constants.RESOURCE_DEF.match(resource_key):
             continue
 
         count, seen_in_path, locations = counts[resource_key]

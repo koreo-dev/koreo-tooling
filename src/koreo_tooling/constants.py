@@ -23,8 +23,17 @@ CRD_API_VERSION = "apiextensions.k8s.io/v1"
 CRD_KIND = "CustomResourceDefinition"
 
 
+RESOURCE_DEF = re.compile("(?P<kind>[A-Z][a-zA-Z0-9.]*):(?P<name>.*):def")
+
+TOP_LEVEL_RESOURCE = re.compile("(?P<kind>[A-Z][a-zA-Z0-9.]*):(?P<name>.*)?:[dr]ef")
+
 WORKFLOW_NAME = re.compile("Workflow:(?P<name>[^:]*)?:def")
+FUNCTION_NAME = re.compile("Function:(?P<name>.*)?:def")
 FUNCTION_TEST_NAME = re.compile("FunctionTest:(?P<name>.*)?:def")
+
+WORKFLOW_ANCHOR = re.compile("Workflow:(?P<name>[^:]*)")
+FUNCTION_ANCHOR = re.compile("Function:(?P<name>.*)")
+FUNCTION_TEST_ANCHOR = re.compile("FunctionTest:(?P<name>.*)")
 
 INPUT_NAME_PATTERN = re.compile("inputs.(?P<name>[^.]+).?")
 PARENT_NAME_PATTERN = re.compile("parent.(?P<name>[^.]+).?")
