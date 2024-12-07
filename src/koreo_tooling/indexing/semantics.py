@@ -202,6 +202,55 @@ def generate_key_range_index(
     return index
 
 
+def generate_local_range_index(
+    nodes: (
+        SemanticAnchor
+        | SemanticBlock
+        | SemanticNode
+        | Sequence[SemanticBlock | SemanticNode]
+        | None
+    ),
+    anchor: SemanticAnchor | None = None,
+) -> Sequence[tuple[str, types.Range]]:
+    if not nodes:
+        return []
+
+    index = []
+
+    match nodes:
+        case SemanticAnchor(key=key, children=children):
+            if key:
+                index.append((key, compute_abs_range(nodes, anchor=nodes)))
+
+            if children:
+                index.extend(generate_local_range_index(nodes=children, anchor=nodes))
+
+            return index
+
+        case SemanticBlock(local_key=local_key, children=children):
+            if local_key and anchor:
+                index.append((local_key, compute_abs_range(nodes, anchor=anchor)))
+
+            if children:
+                index.extend(generate_local_range_index(nodes=children, anchor=anchor))
+
+            return index
+
+        case SemanticNode(local_key=local_key, children=children):
+            if local_key and anchor:
+                index.append((local_key, compute_abs_range(nodes, anchor=anchor)))
+
+            if children:
+                index.extend(generate_local_range_index(nodes=children, anchor=anchor))
+
+            return index
+
+    for node in nodes:
+        index.extend(generate_local_range_index(nodes=node, anchor=anchor))
+
+    return index
+
+
 def anchor_local_key_search(
     search_key: str,
     search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None = None,
