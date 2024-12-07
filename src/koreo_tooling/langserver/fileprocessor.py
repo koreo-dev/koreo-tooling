@@ -288,7 +288,7 @@ def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple, None, N
     for node in nodes:
         yield (
             node.position.line,
-            node.position.offset,
+            node.position.character,
             node.length,
             TypeIndex[node.node_type],
             reduce(operator.or_, node.modifier, 0) if node.modifier else 0,
@@ -299,7 +299,7 @@ def _block_range(semantic_anchor: SemanticAnchor, doc: TextDocument) -> types.Ra
     return types.Range(
         start=types.Position(
             line=semantic_anchor.abs_position.line,
-            character=semantic_anchor.abs_position.offset,
+            character=semantic_anchor.abs_position.character,
         ),
         end=types.Position(
             line=semantic_anchor.abs_position.line,

@@ -139,7 +139,7 @@ def _extract_semantic_structure(
                     position=token.position,
                     anchor_rel=Position(
                         line=token.start_rel.line + anchor_base_pos.line,
-                        offset=token.start_rel.offset,
+                        character=token.start_rel.character,
                     ),
                     length=len(token.text),
                     node_type=token.token_type,
@@ -174,7 +174,7 @@ def _extract_semantic_structure(
                 position=token.position,
                 anchor_rel=Position(
                     line=token.start_rel.line + anchor_base_pos.line,
-                    offset=token.start_rel.offset,
+                    character=token.start_rel.character,
                 ),
                 length=len(token.text),
                 node_type=token_type,
@@ -220,21 +220,21 @@ def lex(
                         Token(
                             position=Position(
                                 line=current_line - prev_line,
-                                offset=current_offset - prev_offset,
+                                character=current_offset - prev_offset,
                             ),
                             start_rel=Position(
                                 line=current_line,
-                                offset=abs_offset + current_offset,
+                                character=abs_offset + current_offset,
                             ),
                             text=match.group("quote"),
                             token_type="operator",
                             token_modifiers=[],
                         ),
                         Token(
-                            position=Position(line=0, offset=quote_group_len),
+                            position=Position(line=0, character=quote_group_len),
                             start_rel=Position(
                                 line=current_line,
-                                offset=abs_offset + current_offset + quote_group_len,
+                                character=abs_offset + current_offset + quote_group_len,
                             ),
                             text=match.group("string"),
                             token_type="string",
@@ -243,11 +243,11 @@ def lex(
                         Token(
                             position=Position(
                                 line=0,
-                                offset=string_len,
+                                character=string_len,
                             ),
                             start_rel=Position(
                                 line=current_line,
-                                offset=abs_offset
+                                character=abs_offset
                                 + current_offset
                                 + quote_group_len
                                 + string_len,
@@ -272,11 +272,11 @@ def lex(
                     Token(
                         position=Position(
                             line=current_line - prev_line,
-                            offset=current_offset - prev_offset,
+                            character=current_offset - prev_offset,
                         ),
                         start_rel=Position(
                             line=current_line,
-                            offset=abs_offset + current_offset,
+                            character=abs_offset + current_offset,
                         ),
                         text=match.group(0),
                         token_type="",
@@ -294,11 +294,11 @@ def lex(
                     Token(
                         position=Position(
                             line=current_line - prev_line,
-                            offset=current_offset - prev_offset,
+                            character=current_offset - prev_offset,
                         ),
                         start_rel=Position(
                             line=current_line,
-                            offset=abs_offset + current_offset,
+                            character=abs_offset + current_offset,
                         ),
                         text=match.group(0),
                         token_type="operator",

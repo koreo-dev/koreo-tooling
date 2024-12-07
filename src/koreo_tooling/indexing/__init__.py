@@ -25,8 +25,8 @@ STRUCTURE_KEY = "..structure.."
 class IndexingLoader(SafeLoader):
     def __init__(self, *args, doc, **kwargs):
         super().__init__(*args, **kwargs)
-        self.last_node_abs_start = Position(0, 0)
-        self.last_node_abs_end = Position(0, 0)
+        self.last_node_abs_start = Position(line=0, character=0)
+        self.last_node_abs_end = Position(line=0, character=0)
         self.doc = doc
         self.doc_count = 0
 
@@ -50,14 +50,12 @@ class IndexingLoader(SafeLoader):
 
         anchor_abs_start = Position(
             line=node.start_mark.line,
-            offset=node.start_mark.column,
+            character=node.start_mark.column,
         )
 
-        last_line, _ = self.last_node_abs_start
-
         anchor_rel_start = Position(
-            line=node.start_mark.line - last_line,
-            offset=node.start_mark.column,
+            line=node.start_mark.line - self.last_node_abs_start.line,
+            character=node.start_mark.column,
         )
 
         structure, last_abs_start = extract_semantic_structure_info(

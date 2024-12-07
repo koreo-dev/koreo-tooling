@@ -8,6 +8,7 @@ from .semantics import (
     Modifier,
     NodeDiagnostic,
     Position,
+    Range,
     SemanticBlock,
     SemanticNode,
     SemanticStructure,
@@ -157,7 +158,9 @@ def _extract_cel_semantic_info(
 ):
     node_line = yaml_node.start_mark.line
     node_column = yaml_node.start_mark.column
-    last_line, last_column = last_token_abs_start
+
+    last_line = last_token_abs_start.line
+    last_column = last_token_abs_start.character
 
     nodes = []
 
@@ -186,14 +189,13 @@ def _extract_cel_semantic_info(
             cel_semantics.parse(
                 cel_expression=[yaml_node.value],
                 anchor_base_pos=_compute_rel_position(
-                    line=node_line, offset=node_column, relative_to=anchor_abs_start
+                    line=node_line, character=node_column, relative_to=anchor_abs_start
                 ),
                 seed_line=0,
                 seed_offset=char_offset,
                 abs_offset=eq_char_offset - char_offset,
             )
         )
-        # return (cel_nodes, Position(line=node_line, offset=node_column))
     else:
         # Multiline expression
 
@@ -203,10 +205,12 @@ def _extract_cel_semantic_info(
         nodes.append(
             SemanticNode(
                 position=_compute_rel_position(
-                    line=node_line, offset=node_column, relative_to=last_token_abs_start
+                    line=node_line,
+                    character=node_column,
+                    relative_to=last_token_abs_start,
                 ),
                 anchor_rel=_compute_rel_position(
-                    line=node_line, offset=node_column, relative_to=anchor_abs_start
+                    line=node_line, character=node_column, relative_to=anchor_abs_start
                 ),
                 length=line_len - node_column,
                 node_type="operator",
@@ -219,7 +223,7 @@ def _extract_cel_semantic_info(
             cel_semantics.parse(
                 cel_expression=doc.lines[node_line + 1 : yaml_node.end_mark.line],
                 anchor_base_pos=_compute_rel_position(
-                    line=node_line, offset=node_column, relative_to=anchor_abs_start
+                    line=node_line, character=node_column, relative_to=anchor_abs_start
                 ),
                 seed_line=1,
                 seed_offset=0,
@@ -237,22 +241,24 @@ def _extract_cel_semantic_info(
 
     last_abs_position = Position(
         line=last_node.anchor_rel.line + anchor_abs_start.line,
-        offset=last_node.anchor_rel.offset,
+        character=last_node.anchor_rel.character,
     )
 
     block = [
         SemanticBlock(
             local_key=None,
             index_key=None,
-            anchor_rel_start=_compute_rel_position(
-                line=yaml_node.start_mark.line,
-                offset=yaml_node.start_mark.column,
-                relative_to=anchor_abs_start,
-            ),
-            anchor_rel_end=_compute_rel_position(
-                line=yaml_node.end_mark.line,
-                offset=yaml_node.end_mark.column,
-                relative_to=anchor_abs_start,
+            anchor_rel=Range(
+                start=_compute_rel_position(
+                    line=yaml_node.start_mark.line,
+                    character=yaml_node.start_mark.column,
+                    relative_to=anchor_abs_start,
+                ),
+                end=_compute_rel_position(
+                    line=yaml_node.end_mark.line,
+                    character=yaml_node.end_mark.column,
+                    relative_to=anchor_abs_start,
+                ),
             ),
             children=nodes,
         )
@@ -269,7 +275,8 @@ def _extract_scalar_semantic_info(
     semantic_type: SemanticStructure,
     diagnostic: NodeDiagnostic | None = None,
 ):
-    last_line, last_column = last_token_abs_start
+    last_line = last_token_abs_start.line
+    last_column = last_token_abs_start.character
 
     node_line = yaml_node.start_mark.line
     node_column = yaml_node.start_mark.column
@@ -300,10 +307,10 @@ def _extract_scalar_semantic_info(
                 index_key=index_key,
                 position=Position(
                     line=node_line - last_line,
-                    offset=char_offset,
+                    character=char_offset,
                 ),
                 anchor_rel=_compute_rel_position(
-                    line=node_line, offset=node_column, relative_to=anchor_abs_start
+                    line=node_line, character=node_column, relative_to=anchor_abs_start
                 ),
                 length=value_len,
                 node_type=semantic_type.type,
@@ -325,7 +332,7 @@ def _extract_scalar_semantic_info(
         char_offset = len(line_data) - len(line_data.lstrip())
         value_len = len(line_data.strip())
 
-    last_token_pos = Position(line=node_line, offset=node_column)
+    last_token_pos = Position(line=node_line, character=node_column)
 
     if len(nodes) <= 1:
         return (
@@ -337,15 +344,17 @@ def _extract_scalar_semantic_info(
         SemanticBlock(
             local_key=local_key,
             index_key=index_key,
-            anchor_rel_start=_compute_rel_position(
-                line=yaml_node.start_mark.line,
-                offset=yaml_node.start_mark.column,
-                relative_to=anchor_abs_start,
-            ),
-            anchor_rel_end=_compute_rel_position(
-                line=yaml_node.end_mark.line,
-                offset=yaml_node.end_mark.column,
-                relative_to=anchor_abs_start,
+            anchor_rel=Range(
+                start=_compute_rel_position(
+                    line=yaml_node.start_mark.line,
+                    character=yaml_node.start_mark.column,
+                    relative_to=anchor_abs_start,
+                ),
+                end=_compute_rel_position(
+                    line=yaml_node.end_mark.line,
+                    character=yaml_node.end_mark.column,
+                    relative_to=anchor_abs_start,
+                ),
             ),
             children=nodes,
         )
@@ -393,15 +402,17 @@ def _extract_value_semantic_info(
             SemanticBlock(
                 local_key=local_key,
                 index_key=index_key,
-                anchor_rel_start=_compute_rel_position(
-                    line=yaml_node.start_mark.line,
-                    offset=yaml_node.start_mark.column,
-                    relative_to=anchor_abs_start,
-                ),
-                anchor_rel_end=_compute_rel_position(
-                    line=yaml_node.end_mark.line,
-                    offset=yaml_node.end_mark.column,
-                    relative_to=anchor_abs_start,
+                anchor_rel=Range(
+                    start=_compute_rel_position(
+                        line=yaml_node.start_mark.line,
+                        character=yaml_node.start_mark.column,
+                        relative_to=anchor_abs_start,
+                    ),
+                    end=_compute_rel_position(
+                        line=yaml_node.end_mark.line,
+                        character=yaml_node.end_mark.column,
+                        relative_to=anchor_abs_start,
+                    ),
                 ),
                 children=nodes,
             )
@@ -439,9 +450,12 @@ def _extract_value_semantic_info(
     )
 
 
-def _compute_rel_position(line: int, offset: int, relative_to: Position) -> Position:
-    rel_to_line, rel_to_offset = relative_to
+def _compute_rel_position(line: int, character: int, relative_to: Position) -> Position:
+    rel_to_line = relative_to.line
+    rel_to_offset = relative_to.character
+
     rel_line = line - rel_to_line
     return Position(
-        line=rel_line, offset=offset if rel_line > 0 else (offset - rel_to_offset)
+        line=rel_line,
+        character=character if rel_line > 0 else (character - rel_to_offset),
     )

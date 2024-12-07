@@ -261,6 +261,7 @@ def code_lens_inputs_action(args):
     )
     match inputs_block:
         case None:
+            return
         case list(_):
             return
 
@@ -295,7 +296,7 @@ def code_lens_inputs_action(args):
                 spec_inputs[field_name] = "TODO"
 
     formated_inputs = f"\n{"\n".join(
-        f"{(inputs_block.anchor_rel.offset + 2) * ' '}{line}"
+        f"{(inputs_block.anchor_rel.character + 2) * ' '}{line}"
         for line in yaml.dump(spec_inputs).splitlines()
     )}\n\n"
 
@@ -303,9 +304,9 @@ def code_lens_inputs_action(args):
         case SemanticAnchor(abs_position=abs_position):
             end_pos = abs_position
 
-        case SemanticBlock(anchor_rel_end=anchor_rel_end):
+        case SemanticBlock(anchor_rel=anchor_rel):
             end_pos = types.Position(
-                line=anchor_rel_end.line + test_anchor.abs_position.line, character=0
+                line=anchor_rel.end.line + test_anchor.abs_position.line, character=0
             )
 
         case SemanticNode(anchor_rel=anchor_rel, length=length):

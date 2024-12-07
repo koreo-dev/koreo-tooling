@@ -10,7 +10,7 @@ from typing import (
 )
 import enum
 
-from lsprotocol import types
+from lsprotocol.types import Position, Range
 
 TokenType = Literal[
     "",
@@ -70,11 +70,6 @@ class NodeDiagnostic(NamedTuple):
     severity: Severity
 
 
-class Position(NamedTuple):
-    line: int
-    offset: int
-
-
 class SemanticAnchor(NamedTuple):
     key: str | None
     abs_position: Position
@@ -85,8 +80,7 @@ class SemanticAnchor(NamedTuple):
 class SemanticBlock(NamedTuple):
     local_key: str | None
     index_key: str | None
-    anchor_rel_start: Position
-    anchor_rel_end: Position
+    anchor_rel: Range
     children: Sequence[SemanticBlock | SemanticNode] | None = None
 
 
@@ -165,7 +159,7 @@ def generate_key_range_index(
         | Sequence[SemanticBlock | SemanticNode]
     ),
     anchor: SemanticAnchor | None = None,
-) -> Sequence[tuple[str, types.Range]]:
+) -> Sequence[tuple[str, Range]]:
     index = []
 
     match nodes:
@@ -211,7 +205,7 @@ def generate_local_range_index(
         | None
     ),
     anchor: SemanticAnchor | None = None,
-) -> Sequence[tuple[str, types.Range]]:
+) -> Sequence[tuple[str, Range]]:
     if not nodes:
         return []
 
@@ -288,16 +282,16 @@ def anchor_local_key_search(
 
 def compute_abs_position(
     rel_position: Position, abs_position: Position, length: int = 0
-) -> types.Position:
-    return types.Position(
+) -> Position:
+    return Position(
         line=abs_position.line + rel_position.line,
-        character=rel_position.offset + length,
+        character=rel_position.character + length,
     )
 
 
 def compute_abs_range(
     node: SemanticAnchor | SemanticBlock | SemanticNode, anchor: SemanticAnchor
-) -> types.Range:
+) -> Range:
     match node:
         case SemanticAnchor(abs_position=abs_position):
             end_node = node
@@ -308,50 +302,48 @@ def compute_abs_range(
 
             match end_node:
                 case SemanticAnchor(abs_position=abs_position):
-                    end_pos = types.Position(
+                    end_pos = Position(
                         line=abs_position.line,
-                        character=abs_position.offset,
+                        character=abs_position.character,
                     )
-                case SemanticBlock(anchor_rel_end=anchor_rel_end):
+                case SemanticBlock(anchor_rel=anchor_rel):
                     end_pos = compute_abs_position(
-                        anchor_rel_end, abs_position=abs_position
+                        anchor_rel.end, abs_position=abs_position
                     )
                 case SemanticNode(anchor_rel=anchor_rel, length=length):
                     end_pos = compute_abs_position(
                         anchor_rel, abs_position=abs_position, length=length
                     )
 
-            return types.Range(
-                start=types.Position(
+            return Range(
+                start=Position(
                     line=abs_position.line,
-                    character=abs_position.offset,
+                    character=abs_position.character,
                 ),
                 end=end_pos,
             )
 
         case SemanticNode(anchor_rel=anchor_rel, length=length):
-            return types.Range(
-                start=types.Position(
+            return Range(
+                start=Position(
                     line=anchor.abs_position.line + anchor_rel.line,
-                    character=anchor_rel.offset,
+                    character=anchor_rel.character,
                 ),
-                end=types.Position(
+                end=Position(
                     line=anchor.abs_position.line + anchor_rel.line,
-                    character=anchor_rel.offset + length,
+                    character=anchor_rel.character + length,
                 ),
             )
 
-        case SemanticBlock(
-            anchor_rel_start=anchor_rel_start, anchor_rel_end=anchor_rel_end
-        ):
-            return types.Range(
-                start=types.Position(
-                    line=anchor.abs_position.line + anchor_rel_start.line,
-                    character=anchor_rel_start.offset,
+        case SemanticBlock(anchor_rel=anchor_rel):
+            return Range(
+                start=Position(
+                    line=anchor.abs_position.line + anchor_rel.start.line,
+                    character=anchor_rel.start.character,
                 ),
-                end=types.Position(
-                    line=anchor.abs_position.line + anchor_rel_end.line,
-                    character=anchor_rel_end.offset,
+                end=Position(
+                    line=anchor.abs_position.line + anchor_rel.end.line,
+                    character=anchor_rel.end.character,
                 ),
             )
 
