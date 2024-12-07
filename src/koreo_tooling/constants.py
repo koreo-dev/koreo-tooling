@@ -22,5 +22,9 @@ PREPARE_MAP = {
 CRD_API_VERSION = "apiextensions.k8s.io/v1"
 CRD_KIND = "CustomResourceDefinition"
 
-INPUT_NAME_PATTERN = re.compile("inputs.([^.]+).?")
-PARENT_NAME_PATTERN = re.compile("parent.([^.]+).?")
+
+WORKFLOW_NAME = re.compile("Workflow:(?P<name>[^:]*)?:def")
+FUNCTION_TEST_NAME = re.compile("FunctionTest:(?P<name>.*)?:def")
+
+INPUT_NAME_PATTERN = re.compile("inputs.(?P<name>[^.]+).?")
+PARENT_NAME_PATTERN = re.compile("parent.(?P<name>[^.]+).?")

@@ -1,6 +1,7 @@
+from asyncio import Semaphore
 from collections import defaultdict
-from collections.abc import Sequence
 from pathlib import Path
+from typing import Sequence
 import copy
 import os
 import re
@@ -9,7 +10,6 @@ os.environ["KOREO_DEV_TOOLING"] = "true"
 
 import yaml
 
-import nanoid
 
 from pygls.lsp.server import LanguageServer
 from pygls.workspace import TextDocument
@@ -19,27 +19,24 @@ from koreo import cache
 from koreo.function.structure import Function
 from koreo.function_test.structure import FunctionTest
 from koreo.result import is_unwrapped_ok, is_not_ok
-from koreo.workflow.structure import Workflow, ErrorStep
+from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
-from koreo_tooling.analysis import call_arg_compare
-from koreo_tooling.function_test import TestResults, run_function_tests
+from koreo_tooling.function_test import TestResults
 from koreo_tooling.indexing import (
-    IndexingLoader,
     TokenModifiers,
     TokenTypes,
-    _STRUCTURE_KEY,
     SemanticAnchor,
     SemanticBlock,
     SemanticNode,
     compute_abs_range,
     compute_abs_position,
-    anchor_local_key_search,
-    extract_diagnostics,
-    flatten,
-    to_lsp_semantics,
-    generate_key_range_index,
 )
+
+from koreo_tooling.langserver.fileprocessor import process_file
+from koreo_tooling.langserver.workflow import process_workflows
+from koreo_tooling.langserver.function_test import run_function_tests
+from koreo_tooling.langserver.rangers import block_range_extract
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -93,7 +90,7 @@ def hover(params: types.HoverParams):
 
     resource_key, resource_key_range = resource_info
 
-    workflow_match = WORKFLOW_NAME.match(resource_key)
+    workflow_match = constants.WORKFLOW_NAME.match(resource_key)
     if workflow_match:
         workflow_name = workflow_match.group("name")
 
@@ -238,7 +235,7 @@ def inlay_hints(params: types.InlayHintParams):
         if not (start_line <= maybe_range.start.line <= end_line):
             continue
 
-        match = FUNCTION_TEST_NAME.match(maybe_resource)
+        match = constants.FUNCTION_TEST_NAME.match(maybe_resource)
         if not match:
             continue
 
@@ -306,19 +303,27 @@ def code_lens(params: types.CodeLensParams):
             continue
 
         if test_result.input_mismatches:
-            inputs_block = _nested_key_value_range_extract(
-                path_parts=["spec", "inputs"],
+            if not any(
+                mismatch.field.startswith("inputs.")
+                for mismatch in test_result.input_mismatches
+            ):
+                continue
+
+            inputs_block = block_range_extract(
+                search_key="inputs",
                 search_nodes=test_anchor.children,
-                doc_path=doc.path,
                 anchor=test_anchor,
             )
-            if not inputs_block:
-                continue
+            match inputs_block:
+                case None:
+                    continue
+                case list(_):
+                    continue
 
             code_lens = types.CodeLens(
                 range=compute_abs_range(inputs_block, test_anchor),
                 command=types.Command(
-                    title="Generate inputs",
+                    title="Autocorrect Inputs",
                     command="codeLens.completeInputs",
                     arguments=[
                         {
@@ -365,23 +370,24 @@ def code_lens_inputs_action(args):
     if not test_anchor:
         return
 
-    inputs_block = _nested_key_value_range_extract(
-        path_parts=["spec", "inputs"],
+    inputs_block = block_range_extract(
+        search_key="inputs",
         search_nodes=test_anchor.children,
-        doc_path=doc.path,
         anchor=test_anchor,
     )
-    if not inputs_block:
-        return
+    match inputs_block:
+        case None:
+        case list(_):
+            return
 
-    inputs_value_block = _block_range_extract(
+    inputs_value_block = block_range_extract(
         search_key="InputValues",
         search_nodes=inputs_block.children,
-        doc_path=doc.path,
         anchor=test_anchor,
     )
-    if not inputs_value_block:
-        return
+    match inputs_value_block:
+        case None | list(_):
+            return
 
     spec_inputs = copy.deepcopy(cached.spec.get("inputs"))
 
@@ -390,10 +396,14 @@ def code_lens_inputs_action(args):
         spec_inputs = {
             mismatch.field.split(".", 1)[-1]: "TODO"
             for mismatch in test_result.input_mismatches
+            if mismatch.expected
         }
     else:
         for mismatch in test_result.input_mismatches:
-            field_name = mismatch.field.split(".", 1)[-1]
+            group, field_name = mismatch.field.split(".", 1)
+            if group != "inputs":
+                continue
+
             if mismatch.actual and not mismatch.expected:
                 del spec_inputs[field_name]
 
@@ -403,7 +413,7 @@ def code_lens_inputs_action(args):
     formated_inputs = f"\n{"\n".join(
         f"{(inputs_block.anchor_rel.offset + 2) * ' '}{line}"
         for line in yaml.dump(spec_inputs).splitlines()
-    )}\n"
+    )}\n\n"
 
     match inputs_value_block:
         case SemanticAnchor(abs_position=abs_position):
@@ -627,268 +637,103 @@ async def semantic_tokens_full(params: types.ReferenceParams):
     return types.SemanticTokens(data=tokens)
 
 
-PATH_GUARD: dict[str, int | None] = {}
+__PATH_GUARD_SEM: dict[str, Semaphore] = {}
+__PATH_GUARD: dict[str, int] = {}
 
 
 async def _handle_file(doc: TextDocument):
-    guard_value = PATH_GUARD.get(doc.path)
-    if doc.path in PATH_GUARD and guard_value and guard_value >= (doc.version or -1):
-        return
+    doc_version = doc.version if doc.version else -1
 
-    PATH_GUARD[doc.path] = doc.version if doc.version is not None else -1
+    if doc.path not in __PATH_GUARD_SEM:
+        __PATH_GUARD_SEM[doc.path] = Semaphore(1)
 
+    async with __PATH_GUARD_SEM[doc.path]:
+        if doc.path in __PATH_GUARD and doc_version <= __PATH_GUARD[doc.path]:
+            return
+
+        __PATH_GUARD[doc.path] = doc_version
+
+        await _guarded_handle_file(doc)
+
+
+async def _guarded_handle_file(doc: TextDocument):
     _reset_file_state(doc.path)
 
+    diagnostics = []
+
     try:
-        if await _process_file(doc=doc):
-            return
+        process_diagnostics = await _process_file(doc=doc)
+        if process_diagnostics:
+            diagnostics.extend(process_diagnostics)
     except Exception as err:
         return
 
-    _process_workflows(path=doc.path)
-
-    test_diagnostics = await _run_function_test(doc=doc)
-
-    if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
-        return
-
-    if test_diagnostics:
-        __DIAGNOSTICS[doc.path].extend(test_diagnostics)
-
-    duplicate_diagnostics = _check_for_duplicate_resources(path=doc.path)
-    if duplicate_diagnostics:
-        __DIAGNOSTICS[doc.path].extend(duplicate_diagnostics)
+    diagnostics.extend(_process_workflows(path=doc.path))
+    diagnostics.extend(await _run_function_test(doc=doc))
+    diagnostics.extend(_check_for_duplicate_resources(path=doc.path))
 
     server.text_document_publish_diagnostics(
         types.PublishDiagnosticsParams(
-            uri=doc.uri, version=doc.version, diagnostics=__DIAGNOSTICS[doc.path]
+            uri=doc.uri, version=doc.version, diagnostics=diagnostics
         )
     )
 
 
-async def _run_function_test(doc: TextDocument):
-    if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
-        return []
+def _process_workflows(path: str) -> list[types.Diagnostic]:
+    workflows = []
+    for maybe_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
+        if maybe_path != path:
+            continue
 
+        match = constants.WORKFLOW_NAME.match(resource_key)
+        if not match:
+            continue
+
+        workflows.append((match.group("name"), resource_range))
+
+    return process_workflows(path=path, workflows=workflows)
+
+
+async def _run_function_test(doc: TextDocument) -> list[types.Diagnostic]:
     test_range_map = {}
-    tests = set[str]()
-    functions = set[str]()
+    tests_to_run = set[str]()
+    functions_to_test = set[str]()
     for resource_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
         if resource_path != doc.path:
             continue
 
-        if match := FUNCTION_TEST_NAME.match(resource_key):
+        if match := constants.FUNCTION_TEST_NAME.match(resource_key):
             test_name = match.group("name")
-            tests.add(test_name)
+            tests_to_run.add(test_name)
             test_range_map[test_name] = resource_range
 
         elif match := FUNCTION_NAME.match(resource_key):
-            functions.add(match.group("name"))
+            functions_to_test.add(match.group("name"))
 
-    if not (tests or functions):
+    if not (tests_to_run or functions_to_test):
         return []
 
     test_results = await run_function_tests(
-        server=server,
-        tests_to_run=tests,
-        functions_to_test=functions,
+        tests_to_run=tests_to_run,
+        functions_to_test=functions_to_test,
+        test_range_map=test_range_map,
     )
 
-    if not test_results:
-        return []
+    if test_results.results:
+        __TEST_RESULTS[doc.path] = test_results.results
 
-    if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
-        return []
+    if test_results.logs:
+        for log in test_results.logs:
+            server.window_log_message(params=log)
 
-    __TEST_RESULTS[doc.path] = test_results
+    if test_results.diagnostics:
+        return test_results.diagnostics
 
-    test_diagnostics = []
-    for test_key, result in test_results.items():
-        if result.success:
-            continue
-
-        # TODO: Add support for reporting within Functions
-        if test_key not in tests:
-            continue
-
-        cached_resource = cache.get_resource_system_data_from_cache(
-            resource_class=FunctionTest, cache_key=test_key
-        )
-        if not (
-            cached_resource and cached_resource.resource and cached_resource.system_data
-        ):
-            continue
-
-        anchor = cached_resource.system_data.get("anchor")
-        if not anchor:
-            continue
-
-        if result.messages:
-            test_diagnostics.append(
-                types.Diagnostic(
-                    message=f"Failures: {'; '.join(result.messages)}",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=test_range_map[test_key],
-                )
-            )
-
-        test_spec_block = _block_range_extract(
-            search_key="spec",
-            search_nodes=anchor.children,
-            doc_path=doc.path,
-            anchor=anchor,
-        )
-        if not test_spec_block:
-            continue
-
-        if result.input_mismatches:
-            inputs_block = _block_range_extract(
-                search_key="inputs",
-                search_nodes=test_spec_block.children,
-                doc_path=doc.path,
-                anchor=anchor,
-            )
-            if not inputs_block:
-                test_diagnostics.append(
-                    types.Diagnostic(
-                        message="Input expected, but none provided.",
-                        severity=types.DiagnosticSeverity.Warning,
-                        range=compute_abs_range(test_spec_block, anchor),
-                    )
-                )
-
-            if not inputs_block:
-                test_diagnostics.append(
-                    types.Diagnostic(
-                        message="Input expected, but none provided.",
-                        severity=types.DiagnosticSeverity.Warning,
-                        range=compute_abs_range(test_spec_block, anchor),
-                    )
-                )
-            else:
-                input_values_block = _block_range_extract(
-                    search_key="InputValues",
-                    search_nodes=inputs_block.children,
-                    doc_path=doc.path,
-                    anchor=anchor,
-                )
-                if not input_values_block:
-                    continue
-
-                for mismatch in result.input_mismatches:
-                    if not mismatch.expected and mismatch.actual:
-                        input_block = _block_range_extract(
-                            search_key=f"input:{mismatch.field.split(".", 1)[-1]}",
-                            search_nodes=input_values_block.children,
-                            doc_path=doc.path,
-                            anchor=anchor,
-                        )
-                        if not input_block:
-                            continue
-
-                        test_diagnostics.append(
-                            types.Diagnostic(
-                                message=f"Input ('{mismatch.field}') not expected.",
-                                severity=types.DiagnosticSeverity.Warning,
-                                range=compute_abs_range(input_block, anchor),
-                            )
-                        )
-
-                    elif mismatch.expected and not mismatch.actual:
-                        test_diagnostics.append(
-                            types.Diagnostic(
-                                message=f"Missing input ('{mismatch.field}').",
-                                severity=types.DiagnosticSeverity.Error,
-                                range=compute_abs_range(inputs_block, anchor),
-                            )
-                        )
-
-        if result.resource_field_errors:
-            resource_block = _block_range_extract(
-                search_key="expectedResource",
-                search_nodes=test_spec_block.children,
-                doc_path=doc.path,
-                anchor=anchor,
-            )
-            if not resource_block:
-                test_diagnostics.append(
-                    types.Diagnostic(
-                        message="Resource unexpectedly modified.",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=compute_abs_range(test_spec_block, anchor),
-                    )
-                )
-            else:
-                for mismatch in result.resource_field_errors:
-                    mismatch_block = _block_range_extract(
-                        search_key=mismatch.field,
-                        search_nodes=resource_block.children,
-                        doc_path=doc.path,
-                        anchor=anchor,
-                    )
-                    if not mismatch_block:
-                        test_diagnostics.append(
-                            types.Diagnostic(
-                                message=f"Missing value for '{mismatch.field}'",
-                                severity=types.DiagnosticSeverity.Error,
-                                range=compute_abs_range(resource_block, anchor),
-                            )
-                        )
-                    else:
-                        test_diagnostics.append(
-                            types.Diagnostic(
-                                message=f"Actual: '{mismatch.actual}'",
-                                severity=types.DiagnosticSeverity.Error,
-                                range=compute_abs_range(mismatch_block, anchor),
-                            )
-                        )
-
-        if result.outcome_fields_errors:
-            outcome_block = _block_range_extract(
-                search_key="expectedOkValue",
-                search_nodes=test_spec_block.children,
-                doc_path=doc.path,
-                anchor=anchor,
-            )
-            if not outcome_block:
-                test_diagnostics.append(
-                    types.Diagnostic(
-                        message="Outcome unexpectedly reached.",
-                        severity=types.DiagnosticSeverity.Error,
-                        range=compute_abs_range(test_spec_block, anchor),
-                    )
-                )
-            else:
-                for mismatch in result.outcome_fields_errors:
-                    mismatch_block = _block_range_extract(
-                        search_key=mismatch.field,
-                        search_nodes=outcome_block.children,
-                        doc_path=doc.path,
-                        anchor=anchor,
-                    )
-                    if not mismatch_block:
-                        test_diagnostics.append(
-                            types.Diagnostic(
-                                message=f"Missing value for '{mismatch.field}'",
-                                severity=types.DiagnosticSeverity.Error,
-                                range=compute_abs_range(outcome_block, anchor),
-                            )
-                        )
-                    else:
-                        test_diagnostics.append(
-                            types.Diagnostic(
-                                message=f"Actual: '{mismatch.actual}'",
-                                severity=types.DiagnosticSeverity.Error,
-                                range=compute_abs_range(mismatch_block, anchor),
-                            )
-                        )
-
-    return test_diagnostics
+    return []
 
 
-__DIAGNOSTICS = defaultdict[str, list[types.Diagnostic]](list[types.Diagnostic])
-__TEST_RESULTS = defaultdict[str, dict[str, TestResults]](defaultdict[str, TestResults])
-__SEMANTIC_TOKEN_INDEX = defaultdict[str, list[int]](list)
+__TEST_RESULTS = defaultdict[str, dict[str, TestResults]](dict)
+__SEMANTIC_TOKEN_INDEX: dict[str, Sequence[int]] = {}
 __SEMANTIC_RANGE_INDEX: list[tuple[str, str, types.Range]] = []
 
 
@@ -900,191 +745,39 @@ def _reset_file_state(path_key: str):
         for path, node_key, node_range in __SEMANTIC_RANGE_INDEX
         if path != path_key
     ]
-    __SEMANTIC_TOKEN_INDEX[path_key] = []
 
-    __DIAGNOSTICS[path_key] = []
-    __TEST_RESULTS[path_key] = {}
+    if path_key in __SEMANTIC_TOKEN_INDEX:
+        del __SEMANTIC_TOKEN_INDEX[path_key]
 
-
-def _load_all_yamls(stream, Loader, doc):
-    """
-    Parse all YAML documents in a stream
-    and produce corresponding Python objects.
-    """
-    loader = Loader(stream, doc=doc)
-    try:
-        while loader.check_data():
-            yield loader.get_data()
-    finally:
-        loader.dispose()
+    if path_key in __TEST_RESULTS:
+        del __TEST_RESULTS[path_key]
 
 
 async def _process_file(
     doc: TextDocument,
 ):
-    path = doc.path
+    results = await process_file(doc=doc)
+
+    if not results:
+        return
+
+    if results.semantic_range_index:
+        __SEMANTIC_RANGE_INDEX.extend(results.semantic_range_index)
+
+    if results.semantic_tokens:
+        __SEMANTIC_TOKEN_INDEX[doc.path] = results.semantic_tokens
+
+    if results.logs:
+        for log in results.logs:
+            server.window_log_message(params=log)
+
+        return results.diagnostics
+
+    if results.diagnostics:
+        return results.diagnostics
 
 
-    yaml_blocks = _load_all_yamls(doc.source, Loader=IndexingLoader, doc=doc)
-    for yaml_block in yaml_blocks:
-        if PATH_GUARD[doc.path] != (doc.version if doc.version is not None else -1):
-            return True
-
-        try:
-            api_version = yaml_block.get("apiVersion")
-            kind = yaml_block.get("kind")
-        except:
-            server.window_log_message(
-                params=types.LogMessageParams(
-                    type=types.MessageType.Info,
-                    message="Skipping empty block",
-                )
-            )
-            continue
-
-        semantic_anchor = yaml_block.get(_STRUCTURE_KEY)
-
-        block_ranges = [
-            (path, node_key, node_range)
-            for node_key, node_range in generate_key_range_index(semantic_anchor)
-        ]
-
-
-        __SEMANTIC_RANGE_INDEX.extend(block_ranges)
-
-        flattened = flatten(semantic_anchor)
-        tokens = to_lsp_semantics(flattened)
-        __SEMANTIC_TOKEN_INDEX[path].extend(tokens)
-
-        semantic_diagnostics = extract_diagnostics(flattened)
-        if semantic_diagnostics:
-            for node in semantic_diagnostics:
-                __DIAGNOSTICS[path].append(
-                    types.Diagnostic(
-                        message=node.diagnostic.message,
-                        severity=types.DiagnosticSeverity.Error,  # TODO: Map internal to LSP
-                        range=compute_abs_range(node, semantic_anchor),
-                    )
-                )
-
-        if api_version not in {
-            constants.API_VERSION,
-            constants.CRD_API_VERSION,
-        }:
-            api_version_block = _key_value_range_extract(
-                path_key="apiVersion",
-                search_nodes=semantic_anchor.children,
-                doc_path=path,
-                anchor=semantic_anchor,
-            )
-            if api_version_block:
-                resource_range = compute_abs_range(api_version_block, semantic_anchor)
-            else:
-                resource_range = types.Range(
-                    start=types.Position(
-                        line=semantic_anchor.abs_position.line,
-                        character=semantic_anchor.abs_position.offset,
-                    ),
-                    end=types.Position(
-                        line=semantic_anchor.abs_position.line,
-                        character=len(doc.lines[semantic_anchor.abs_position.line]),
-                    ),
-                )
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"'{kind}.{api_version}' is not a Koreo Resource.",
-                    severity=types.DiagnosticSeverity.Information,
-                    range=resource_range,
-                )
-            )
-            continue
-
-        if kind not in constants.PREPARE_MAP and kind != constants.CRD_KIND:
-            kind_version_block = _key_value_range_extract(
-                path_key="kind",
-                search_nodes=semantic_anchor.children,
-                doc_path=path,
-                anchor=semantic_anchor,
-            )
-            if kind_version_block:
-                resource_range = compute_abs_range(kind_version_block, semantic_anchor)
-            else:
-                resource_range = types.Range(
-                    start=types.Position(
-                        line=semantic_anchor.abs_position.line,
-                        character=semantic_anchor.abs_position.offset,
-                    ),
-                    end=types.Position(
-                        line=semantic_anchor.abs_position.line,
-                        character=len(doc.lines[semantic_anchor.abs_position.line]),
-                    ),
-                )
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"'{kind}' is not a supported Koreo Resource.",
-                    severity=types.DiagnosticSeverity.Information,
-                    range=resource_range,
-                )
-            )
-            continue
-
-        # continue
-        resource_class, preparer = constants.PREPARE_MAP[kind]
-        metadata = yaml_block.get("metadata", {})
-        metadata["resourceVersion"] = nanoid.generate(size=10)
-
-        raw_spec = yaml_block.get("spec", {})
-
-        cached_system_data = {
-            "path": path,
-            "anchor": semantic_anchor,
-        }
-
-        try:
-            await cache.prepare_and_cache(
-                resource_class=resource_class,
-                preparer=preparer,
-                metadata=metadata,
-                spec=raw_spec,
-                _system_data=cached_system_data,
-            )
-        except Exception as err:
-            resource_name_label = _nested_key_value_range_extract(
-                path_parts=["metadata", "name"],
-                search_nodes=semantic_anchor.children,
-                doc_path=path,
-                anchor=semantic_anchor,
-            )
-            if resource_name_label:
-                resource_range = compute_abs_range(resource_name_label, semantic_anchor)
-            else:
-                resource_range = types.Range(
-                    start=types.Position(
-                        line=semantic_anchor.abs_position.line,
-                        character=semantic_anchor.abs_position.offset,
-                    ),
-                    end=types.Position(
-                        line=semantic_anchor.abs_position.line,
-                        character=len(doc.lines[semantic_anchor.abs_position.line]),
-                    ),
-                )
-
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"FAILED TO Extract ('{kind}.{api_version}') from {metadata.get('name')} ({err}).",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
-            )
-
-            raise
-
-    return False
-
-
-WORKFLOW_NAME = re.compile("Workflow:(?P<name>[^:]*)?:def")
 FUNCTION_NAME = re.compile("Function:(?P<name>.*)?:def")
-FUNCTION_TEST_NAME = re.compile("FunctionTest:(?P<name>.*)?:def")
 RESOURCE_DEF = re.compile("([A-Z][a-zA-Z0-9.]*):(.*):def")
 
 
@@ -1124,302 +817,6 @@ def _check_for_duplicate_resources(path: str):
             )
 
     return duplicate_diagnostics
-
-
-def _process_workflows(path: str):
-    for maybe_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
-        if maybe_path != path:
-            continue
-
-        match = WORKFLOW_NAME.match(resource_key)
-        if not match:
-            continue
-
-        koreo_cache_key = match.group("name")
-
-        cached_resource = cache.get_resource_system_data_from_cache(
-            resource_class=Workflow, cache_key=koreo_cache_key
-        )
-
-        if not cached_resource or not cached_resource.resource:
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"Workflow not yet prepared ({koreo_cache_key}) or not in Koreo cache.",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
-            )
-            continue
-
-        _process_workflow(
-            path=path,
-            resource_range=resource_range,
-            workflow_name=koreo_cache_key,
-            workflow=cached_resource.resource,
-            raw_spec=cached_resource.spec,
-            koreo_metadata=cached_resource.system_data,
-        )
-
-
-def _process_workflow(
-    path: str,
-    resource_range: types.Range,
-    workflow_name: str,
-    workflow: Workflow,
-    raw_spec: dict,
-    koreo_metadata: dict | None,
-) -> bool:
-    has_step_error = False
-
-    if not koreo_metadata:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=f"Workflow ('{workflow_name}') missing in Koreo Cache (this _should_ be impossible).",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-        )
-        return True
-
-    semantic_path = koreo_metadata.get("path", "")
-    if semantic_path != path:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=(
-                    f"Duplicate Workflow ('{workflow_name}') detected in "
-                    f"('{semantic_path}'), skipping further analysis."
-                ),
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-        )
-        return True
-
-    semantic_anchor = koreo_metadata.get("anchor")
-    if not semantic_anchor:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=f"Unknown error processing Workflow ('{workflow_name}'), semantic analysis data missing from Koreo cache.",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-        )
-        return True
-
-    if not is_unwrapped_ok(workflow.steps_ready):
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=f"Workflow is not ready ({workflow.steps_ready.message}).",
-                severity=types.DiagnosticSeverity.Warning,
-                range=resource_range,
-            )
-        )
-
-    step_specs = {
-        step_spec.get("label"): step_spec for step_spec in raw_spec.get("steps", [])
-    }
-
-    if not step_specs and workflow.steps:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=f"Workflow steps are malformed.",
-                severity=types.DiagnosticSeverity.Warning,
-                range=resource_range,
-            )
-        )
-        return True
-
-    for step in workflow.steps:
-        step_block = _block_range_extract(
-            search_key=f"Step:{step.label}",
-            search_nodes=semantic_anchor.children,
-            doc_path=path,
-            anchor=semantic_anchor,
-        )
-        if not step_block:
-            continue
-
-        step_spec = step_specs.get(step.label)
-
-        step_error = _process_workflow_step(
-            path, step, step_block, step_spec, semantic_anchor
-        )
-
-        has_step_error = has_step_error or step_error
-
-    if has_step_error:
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=f"Workflow steps are not ready.",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-        )
-
-    return has_step_error
-
-
-def _process_workflow_step(path, step, step_semantic_block, step_spec, semantic_anchor):
-    has_error = False
-
-    if isinstance(step, ErrorStep):
-        label_block = _block_range_extract(
-            search_key=f"label:{step.label}",
-            search_nodes=step_semantic_block.children,
-            doc_path=path,
-            anchor=semantic_anchor,
-        )
-        if not label_block:
-            return True
-
-        __DIAGNOSTICS[path].append(
-            types.Diagnostic(
-                message=f"Step ('{step.label}') not ready {step.outcome.message}.",
-                severity=types.DiagnosticSeverity.Warning,
-                range=compute_abs_range(label_block, semantic_anchor),
-            )
-        )
-        return True
-
-    # These are just the "top level" direct inputs. No consideration to
-    # internal structure.
-    first_tier_inputs = set(
-        constants.INPUT_NAME_PATTERN.match(key).group(1)
-        for key in step.logic.dynamic_input_keys
-        if key.startswith("inputs")
-    )
-
-    raw_inputs = step_spec.get("inputs", {})
-
-    inputs_block = _block_range_extract(
-        search_key="inputs",
-        search_nodes=step_semantic_block.children,
-        doc_path=path,
-        anchor=semantic_anchor,
-    )
-
-    inputs = call_arg_compare(step.provided_input_keys, first_tier_inputs)
-    for argument, (provided, expected) in inputs.items():
-        if not expected and provided:
-            has_error = True
-
-            if not inputs_block:
-                continue
-            input_block = _block_range_extract(
-                search_key=f"input:{argument}",
-                search_nodes=inputs_block.children,
-                doc_path=path,
-                anchor=semantic_anchor,
-            )
-            if not input_block:
-                continue
-
-            raw_arg = raw_inputs.get(argument)
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"Input ('{argument}') not expected. {raw_arg}.",
-                    severity=types.DiagnosticSeverity.Warning,
-                    range=compute_abs_range(input_block, semantic_anchor),
-                )
-            )
-
-        elif expected and not provided:
-            has_error = True
-
-            if not inputs_block:
-                continue
-
-            __DIAGNOSTICS[path].append(
-                types.Diagnostic(
-                    message=f"Missing input ('{argument}').",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=compute_abs_range(inputs_block, semantic_anchor),
-                )
-            )
-
-    return has_error
-
-
-def _block_range_extract(
-    search_key: str, search_nodes: Sequence, doc_path: str, anchor
-):
-    matches = anchor_local_key_search(search_key, search_nodes=search_nodes)
-
-    if not matches:
-        return None
-
-    match, *extras = matches
-
-    if extras:
-        for match in matches:
-            __DIAGNOSTICS[doc_path].append(
-                types.Diagnostic(
-                    message=f"Multiple instances of ('{search_key}').",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=compute_abs_range(match, anchor),
-                )
-            )
-
-        return None
-
-    return match
-
-
-def _key_value_range_extract(
-    path_key: str, search_nodes: Sequence, doc_path: str, anchor
-):
-    yaml_key = _block_range_extract(
-        search_key=path_key, search_nodes=search_nodes, doc_path=doc_path, anchor=anchor
-    )
-    if not yaml_key:
-        return None
-
-    if not yaml_key.children:
-        __DIAGNOSTICS[doc_path].append(
-            types.Diagnostic(
-                message=f"Missing value for ('{path_key}').",
-                severity=types.DiagnosticSeverity.Warning,
-                range=compute_abs_range(yaml_key, anchor),
-            )
-        )
-        return None
-
-    value, *extras = yaml_key.children
-
-    if extras:
-        for child in yaml_key.children:
-            __DIAGNOSTICS[doc_path].append(
-                types.Diagnostic(
-                    message=f"Multiple children of ('{path_key}').",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=compute_abs_range(child, anchor),
-                )
-            )
-
-        return None
-
-    return value
-
-
-def _nested_key_value_range_extract(
-    path_parts: list[str], search_nodes: Sequence, doc_path: str, anchor
-):
-    while path_parts:
-        next_path, *path_parts = path_parts
-        next_node = _block_range_extract(
-            search_key=next_path,
-            search_nodes=search_nodes,
-            doc_path=doc_path,
-            anchor=anchor,
-        )
-        if not next_node:
-            return None
-
-        if not path_parts:
-            return next_node
-
-        search_nodes = next_node.children
-    return None
 
 
 if __name__ == "__main__":

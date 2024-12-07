@@ -1,6 +1,5 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from functools import reduce
 from typing import (
     Any,
     Literal,
@@ -10,7 +9,6 @@ from typing import (
     get_args,
 )
 import enum
-import operator
 
 from lsprotocol import types
 
@@ -43,7 +41,6 @@ TokenType = Literal[
 ]
 
 TokenTypes = get_args(TokenType)
-TypeIndex = {key: idx for idx, key in enumerate(TokenTypes)}
 
 
 class Modifier(enum.IntFlag):
@@ -58,7 +55,7 @@ class Modifier(enum.IntFlag):
     defaultLibrary = enum.auto()
 
 
-TokenModifiers = [modifier.name for modifier in Modifier]
+TokenModifiers: Sequence[str] = [modifier.name for modifier in Modifier]
 
 
 class Severity(enum.IntFlag):
@@ -156,22 +153,6 @@ def flatten_node(
     return flattened
 
 
-def to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Sequence[int]:
-    semantics = []
-    for node in nodes:
-        semantics.extend(
-            [
-                node.position.line,
-                node.position.offset,
-                node.length,
-                TypeIndex[node.node_type],
-                reduce(operator.or_, node.modifier, 0) if node.modifier else 0,
-            ]
-        )
-
-    return semantics
-
-
 def extract_diagnostics(nodes: Sequence[SemanticNode]) -> Sequence[SemanticNode]:
     return [node for node in nodes if node.diagnostic]
 
@@ -184,13 +165,13 @@ def generate_key_range_index(
         | Sequence[SemanticBlock | SemanticNode]
     ),
     anchor: SemanticAnchor | None = None,
-) -> Sequence[tuple[str, Position]]:
+) -> Sequence[tuple[str, types.Range]]:
     index = []
 
     match nodes:
-        case SemanticAnchor(key=key, abs_position=abs_position, children=children):
+        case SemanticAnchor(key=key, children=children):
             if key:
-                index.append((key, abs_position))
+                index.append((key, compute_abs_range(nodes, anchor=nodes)))
 
             if children:
                 index.extend(generate_key_range_index(nodes=children, anchor=nodes))
@@ -266,9 +247,39 @@ def compute_abs_position(
 
 
 def compute_abs_range(
-    node: SemanticBlock | SemanticNode, anchor: SemanticAnchor
+    node: SemanticAnchor | SemanticBlock | SemanticNode, anchor: SemanticAnchor
 ) -> types.Range:
     match node:
+        case SemanticAnchor(abs_position=abs_position):
+            end_node = node
+            while True:
+                if not end_node.children:
+                    break
+                end_node = end_node.children[-1]
+
+            match end_node:
+                case SemanticAnchor(abs_position=abs_position):
+                    end_pos = types.Position(
+                        line=abs_position.line,
+                        character=abs_position.offset,
+                    )
+                case SemanticBlock(anchor_rel_end=anchor_rel_end):
+                    end_pos = compute_abs_position(
+                        anchor_rel_end, abs_position=abs_position
+                    )
+                case SemanticNode(anchor_rel=anchor_rel, length=length):
+                    end_pos = compute_abs_position(
+                        anchor_rel, abs_position=abs_position, length=length
+                    )
+
+            return types.Range(
+                start=types.Position(
+                    line=abs_position.line,
+                    character=abs_position.offset,
+                ),
+                end=end_pos,
+            )
+
         case SemanticNode(anchor_rel=anchor_rel, length=length):
             return types.Range(
                 start=types.Position(

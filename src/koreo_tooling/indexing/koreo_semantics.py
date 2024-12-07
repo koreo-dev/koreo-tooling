@@ -19,12 +19,14 @@ def step_path_indexer(value) -> str:
 
 _api_version: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
+        index_key_fn=lambda value: f"api_version",
         type="namespace",
     )
 )
 
 _kind: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
+        index_key_fn=lambda value: f"kind",
         type="type",
     ),
 )

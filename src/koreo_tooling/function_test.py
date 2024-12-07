@@ -40,10 +40,9 @@ class TestResults(NamedTuple):
 
 
 async def run_function_tests(
-    server: LanguageServer,
     tests_to_run: set[str],
     functions_to_test: set[str],
-) -> dict[str, TestResults]:
+) -> tuple[dict[str, TestResults], list[types.LogMessageParams]]:
     function_tests = set[str]()
     for function_name in functions_to_test:
         function_tests.update(get_function_tests(function_name))
@@ -51,7 +50,9 @@ async def run_function_tests(
     all_tests = tests_to_run.union(function_tests)
 
     if not all_tests:
-        return {}
+        return ({}, [])
+
+    logs = []
 
     tasks = []
     async with asyncio.TaskGroup() as task_group:
@@ -60,8 +61,8 @@ async def run_function_tests(
                 resource_class=FunctionTest, cache_key=test_key
             )
             if not test:
-                server.window_log_message(
-                    params=types.LogMessageParams(
+                logs.append(
+                    types.LogMessageParams(
                         type=types.MessageType.Error,
                         message=f"Failed to find FunctionTest ('{test_key}') in Koreo cache.",
                     )
@@ -77,15 +78,15 @@ async def run_function_tests(
     done, pending = await asyncio.wait(tasks)
     if pending:
         for timeout in pending:
-            server.window_log_message(
-                params=types.LogMessageParams(
+            logs.append(
+                types.LogMessageParams(
                     type=types.MessageType.Error,
                     message=f"Timeout running FunctionTest ('{timeout.get_name()}')!",
                 )
             )
 
     results = {task.get_name(): task.result() for task in done}
-    return results
+    return (results, logs)
 
 
 async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
