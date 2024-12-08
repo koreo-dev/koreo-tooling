@@ -424,7 +424,9 @@ async def _guarded_handle_file(doc: TextDocument, doc_version: int, run_id: str)
         )
     )
 
-    test_diagnostics, test_results = await _run_function_test(doc=doc)
+    test_diagnostics, test_results = await _run_function_test(
+        semantic_range_index=processing_result.semantic_range_index
+    )
     diagnostics.extend(test_diagnostics)
 
     async with __PATH_GUARD_SEM[doc.path]:
@@ -471,15 +473,16 @@ def _process_workflows(
 
 
 async def _run_function_test(
-    doc: TextDocument,
+    semantic_range_index: Sequence[tuple[str, str, types.Range]] | None,
 ) -> tuple[list[types.Diagnostic], dict[str, TestResults]]:
+    if not semantic_range_index:
+        return ([], {})
+
     test_range_map = {}
     tests_to_run = set[str]()
     functions_to_test = set[str]()
-    for resource_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
-        if resource_path != doc.path:
-            continue
 
+    for _, resource_key, resource_range in semantic_range_index:
         if match := constants.FUNCTION_TEST_NAME.match(resource_key):
             test_name = match.group("name")
             tests_to_run.add(test_name)
