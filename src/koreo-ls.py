@@ -1,13 +1,11 @@
 from asyncio import Semaphore
 from collections import defaultdict
 from pathlib import Path
-from typing import NamedTuple, Sequence
-import copy
+from typing import Callable, NamedTuple, Sequence
 import os
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
-import yaml
 import nanoid
 
 
@@ -22,23 +20,16 @@ from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
-from koreo_tooling.indexing import (
-    TokenModifiers,
-    TokenTypes,
-    SemanticAnchor,
-    SemanticBlock,
-    SemanticNode,
-    compute_abs_range,
-    compute_abs_position,
-)
+from koreo_tooling.indexing import TokenModifiers, TokenTypes, SemanticAnchor
 
 from koreo_tooling.indexing.semantics import generate_local_range_index
 
+from koreo_tooling.langserver.codelens import LENS_COMMANDS, EditResult, handle_lens
+from koreo_tooling.langserver.codelens import handle_lens
 from koreo_tooling.langserver.fileprocessor import process_file
-from koreo_tooling.langserver.workflow import process_workflows
 from koreo_tooling.langserver.function_test import run_function_tests
-from koreo_tooling.langserver.rangers import block_range_extract
 from koreo_tooling.langserver.hover import handle_hover
+from koreo_tooling.langserver.workflow import process_workflows
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -168,245 +159,72 @@ def code_lens(params: types.CodeLensParams):
     if not test_results:
         return []
 
-    lens = []
-    for test_name, test_result in test_results.items():
-        if test_result.success:
-            continue
-
-        cached = cache.get_resource_system_data_from_cache(
-            resource_class=FunctionTest, cache_key=test_name
-        )
-
-        if not (cached and cached.resource and cached.system_data):
-            continue
-
-        if cached.system_data.get("path") != doc.path:
-            continue
-
-        test_anchor = cached.system_data.get("anchor")
-        if not test_anchor:
-            continue
-
-        if test_result.input_mismatches:
-            if not any(
-                mismatch.field.startswith("inputs.")
-                for mismatch in test_result.input_mismatches
-            ):
-                continue
-
-            inputs_block = block_range_extract(
-                search_key="inputs",
-                search_nodes=test_anchor.children,
-                anchor=test_anchor,
-            )
-            match inputs_block:
-                case None:
-                    continue
-                case list(_):
-                    continue
-
-            code_lens = types.CodeLens(
-                range=compute_abs_range(inputs_block, test_anchor),
-                command=types.Command(
-                    title="Autocorrect Inputs",
-                    command="codeLens.completeInputs",
-                    arguments=[
-                        {
-                            "uri": params.text_document.uri,
-                            "version": doc.version,
-                            "test_name": test_name,
-                        }
-                    ],
-                ),
-            )
-            lens.append(code_lens)
-
-    return lens
-
-
-@server.command("codeLens.completeInputs")
-def code_lens_inputs_action(args):
-    if not args:
-        return
-
-    edit_args = args[0]
-
-    doc_uri = edit_args["uri"]
-    doc_version = edit_args["version"]
-    test_name = edit_args["test_name"]
-
-    doc = server.workspace.get_text_document(doc_uri)
-    if doc.version != doc_version:
-        return
-
-    doc_path = doc.path
-
-    test_result = __TEST_RESULTS[doc_path][test_name]
-    if not test_result.input_mismatches:
-        return
-
-    cached = cache.get_resource_system_data_from_cache(
-        resource_class=FunctionTest, cache_key=test_name
+    lens_result = handle_lens(
+        doc_uri=params.text_document.uri,
+        path=doc.path,
+        doc_version=doc.version if doc.version else -1,
+        test_results=test_results,
     )
-    if not (cached and cached.resource and cached.system_data):
-        return
 
-    test_anchor = cached.system_data.get("anchor")
-    if not test_anchor:
-        return
+    if lens_result.logs:
+        for log in lens_result.logs:
+            server.window_log_message(params=log)
 
-    inputs_block = block_range_extract(
-        search_key="inputs",
-        search_nodes=test_anchor.children,
-        anchor=test_anchor,
-    )
-    match inputs_block:
-        case None:
-            return
-        case list(_):
+    return lens_result.lens
+
+
+def _lens_action_wrapper(fn: Callable[[str, TestResults], EditResult]):
+    async def wrapper(args):
+        if not args:
             return
 
-    inputs_value_block = block_range_extract(
-        search_key="InputValues",
-        search_nodes=inputs_block.children,
-        anchor=test_anchor,
-    )
-    match inputs_value_block:
-        case None | list(_):
+        edit_args = args[0]
+
+        doc_uri = edit_args["uri"]
+        doc_version = edit_args["version"]
+        test_name = edit_args["test_name"]
+
+        doc = server.workspace.get_text_document(doc_uri)
+        if doc.version != doc_version:
             return
 
-    spec_inputs = copy.deepcopy(cached.spec.get("inputs"))
+        doc_path = doc.path
 
+        test_result = __TEST_RESULTS[doc_path][test_name]
 
-    if not spec_inputs:
-        spec_inputs = {
-            mismatch.field.split(".", 1)[-1]: "TODO"
-            for mismatch in test_result.input_mismatches
-            if mismatch.expected
-        }
-    else:
-        for mismatch in test_result.input_mismatches:
-            group, field_name = mismatch.field.split(".", 1)
-            if group != "inputs":
-                continue
+        edit_result = fn(test_name, test_result)
+        if edit_result.logs:
+            for log in edit_result.logs:
+                server.window_log_message(params=log)
 
-            if mismatch.actual and not mismatch.expected:
-                del spec_inputs[field_name]
-
-            if not mismatch.actual and mismatch.expected:
-                spec_inputs[field_name] = "TODO"
-
-    formated_inputs = f"\n{"\n".join(
-        f"{(inputs_block.anchor_rel.character + 2) * ' '}{line}"
-        for line in yaml.dump(spec_inputs).splitlines()
-    )}\n\n"
-
-    match inputs_value_block:
-        case SemanticAnchor(abs_position=abs_position):
-            end_pos = abs_position
-
-        case SemanticBlock(anchor_rel=anchor_rel):
-            end_pos = types.Position(
-                line=anchor_rel.end.line + test_anchor.abs_position.line, character=0
-            )
-
-        case SemanticNode(anchor_rel=anchor_rel, length=length):
-            end_pos = compute_abs_position(
-                anchor_rel, test_anchor.abs_position, length=length
-            )
-
-    edit = types.TextDocumentEdit(
-        text_document=types.OptionalVersionedTextDocumentIdentifier(
-            uri=doc_uri,
-            version=edit_args["version"],
-        ),
-        edits=[
-            types.TextEdit(
-                new_text=formated_inputs,
-                range=types.Range(
-                    start=compute_abs_position(
-                        inputs_block.anchor_rel,
-                        test_anchor.abs_position,
-                        length=inputs_block.length + 1,
+        if edit_result.edits:
+            # Apply the edit.
+            server.workspace_apply_edit(
+                types.ApplyWorkspaceEditParams(
+                    edit=types.WorkspaceEdit(
+                        document_changes=[
+                            types.TextDocumentEdit(
+                                text_document=types.OptionalVersionedTextDocumentIdentifier(
+                                    uri=doc_uri,
+                                    version=doc.version,
+                                ),
+                                edits=edit_result.edits,
+                            )
+                        ]
                     ),
-                    end=end_pos,
-                ),
+                )
             )
-        ],
-    )
 
-    # Apply the edit.
-    server.workspace_apply_edit(
-        types.ApplyWorkspaceEditParams(
-            edit=types.WorkspaceEdit(document_changes=[edit]),
-        ),
-    )
+    return wrapper
 
 
-@server.command("codeLens.fillexpectedResource")
-def code_lens_action(args):
-    if not args:
-        return
+# Register Code Lens Commands
+def _register_lens_commands(lens_commands):
+    for command_name, command_fn in lens_commands:
+        server.command(command_name=command_name)(_lens_action_wrapper(command_fn))
 
-    edit_args = args[0]
 
-    doc_uri = edit_args["uri"]
-    expected_resource_line = edit_args["line"]
-    expected_resource_indent = edit_args["indent"]
-
-    doc = server.workspace.get_text_document(doc_uri)
-
-    start_line = expected_resource_line + 1
-    end_line = start_line
-    end_char = 0
-    indent = expected_resource_indent + 2
-
-    while end_line < len(doc.lines):
-        line_data = doc.lines[end_line]
-        first_char = len(line_data) - len(line_data.lstrip())
-
-        if first_char <= expected_resource_indent:
-            break
-
-        # In case they're using other than 2 indent
-        indent = min(indent, first_char)
-
-        end_line += 1
-
-    end_line -= 1
-    end_char = len(doc.lines[end_line])
-
-    test_result = __TEST_RESULTS[edit_args["path"]][edit_args["test_name"]]
-
-    indent = " " * indent
-
-    actual_resource = "\n".join(
-        f"{indent}{line}"
-        for line in yaml.dump(test_result.actual_resource).splitlines()
-    )
-
-    edit = types.TextDocumentEdit(
-        text_document=types.OptionalVersionedTextDocumentIdentifier(
-            uri=doc_uri,
-            version=edit_args["version"],
-        ),
-        edits=[
-            types.TextEdit(
-                new_text=actual_resource,
-                range=types.Range(
-                    start=types.Position(line=start_line, character=0),
-                    end=types.Position(line=end_line, character=end_char),
-                ),
-            )
-        ],
-    )
-
-    # Apply the edit.
-    server.workspace_apply_edit(
-        types.ApplyWorkspaceEditParams(
-            edit=types.WorkspaceEdit(document_changes=[edit]),
-        ),
-    )
+_register_lens_commands(LENS_COMMANDS)
 
 
 @server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)

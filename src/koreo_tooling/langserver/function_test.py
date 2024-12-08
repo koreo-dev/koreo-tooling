@@ -201,7 +201,7 @@ def _process_resource_errors(
     anchor: SemanticAnchor,
 ) -> list[types.Diagnostic]:
     resource_block = block_range_extract(
-        search_key="expectedResource",
+        search_key="expected_resource",
         search_nodes=test_spec_block.children,
         anchor=anchor,
     )
@@ -256,7 +256,7 @@ def _process_outcome_errors(
     anchor: SemanticAnchor,
 ) -> list[types.Diagnostic]:
     outcome_block = block_range_extract(
-        search_key="expectedOkValue",
+        search_key="expected_ok_value",
         search_nodes=test_spec_block.children,
         anchor=anchor,
     )

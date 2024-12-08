@@ -2,7 +2,6 @@ from typing import Any, Literal, NamedTuple
 import asyncio
 
 from lsprotocol import types
-from pygls.lsp.server import LanguageServer
 
 from celpy import celtypes
 
@@ -32,11 +31,13 @@ class FieldMismatchResult(NamedTuple):
 
 class TestResults(NamedTuple):
     success: bool
-    messages: list[str] | None
-    resource_field_errors: list[CompareResult] | None
-    outcome_fields_errors: list[CompareResult] | None
-    input_mismatches: list[FieldMismatchResult] | None
-    actual_resource: dict | None
+    messages: list[str] | None = None
+    resource_field_errors: list[CompareResult] | None = None
+    outcome_fields_errors: list[CompareResult] | None = None
+    input_mismatches: list[FieldMismatchResult] | None = None
+    actual_resource: dict | None = None
+    actual_ok_value: dict | None = None
+    missing_test_assertion: bool = False
 
 
 async def run_function_tests(
@@ -90,6 +91,16 @@ async def run_function_tests(
 
 
 async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
+    if not is_unwrapped_ok(test):
+        return TestResults(
+            success=False,
+            messages=[f"{test.message}"],
+            resource_field_errors=None,
+            outcome_fields_errors=None,
+            input_mismatches=None,
+            actual_resource=None,
+        )
+
     if not is_unwrapped_ok(test.function_under_test):
         return TestResults(
             success=False,
@@ -128,6 +139,7 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
     messages = []
     resource_field_errors = []
     outcome_fields_errors = []
+    actual_ok_value = None
 
     match test_outcome.outcome:
         case DepSkip(message=message, location=location):
@@ -185,6 +197,8 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
                     "Can not assert expectedResource unless changes requested."
                 )
 
+            actual_ok_value = okValue
+
             outcome_fields_errors = _check_value(
                 actual=okValue, expected=test_outcome.expected_ok_value
             )
@@ -192,12 +206,14 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
             if outcome_fields_errors:
                 success = False
 
+    missing_test_assertion = False
     if not (
         test_outcome.expected_resource
         or test_outcome.expected_outcome
         or test_outcome.expected_ok_value
     ):
         success = False
+        missing_test_assertion = True
         messages.append(
             "Must define expectedResource, expectedOutcome, or expectedOkValue."
         )
@@ -209,6 +225,8 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
         outcome_fields_errors=outcome_fields_errors,
         input_mismatches=field_mismatches,
         actual_resource=test_outcome.actual_resource,
+        actual_ok_value=actual_ok_value,
+        missing_test_assertion=missing_test_assertion,
     )
 
 

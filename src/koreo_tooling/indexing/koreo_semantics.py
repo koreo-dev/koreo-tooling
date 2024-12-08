@@ -276,9 +276,27 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                 local_key_fn=lambda value: "spec",
                 sub_structure={
                     "functionRef": _function_ref,
+                    "currentResource": SemanticStructure(
+                        type="property",
+                        local_key_fn=lambda value: "current_resource",
+                        sub_structure=SemanticStructure(
+                            local_key_fn=lambda value: "current_value",
+                        ),
+                    ),
                     "inputs": _function_inputs,
+                    "expectedResource": SemanticStructure(
+                        type="property",
+                        local_key_fn=lambda value: "expected_resource",
+                        sub_structure=SemanticStructure(
+                            local_key_fn=lambda value: "expected_value",
+                        ),
+                    ),
                     "expectedOkValue": SemanticStructure(
-                        local_key_fn=lambda value: "expectedOkValue",
+                        type="property",
+                        local_key_fn=lambda value: "expected_ok_value",
+                        sub_structure=SemanticStructure(
+                            local_key_fn=lambda value: "expected_value",
+                        ),
                     ),
                 },
             ),
