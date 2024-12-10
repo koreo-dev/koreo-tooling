@@ -12,7 +12,7 @@ from .semantics import (
 
 SYMBOL = re.compile(r"[\w]+")
 QUOTED = re.compile(r"(?P<quote>['\"])(?P<string>.*?)(?P=quote)")
-OP = re.compile(r"->|[\{\}\(\)\.,+:*-=\[\]^$!<>|?]")
+OP = re.compile(r"->|[\{\}\(\)\.,+:*-=\[\]^$!<>|?&\\]")
 SPACE = re.compile(r"\s+")
 
 NUMBER = re.compile(r"\d+")
