@@ -1,8 +1,10 @@
 from asyncio import Semaphore
 from functools import reduce
-from typing import Generator, NamedTuple, Sequence
+from typing import Any, Generator, NamedTuple, Sequence
 import hashlib
 import operator
+
+import yaml.scanner
 
 from pygls.workspace import TextDocument
 from lsprotocol import types
@@ -50,6 +52,53 @@ async def process_file(
 
     yaml_blocks = _load_all_yamls(doc.source, Loader=IndexingLoader, doc=doc)
     for yaml_block in yaml_blocks:
+        match yaml_block:
+            case YamlParseError(
+                err=err, problem_pos=problem_pos, context_pos=context_pos
+            ):
+                logs.append(
+                    types.LogMessageParams(
+                        type=types.MessageType.Error,
+                        message=f"Failed to parse YAML around {problem_pos} / {context_pos}",
+                    )
+                )
+
+                if problem_pos:
+                    diagnostics.append(
+                        types.Diagnostic(
+                            message=err,
+                            severity=types.DiagnosticSeverity.Error,
+                            range=types.Range(
+                                start=types.Position(
+                                    line=problem_pos.line, character=0
+                                ),
+                                end=types.Position(
+                                    line=problem_pos.line,
+                                    character=len(doc.lines[problem_pos.line]),
+                                ),
+                            ),
+                        )
+                    )
+
+                if context_pos:
+                    diagnostics.append(
+                        types.Diagnostic(
+                            message=err,
+                            severity=types.DiagnosticSeverity.Error,
+                            range=types.Range(
+                                start=types.Position(
+                                    line=context_pos.line, character=0
+                                ),
+                                end=types.Position(
+                                    line=context_pos.line,
+                                    character=len(doc.lines[context_pos.line]),
+                                ),
+                            ),
+                        )
+                    )
+
+                break
+
         block_result = await _process_block(
             path=path, yaml_block=yaml_block, doc=doc, pash=pash
         )
@@ -271,7 +320,13 @@ async def _process_block(
     )
 
 
-def _load_all_yamls(stream, Loader, doc):
+class YamlParseError(NamedTuple):
+    err: str
+    problem_pos: types.Position | None
+    context_pos: types.Position | None
+
+
+def _load_all_yamls(stream, Loader, doc) -> Generator[dict | YamlParseError, Any, None]:
     """
     Parse all YAML documents in a stream
     and produce corresponding Python objects.
@@ -279,7 +334,25 @@ def _load_all_yamls(stream, Loader, doc):
     loader = Loader(stream, doc=doc)
     try:
         while loader.check_data():
-            yield loader.get_data()
+            try:
+                yield loader.get_data()
+            except yaml.scanner.ScannerError as err:
+                problem_pos = None
+                if err.problem_mark:
+                    problem_pos = types.Position(
+                        line=err.problem_mark.line, character=err.problem_mark.column
+                    )
+
+                context_pos = None
+                if err.context_mark:
+                    context_pos = types.Position(
+                        line=err.context_mark.line, character=err.context_mark.column
+                    )
+
+                yield YamlParseError(
+                    err=f"{err}", problem_pos=problem_pos, context_pos=context_pos
+                )
+
     finally:
         loader.dispose()
 
