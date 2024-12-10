@@ -190,7 +190,14 @@ def _process_workflow_step(
         if input_key
     )
 
+    raw_mapped_input = step_spec.get("mappedInput", {})
+    mapped_input_key = raw_mapped_input.get("inputKey")
+
     raw_inputs = step_spec.get("inputs", {})
+
+    provided_input_keys = list(raw_inputs.keys())
+    if mapped_input_key:
+        provided_input_keys.append(f"{mapped_input_key}")
 
     has_error = False
     diagnostics: list[types.Diagnostic] = []
@@ -206,7 +213,7 @@ def _process_workflow_step(
             diagnostics.extend(block_diagnostics)
             inputs_block = None
 
-    inputs = call_arg_compare(step.provided_input_keys, first_tier_inputs)
+    inputs = call_arg_compare(provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
         if not expected and provided:
             has_error = True
