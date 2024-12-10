@@ -218,7 +218,7 @@ def _process_workflow_step(
 
             input_block = block_range_extract(
                 search_key=f"input:{argument}",
-                search_nodes=inputs_block.children,
+                search_nodes=step_semantic_block.children,
                 anchor=semantic_anchor,
             )
             match input_block:
@@ -275,15 +275,17 @@ def _step_label_error_diagnostic(
         anchor=semantic_anchor,
     )
     match label_block:
-        case None:
-            return []
         case list(label_diagnostics):
             return label_diagnostics
+        case None:
+            diagnostic_range = compute_abs_range(step_semantic_block, semantic_anchor)
+        case _:
+            diagnostic_range = compute_abs_range(label_block, semantic_anchor)
 
     return [
         types.Diagnostic(
             message=message,
             severity=types.DiagnosticSeverity.Warning,
-            range=compute_abs_range(label_block, semantic_anchor),
+            range=diagnostic_range,
         )
     ]
