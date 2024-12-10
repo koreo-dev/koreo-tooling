@@ -135,6 +135,34 @@ def _process_workflow(
         )
         return ProcessResult(error=True, diagnostics=diagnostics)
 
+    raw_config_step_spec = raw_spec.get("configStep")
+
+    if raw_config_step_spec and workflow.config_step:
+        step_block = block_range_extract(
+            search_key=f"config_step_block",
+            search_nodes=semantic_anchor.children,
+            anchor=semantic_anchor,
+        )
+        config_step_result = _process_workflow_step(
+            workflow.config_step,
+            step_block,
+            raw_config_step_spec,
+            semantic_anchor,
+        )
+
+        has_step_error = has_step_error or config_step_result.error
+        if config_step_result.diagnostics:
+            diagnostics.extend(config_step_result.diagnostics)
+
+    if has_step_error:
+        diagnostics.append(
+            types.Diagnostic(
+                message=f"Workflow steps are not ready.",
+                severity=types.DiagnosticSeverity.Error,
+                range=resource_range,
+            )
+        )
+
     for step in workflow.steps:
         step_block = block_range_extract(
             search_key=f"Step:{step.label}",
