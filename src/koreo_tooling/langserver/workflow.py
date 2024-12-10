@@ -115,10 +115,15 @@ def _process_workflow(
                 range=resource_range,
             )
         )
+        if not raw_spec:
+            return ProcessResult(error=True, diagnostics=diagnostics)
 
-    step_specs = {
-        step_spec.get("label"): step_spec for step_spec in raw_spec.get("steps", [])
-    }
+    raw_steps_spec = raw_spec.get("steps")
+
+    if not raw_steps_spec:
+        step_specs = {}
+    else:
+        step_specs = {step_spec.get("label"): step_spec for step_spec in raw_steps_spec}
 
     if not step_specs and workflow.steps:
         diagnostics.append(
