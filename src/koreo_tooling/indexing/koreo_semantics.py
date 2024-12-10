@@ -8,6 +8,19 @@ VALUE = "."
 ALL = "*"
 
 
+def config_step_path_indexer(value) -> str:
+    try:
+        label = "config"
+        for key, name in value:
+            if key.value == "label":
+                label = name.value
+                break
+
+        return f"Step:{label}"
+    except Exception as err:
+        raise Exception(f"Failed to process '{value}', with {err}")
+
+
 def step_path_indexer(value) -> str:
     try:
         return (
@@ -230,6 +243,25 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                             ),
                         },
                     ),
+                    "configStep": SemanticStructure(
+                        local_key_fn=lambda value: f"config_step_block",
+                        sub_structure=SemanticStructure(
+                            local_key_fn=config_step_path_indexer,
+                            sub_structure={
+                                "label": SemanticStructure(
+                                    type="property",
+                                    sub_structure=SemanticStructure(
+                                        local_key_fn=lambda value: f"label:{value}",
+                                        type="event",
+                                        modifier=[Modifier.definition],
+                                    ),
+                                ),
+                                "functionRef": _function_ref,
+                                "workflowRef": _workflow_ref,
+                                "inputs": _function_inputs,
+                            },
+                        ),
+                    ),
                     "steps": SemanticStructure(
                         sub_structure=SemanticStructure(
                             sub_structure=SemanticStructure(
@@ -246,6 +278,22 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     "functionRef": _function_ref,
                                     "workflowRef": _workflow_ref,
                                     "inputs": _function_inputs,
+                                    "mappedInput": SemanticStructure(
+                                        type="property",
+                                        local_key_fn=lambda value: "mapped_input",
+                                        sub_structure={
+                                            "source": SemanticStructure(
+                                                type="argument",
+                                            ),
+                                            "inputKey": SemanticStructure(
+                                                type="argument",
+                                                sub_structure=SemanticStructure(
+                                                    type="parameter",
+                                                    local_key_fn=lambda value: f"input:{value}",
+                                                ),
+                                            ),
+                                        },
+                                    ),
                                 },
                             ),
                         ),
