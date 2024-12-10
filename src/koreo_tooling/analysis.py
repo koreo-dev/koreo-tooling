@@ -1,4 +1,9 @@
-def call_arg_compare(lhs: list[str], rhs: set[str]) -> dict[str, tuple[bool, bool]]:
+from typing import Iterable
+
+
+def call_arg_compare(
+    lhs: Iterable[str], rhs: Iterable[str]
+) -> dict[str, tuple[bool, bool]]:
     arguments: dict[str, tuple[bool, bool]] = {}
     for argument in lhs:
         arguments[argument] = (True, False)
