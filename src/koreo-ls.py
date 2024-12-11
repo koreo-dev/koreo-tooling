@@ -1,12 +1,10 @@
-from asyncio import Semaphore
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable, NamedTuple, Sequence
 import os
+import time
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
-
-import nanoid
 
 
 from pygls.lsp.server import LanguageServer
@@ -25,11 +23,11 @@ from koreo_tooling.indexing import TokenModifiers, TokenTypes, SemanticAnchor
 from koreo_tooling.indexing.semantics import generate_local_range_index
 
 from koreo_tooling.langserver.codelens import LENS_COMMANDS, EditResult, handle_lens
-from koreo_tooling.langserver.codelens import handle_lens
 from koreo_tooling.langserver.fileprocessor import process_file
 from koreo_tooling.langserver.function_test import run_function_tests
 from koreo_tooling.langserver.hover import handle_hover
 from koreo_tooling.langserver.workflow import process_workflows
+from koreo_tooling.langserver.orchestrator import handle_file
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -238,22 +236,31 @@ async def change_workspace_config(params):
         for suffix in suffixes:
             for match in path.rglob(f"*.{suffix}"):
 
-                doc = server.workspace.get_text_document(f"{match}")
-                await _handle_file(doc=doc)
+                await handle_file(
+                    file_uri=f"{match}",
+                    monotime=time.monotonic(),
+                    file_processor=_handle_file,
+                )
 
 
 @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
 async def open_processor(params):
 
-    doc = server.workspace.get_text_document(params.text_document.uri)
-    await _handle_file(doc=doc)
+    await handle_file(
+        file_uri=params.text_document.uri,
+        monotime=time.monotonic(),
+        file_processor=_handle_file,
+    )
 
 
 @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
 async def change_processor(params):
 
-    doc = server.workspace.get_text_document(params.text_document.uri)
-    await _handle_file(doc=doc)
+    await handle_file(
+        file_uri=params.text_document.uri,
+        monotime=time.monotonic(),
+        file_processor=_handle_file,
+    )
 
 
 class ResourceMatch(NamedTuple):
@@ -380,39 +387,23 @@ async def goto_reference(params: types.ReferenceParams):
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
     if not doc.path in __SEMANTIC_TOKEN_INDEX:
-        await _handle_file(doc=doc)
+        await handle_file(
+            file_uri=params.text_document.uri,
+            monotime=time.monotonic(),
+            file_processor=_handle_file,
+        )
 
     tokens = __SEMANTIC_TOKEN_INDEX[doc.path]
     return types.SemanticTokens(data=tokens)
 
 
-__PATH_GUARD_SEM: dict[str, Semaphore] = {}
-__PATH_GUARD: dict[str, tuple[int, str]] = {}
-
-
-async def _handle_file(doc: TextDocument):
-    doc_version = doc.version if doc.version else -1
-
-    if doc.path not in __PATH_GUARD_SEM:
-        __PATH_GUARD_SEM[doc.path] = Semaphore(1)
-
-    run_id = nanoid.generate(size=5)
-
-    async with __PATH_GUARD_SEM[doc.path]:
-        if doc.path in __PATH_GUARD and doc_version <= __PATH_GUARD[doc.path][0]:
-            return
-
-        __PATH_GUARD[doc.path] = (doc_version, run_id)
-
-    await _guarded_handle_file(doc, doc_version, run_id)
-
-
-async def _guarded_handle_file(doc: TextDocument, doc_version: int, run_id: str):
+async def _handle_file(doc_uri: str, monotime: float):
+    doc = server.workspace.get_text_document(doc_uri)
 
     diagnostics = []
 
     try:
-        processing_result = await _process_file(doc=doc)
+        processing_result = await _process_file(doc=doc, monotime=monotime)
         if processing_result.diagnostics:
             diagnostics.extend(processing_result.diagnostics)
     except Exception as err:
@@ -429,30 +420,26 @@ async def _guarded_handle_file(doc: TextDocument, doc_version: int, run_id: str)
     )
     diagnostics.extend(test_diagnostics)
 
-    async with __PATH_GUARD_SEM[doc.path]:
-        if doc.path in __PATH_GUARD and __PATH_GUARD[doc.path] != (doc_version, run_id):
-            return
+    _reset_file_state(doc.path)
 
-        _reset_file_state(doc.path)
+    if processing_result.semantic_tokens:
+        __SEMANTIC_TOKEN_INDEX[doc.path] = processing_result.semantic_tokens
+    else:
+        # Will this break anything?
+        __SEMANTIC_TOKEN_INDEX[doc.path] = []
 
-        if processing_result.semantic_tokens:
-            __SEMANTIC_TOKEN_INDEX[doc.path] = processing_result.semantic_tokens
-        else:
-            # Will this break anything?
-            __SEMANTIC_TOKEN_INDEX[doc.path] = []
+    if processing_result.semantic_range_index:
+        __SEMANTIC_RANGE_INDEX.extend(processing_result.semantic_range_index)
 
-        if processing_result.semantic_range_index:
-            __SEMANTIC_RANGE_INDEX.extend(processing_result.semantic_range_index)
+    __TEST_RESULTS[doc.path] = test_results
 
-        __TEST_RESULTS[doc.path] = test_results
+    diagnostics.extend(_check_for_duplicate_resources(path=doc.path))
 
-        diagnostics.extend(_check_for_duplicate_resources(path=doc.path))
-
-        server.text_document_publish_diagnostics(
-            types.PublishDiagnosticsParams(
-                uri=doc.uri, version=doc.version, diagnostics=diagnostics
-            )
+    server.text_document_publish_diagnostics(
+        types.PublishDiagnosticsParams(
+            uri=doc.uri, version=doc.version, diagnostics=diagnostics
         )
+    )
 
 
 def _process_workflows(
@@ -535,10 +522,8 @@ def _reset_file_state(path_key: str):
         del __TEST_RESULTS[path_key]
 
 
-async def _process_file(
-    doc: TextDocument,
-):
-    results = await process_file(doc=doc)
+async def _process_file(doc: TextDocument, monotime: float):
+    results = await process_file(doc=doc, monotime=monotime)
 
     if results.logs:
         for log in results.logs:

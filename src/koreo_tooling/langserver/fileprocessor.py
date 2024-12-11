@@ -39,9 +39,7 @@ class ProccessResults(NamedTuple):
     diagnostics: Sequence[types.Diagnostic] | None = None
 
 
-async def process_file(
-    doc: TextDocument,
-) -> ProccessResults:
+async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
     path = doc.path
     pash = hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()
 
@@ -100,7 +98,7 @@ async def process_file(
                 break
 
         block_result = await _process_block(
-            path=path, yaml_block=yaml_block, doc=doc, pash=pash
+            path=path, yaml_block=yaml_block, doc=doc, pash=pash, monotime=monotime
         )
 
         if block_result.logs:
@@ -135,7 +133,7 @@ class BlockResults(NamedTuple):
 
 
 async def _process_block(
-    path: str, yaml_block: dict, doc: TextDocument, pash: str
+    path: str, yaml_block: dict, doc: TextDocument, pash: str, monotime: float
 ) -> BlockResults:
     try:
         api_version = yaml_block.get("apiVersion")
@@ -245,9 +243,7 @@ async def _process_block(
     metadata = yaml_block.get("metadata", {})
     name = metadata.get("name", "missing-name")
 
-    doc_version = doc.version if doc.version is not None else -1
-
-    resource_version = f"{pash}:{doc_version}"
+    resource_version = f"{pash}:{monotime}"
     metadata["resourceVersion"] = resource_version
 
     raw_spec = yaml_block.get("spec", {})
@@ -272,8 +268,8 @@ async def _process_block(
                 )
             else:
                 cached_version = cached.resource_version
-                cache_pash, cached_doc_version = cached_version.split(":")
-                if cache_pash == pash and int(cached_doc_version) >= doc_version:
+                cache_pash, cached_monotime = cached_version.split(":")
+                if cache_pash == pash and float(cached_monotime) >= monotime:
                     logs.append(
                         types.LogMessageParams(
                             type=types.MessageType.Info,
