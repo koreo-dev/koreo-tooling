@@ -110,6 +110,7 @@ class SemanticStructure:
     local_key_fn: IndexFn | None = None
     index_key_fn: IndexFn | None = None
     sub_structure: SemanticStructureMap | SemanticStructure | None = None
+    strict_sub_structure_keys: bool = False
 
 
 def flatten(

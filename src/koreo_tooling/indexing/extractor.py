@@ -30,7 +30,7 @@ def extract_semantic_structure_info(
             clean_semantic_type = semantic_type
         case None:
             clean_semantic_type = SemanticStructure()
-        case _:
+        case dict():
             clean_semantic_type = SemanticStructure(sub_structure=semantic_type)
 
     if isinstance(yaml_node, MappingNode):
@@ -40,6 +40,7 @@ def extract_semantic_structure_info(
             yaml_node=yaml_node,
             doc=doc,
             semantic_type=clean_semantic_type.sub_structure,
+            strict_sub_structure_keys=clean_semantic_type.strict_sub_structure_keys,
         )
 
     if isinstance(yaml_node, SequenceNode):
@@ -66,6 +67,7 @@ def _extract_map_structure_info(
     yaml_node: Node,
     doc,
     semantic_type: dict[str, SemanticStructure] | SemanticStructure | None,
+    strict_sub_structure_keys: bool = False,
 ) -> tuple[list[SemanticNode], Position]:
     semantic_nodes = []
     new_last_start = last_token_abs_start
@@ -85,6 +87,15 @@ def _extract_map_structure_info(
             )
         else:
             seen_keys.add(f"{key.value}")
+
+        if (
+            strict_sub_structure_keys
+            and not node_diagnostic
+            and f"{key.value}" not in semantic_type_map
+        ):
+            node_diagnostic = NodeDiagnostic(
+                message="Unknown key", severity=Severity.error
+            )
 
         key_semantic_type = semantic_type_map.get(key.value)
         if not key_semantic_type:
@@ -106,12 +117,25 @@ def _extract_map_structure_info(
         if len(key_semantic_nodes) != 1:
             raise Exception(f"More than one key node! {key_semantic_nodes}")
 
+        match key_semantic_type.sub_structure:
+            case SemanticStructure():
+                value_semantic_type = key_semantic_type.sub_structure
+            case None:
+                value_semantic_type = SemanticStructure(
+                    strict_sub_structure_keys=key_semantic_type.strict_sub_structure_keys
+                )
+            case dict():
+                value_semantic_type = SemanticStructure(
+                    sub_structure=key_semantic_type.sub_structure,
+                    strict_sub_structure_keys=key_semantic_type.strict_sub_structure_keys,
+                )
+
         value_semantic_nodes, new_last_start = _extract_value_semantic_info(
             anchor_abs_start=anchor_abs_start,
             last_token_abs_start=new_last_start,
             yaml_node=value,
             doc=doc,
-            semantic_type=key_semantic_type.sub_structure,
+            semantic_type=value_semantic_type
         )
 
         key_semantic_node = key_semantic_nodes[-1]

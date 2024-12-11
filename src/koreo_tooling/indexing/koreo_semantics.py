@@ -102,6 +102,7 @@ _managed_resource: SemanticStructure = SemanticStructure(
 )
 
 _behavior: SemanticStructure = SemanticStructure(
+    strict_sub_structure_keys=True,
     sub_structure={
         "load": SemanticStructure(
             type="parameter",
@@ -155,16 +156,27 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                 },
             ),
             "spec": SemanticStructure(
+                strict_sub_structure_keys=True,
                 sub_structure={
                     "staticResource": SemanticStructure(
+                        strict_sub_structure_keys=True,
                         type="property",
                         sub_structure={
                             "managedResource": _managed_resource,
                             "behavior": _behavior,
+                            "context": SemanticStructure(
+                                type="property",
+                                sub_structure={
+                                    ALL: SemanticStructure(
+                                        type="variable",
+                                    )
+                                },
+                            ),
                         },
                     ),
                     "dynamicResource": SemanticStructure(
                         type="property",
+                        strict_sub_structure_keys=True,
                         sub_structure={
                             "key": SemanticStructure(
                                 type="property",
@@ -180,6 +192,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         },
                     ),
                     "inputValidators": SemanticStructure(
+                        strict_sub_structure_keys=True,
                         sub_structure={
                             "type": SemanticStructure(
                                 type="property",
@@ -195,7 +208,19 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                             ),
                         },
                     ),
+                    "materializers": SemanticStructure(
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "base": SemanticStructure(
+                                type="property",
+                            ),
+                            "onCreate": SemanticStructure(
+                                type="property",
+                            ),
+                        },
+                    ),
                     "outcome": SemanticStructure(
+                        strict_sub_structure_keys=True,
                         sub_structure={
                             "okValue": SemanticStructure(
                                 sub_structure=SemanticStructure(type="string")
@@ -225,9 +250,11 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                 ),
             ),
             "spec": SemanticStructure(
+                strict_sub_structure_keys=True,
                 sub_structure={
                     "crdRef": SemanticStructure(
                         type="typeParameter",
+                        strict_sub_structure_keys=True,
                         sub_structure={
                             "apiGroup": SemanticStructure(
                                 type="parameter",
@@ -247,6 +274,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         local_key_fn=lambda value: f"config_step_block",
                         sub_structure=SemanticStructure(
                             local_key_fn=config_step_path_indexer,
+                            strict_sub_structure_keys=True,
                             sub_structure={
                                 "label": SemanticStructure(
                                     type="property",
@@ -266,6 +294,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         sub_structure=SemanticStructure(
                             sub_structure=SemanticStructure(
                                 local_key_fn=step_path_indexer,
+                                strict_sub_structure_keys=True,
                                 sub_structure={
                                     "label": SemanticStructure(
                                         type="property",
@@ -322,6 +351,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
             ),
             "spec": SemanticStructure(
                 local_key_fn=lambda value: "spec",
+                strict_sub_structure_keys=True,
                 sub_structure={
                     "functionRef": _function_ref,
                     "currentResource": SemanticStructure(
@@ -369,6 +399,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                 ),
             ),
             "spec": SemanticStructure(
+                strict_sub_structure_keys=True,
                 sub_structure={
                     "behavior": _behavior,
                     "managedResource": _managed_resource,
