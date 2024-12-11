@@ -215,21 +215,24 @@ def lex(
                 quote_group_len = len(match.group("quote"))
                 string_len = len(match.group("string"))
 
-                tokens.extend(
-                    [
-                        Token(
-                            position=Position(
-                                line=current_line - prev_line,
-                                character=current_offset - prev_offset,
-                            ),
-                            start_rel=Position(
-                                line=current_line,
-                                character=abs_offset + current_offset,
-                            ),
-                            text=match.group("quote"),
-                            token_type="operator",
-                            token_modifiers=[],
+                tokens.append(
+                    Token(
+                        position=Position(
+                            line=current_line - prev_line,
+                            character=current_offset - prev_offset,
                         ),
+                        start_rel=Position(
+                            line=current_line,
+                            character=abs_offset + current_offset,
+                        ),
+                        text=match.group("quote"),
+                        token_type="operator",
+                        token_modifiers=[],
+                    ),
+                )
+
+                if string_len:
+                    tokens.append(
                         Token(
                             position=Position(line=0, character=quote_group_len),
                             start_rel=Position(
@@ -239,24 +242,26 @@ def lex(
                             text=match.group("string"),
                             token_type="string",
                             token_modifiers=[],
+                        )
+                    )
+
+                tokens.append(
+                    Token(
+                        position=Position(
+                            line=0,
+                            character=string_len if string_len else quote_group_len,
                         ),
-                        Token(
-                            position=Position(
-                                line=0,
-                                character=string_len,
-                            ),
-                            start_rel=Position(
-                                line=current_line,
-                                character=abs_offset
-                                + current_offset
-                                + quote_group_len
-                                + string_len,
-                            ),
-                            text=match.group("quote"),
-                            token_type="operator",
-                            token_modifiers=[],
+                        start_rel=Position(
+                            line=current_line,
+                            character=abs_offset
+                            + current_offset
+                            + quote_group_len
+                            + string_len,
                         ),
-                    ]
+                        text=match.group("quote"),
+                        token_type="operator",
+                        token_modifiers=[],
+                    ),
                 )
 
                 line = line[match.end() :]
