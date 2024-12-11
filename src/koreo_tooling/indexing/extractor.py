@@ -135,7 +135,7 @@ def _extract_map_structure_info(
             last_token_abs_start=new_last_start,
             yaml_node=value,
             doc=doc,
-            semantic_type=value_semantic_type
+            semantic_type=value_semantic_type,
         )
 
         key_semantic_node = key_semantic_nodes[-1]

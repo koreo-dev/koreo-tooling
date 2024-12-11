@@ -113,7 +113,6 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
 
     field_mismatches = _check_inputs(
         inputs=test.inputs,
-        parent=test.parent,
         dynamic_input_keys=test.function_under_test.dynamic_input_keys,
     )
 
@@ -232,25 +231,18 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
 
 def _check_inputs(
     inputs: celtypes.MapType | None,
-    parent: celtypes.MapType | None,
     dynamic_input_keys: set[str],
 ) -> list[FieldMismatchResult]:
     provided_keys = set[str]()
     if inputs:
         provided_keys.update(f"inputs.{input_key}" for input_key in inputs.keys())
 
-    if parent:
-        provided_keys.update(f"parent.{input_key}" for input_key in parent.keys())
-
     first_tier_inputs = set(
-        f"inputs.{constants.INPUT_NAME_PATTERN.match(key).group(1)}"
-        for key in dynamic_input_keys
-        if key.startswith("inputs.")
-    )
-    first_tier_inputs.update(
-        f"parent.{constants.PARENT_NAME_PATTERN.match(key).group(1)}"
-        for key in dynamic_input_keys
-        if key.startswith("parent.")
+        f"inputs.{match.group('name')}"
+        for match in (
+            constants.INPUT_NAME_PATTERN.match(key) for key in dynamic_input_keys
+        )
+        if match
     )
 
     mismatches = []
