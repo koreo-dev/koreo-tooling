@@ -323,6 +323,21 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                             ),
                                         },
                                     ),
+                                    "condition": SemanticStructure(
+                                        type="property",
+                                        strict_sub_structure_keys=True,
+                                        sub_structure={
+                                            "type": SemanticStructure(
+                                                type="property",
+                                                sub_structure=SemanticStructure(
+                                                    type="type",
+                                                ),
+                                            ),
+                                            "name": SemanticStructure(
+                                                type="property",
+                                            ),
+                                        },
+                                    ),
                                 },
                             ),
                         ),
