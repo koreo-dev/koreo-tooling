@@ -525,13 +525,13 @@ def _code_lens_replace_value_block_action(
     )
 
     indent = (offset + 2) * " "
-    formated_inputs = f"\n{"\n".join(
+    formated = f"\n{"\n".join(
         f"{indent}{line}"
-        for line in yaml.dump(new_value).splitlines()
+        for line in yaml.dump(new_value, width=10000).splitlines()
     )}\n\n"
 
     return EditResult(
-        edits=(types.TextEdit(new_text=formated_inputs, range=edit_range),),
+        edits=(types.TextEdit(new_text=formated, range=edit_range),),
         logs=logs,
     )
 
