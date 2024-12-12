@@ -35,6 +35,12 @@ async def handle_file(file_uri: str, monotime: float, file_processor: FileProces
     return result
 
 
+async def shutdown_handlers():
+    async with asyncio.TaskGroup() as task_group:
+        for queue in _FILE_HANDLER_QUEUES.values():
+            task_group.create_task(queue.put(KillRequest()))
+
+
 def _setup_worker(
     file_uri: str, file_processor: FileProcessor
 ) -> asyncio.LifoQueue[ProccessRequest | KillRequest]:

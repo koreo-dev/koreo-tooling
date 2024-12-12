@@ -138,6 +138,64 @@ _function_inputs: SemanticStructure = SemanticStructure(
     ),
 )
 
+_validators = SemanticStructure(
+    type="property",
+    strict_sub_structure_keys=True,
+    sub_structure={
+        "assert": SemanticStructure(
+            type="property",
+            sub_structure=SemanticStructure(type="string"),
+        ),
+        "ok": SemanticStructure(
+            type="property", strict_sub_structure_keys=True, sub_structure={}
+        ),
+        "skip": SemanticStructure(
+            type="property",
+            strict_sub_structure_keys=True,
+            sub_structure={
+                "message": SemanticStructure(
+                    type="property",
+                    sub_structure=SemanticStructure(type="string"),
+                ),
+            },
+        ),
+        "depSkip": SemanticStructure(
+            type="property",
+            strict_sub_structure_keys=True,
+            sub_structure={
+                "message": SemanticStructure(
+                    type="property",
+                    sub_structure=SemanticStructure(type="string"),
+                ),
+            },
+        ),
+        "retry": SemanticStructure(
+            type="property",
+            strict_sub_structure_keys=True,
+            sub_structure={
+                "message": SemanticStructure(
+                    type="property",
+                    sub_structure=SemanticStructure(type="string"),
+                ),
+                "delay": SemanticStructure(
+                    type="property",
+                    sub_structure=SemanticStructure(type="number"),
+                ),
+            },
+        ),
+        "permFail": SemanticStructure(
+            type="property",
+            strict_sub_structure_keys=True,
+            sub_structure={
+                "message": SemanticStructure(
+                    type="property",
+                    sub_structure=SemanticStructure(type="string"),
+                ),
+            },
+        ),
+    },
+)
+
 SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
     "Function": SemanticStructure(
         sub_structure={
@@ -191,23 +249,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                             ),
                         },
                     ),
-                    "inputValidators": SemanticStructure(
-                        strict_sub_structure_keys=True,
-                        sub_structure={
-                            "type": SemanticStructure(
-                                type="property",
-                                sub_structure=SemanticStructure(type="class"),
-                            ),
-                            "message": SemanticStructure(
-                                type="property",
-                                sub_structure=SemanticStructure(type="string"),
-                            ),
-                            "test": SemanticStructure(
-                                type="property",
-                                sub_structure=SemanticStructure(type="string"),
-                            ),
-                        },
-                    ),
+                    "inputValidators": _validators,
                     "materializers": SemanticStructure(
                         strict_sub_structure_keys=True,
                         sub_structure={
@@ -222,6 +264,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                     "outcome": SemanticStructure(
                         strict_sub_structure_keys=True,
                         sub_structure={
+                            "validators": _validators,
                             "okValue": SemanticStructure(
                                 sub_structure=SemanticStructure(type="string")
                             ),
@@ -384,6 +427,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                             local_key_fn=lambda value: "expected_value",
                         ),
                     ),
+                    "expectedOutcome": _validators,
                     "expectedOkValue": SemanticStructure(
                         type="property",
                         local_key_fn=lambda value: "expected_ok_value",

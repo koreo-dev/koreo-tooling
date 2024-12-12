@@ -27,7 +27,7 @@ from koreo_tooling.langserver.fileprocessor import process_file
 from koreo_tooling.langserver.function_test import run_function_tests
 from koreo_tooling.langserver.hover import handle_hover
 from koreo_tooling.langserver.workflow import process_workflows
-from koreo_tooling.langserver.orchestrator import handle_file
+from koreo_tooling.langserver.orchestrator import handle_file, shutdown_handlers
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
@@ -395,6 +395,14 @@ async def semantic_tokens_full(params: types.ReferenceParams):
 
     tokens = __SEMANTIC_TOKEN_INDEX[doc.path]
     return types.SemanticTokens(data=tokens)
+
+
+@server.feature(types.SHUTDOWN)
+async def shutdown(*_, **__):
+    with open("/Users/bobert/tmp/koreo-ls.log", "w") as outfile:
+        outfile.write("shutting down")
+        await shutdown_handlers()
+        outfile.write("shut down complete")
 
 
 async def _handle_file(doc_uri: str, monotime: float):
