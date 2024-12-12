@@ -36,7 +36,7 @@ class TestResults(NamedTuple):
     outcome_fields_errors: list[CompareResult] | None = None
     input_mismatches: list[FieldMismatchResult] | None = None
     actual_resource: dict | None = None
-    actual_ok_value: dict | None = None
+    actual_return: dict | None = None
     missing_test_assertion: bool = False
 
 
@@ -138,7 +138,7 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
     messages = []
     resource_field_errors = []
     outcome_fields_errors = []
-    actual_ok_value = None
+    actual_return = None
 
     match test_outcome.outcome:
         case DepSkip(message=message, location=location):
@@ -168,10 +168,10 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
                 messages.append(
                     f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."
                 )
-            elif test_outcome.expected_ok_value:
+            elif test_outcome.expected_return:
                 success = False
                 messages.append(
-                    "Can not assert expected ok-value when resource "
+                    "Can not assert expected return-value when resource "
                     "modifications requested. Ensure currentResource matches "
                     "materializer."
                 )
@@ -183,7 +183,7 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
             if resource_field_errors:
                 success = False
 
-        case Ok(data=okValue) | okValue:
+        case Ok(data=return_value) | return_value:
             if test_outcome.expected_outcome is not None and not isinstance(
                 test_outcome.expected_outcome, Ok
             ):
@@ -196,10 +196,10 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
                     "Can not assert expectedResource unless changes requested."
                 )
 
-            actual_ok_value = okValue
+            actual_return = return_value
 
             outcome_fields_errors = _check_value(
-                actual=okValue, expected=test_outcome.expected_ok_value
+                actual=return_value, expected=test_outcome.expected_return
             )
 
             if outcome_fields_errors:
@@ -209,12 +209,12 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
     if not (
         test_outcome.expected_resource
         or test_outcome.expected_outcome
-        or test_outcome.expected_ok_value
+        or test_outcome.expected_return
     ):
         success = False
         missing_test_assertion = True
         messages.append(
-            "Must define expectedResource, expectedOutcome, or expectedOkValue."
+            "Must define expectedResource, expectedOutcome, or expectedReturn."
         )
 
     return TestResults(
@@ -224,7 +224,7 @@ async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
         outcome_fields_errors=outcome_fields_errors,
         input_mismatches=field_mismatches,
         actual_resource=test_outcome.actual_resource,
-        actual_ok_value=actual_ok_value,
+        actual_return=actual_return,
         missing_test_assertion=missing_test_assertion,
     )
 

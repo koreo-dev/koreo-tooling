@@ -98,7 +98,7 @@ def handle_lens(
                 logs.extend(lens_result.logs)
 
         if test_result.outcome_fields_errors or test_result.missing_test_assertion:
-            lens_result = _generate_ok_value_lens(
+            lens_result = _generate_return_value_lens(
                 doc_uri=doc_uri,
                 doc_version=doc_version,
                 test_name=test_name,
@@ -256,18 +256,18 @@ def _generate_current_resource_lens(
     )
 
 
-def _generate_ok_value_lens(
+def _generate_return_value_lens(
     doc_uri: str,
     doc_version: int,
     test_name: str,
     test_anchor: SemanticAnchor,
 ) -> LensResult:
-    ok_value_block = block_range_extract(
-        search_key="expected_ok_value",
+    return_value_block = block_range_extract(
+        search_key="expected_return_value",
         search_nodes=test_anchor.children,
         anchor=test_anchor,
     )
-    match ok_value_block:
+    match return_value_block:
         case None:
             return LensResult()
         case list(_):
@@ -275,7 +275,7 @@ def _generate_ok_value_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"Test ({test_name}) has multiple expectedOkValue blocks",
+                        message=f"Test ({test_name}) has multiple expectedReturn blocks",
                     )
                 ]
             )
@@ -283,10 +283,10 @@ def _generate_ok_value_lens(
     return LensResult(
         lens=[
             types.CodeLens(
-                range=compute_abs_range(ok_value_block, test_anchor),
+                range=compute_abs_range(return_value_block, test_anchor),
                 command=types.Command(
-                    title="Autocorrect expected okValue",
-                    command="codeLens.completeExpectedOkValue",
+                    title="Autocorrect expected return value",
+                    command="codeLens.completeExpectedReturnValue",
                     arguments=[
                         {
                             "uri": doc_uri,
@@ -432,15 +432,15 @@ def _code_lens_resource_action(test_name: str, test_result: TestResults):
     )
 
 
-def _code_lens_ok_value_action(test_name: str, test_result: TestResults):
+def _code_lens_return_value_action(test_name: str, test_result: TestResults):
     if not (test_result.outcome_fields_errors or test_result.missing_test_assertion):
         return EditResult()
 
     return _code_lens_replace_value_block_action(
         test_name=test_name,
-        label_block_key="expected_ok_value",
+        label_block_key="expected_return_value",
         value_block_key="expected_value",
-        new_value=test_result.actual_ok_value,
+        new_value=test_result.actual_return_value,
     )
 
 
@@ -590,5 +590,5 @@ LENS_COMMANDS = (
     ("codeLens.completeInputs", _code_lens_inputs_action),
     ("codeLens.completeCurrentResource", _code_lens_current_resource_action),
     ("codeLens.completeExpectedResource", _code_lens_resource_action),
-    ("codeLens.completeExpectedOkValue", _code_lens_ok_value_action),
+    ("codeLens.completeExpectedReturnValue", _code_lens_return_value_action),
 )

@@ -265,9 +265,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         strict_sub_structure_keys=True,
                         sub_structure={
                             "validators": _validators,
-                            "okValue": SemanticStructure(
-                                sub_structure=SemanticStructure(type="string")
-                            ),
+                            "return": SemanticStructure(),
                         },
                     ),
                 },
@@ -428,9 +426,9 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         ),
                     ),
                     "expectedOutcome": _validators,
-                    "expectedOkValue": SemanticStructure(
+                    "expectedReturn": SemanticStructure(
                         type="property",
-                        local_key_fn=lambda value: "expected_ok_value",
+                        local_key_fn=lambda value: "expected_return",
                         sub_structure=SemanticStructure(
                             local_key_fn=lambda value: "expected_value",
                         ),

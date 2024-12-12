@@ -256,7 +256,7 @@ def _process_outcome_errors(
     anchor: SemanticAnchor,
 ) -> list[types.Diagnostic]:
     outcome_block = block_range_extract(
-        search_key="expected_ok_value",
+        search_key="expected_return",
         search_nodes=test_spec_block.children,
         anchor=anchor,
     )
