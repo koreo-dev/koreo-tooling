@@ -13,6 +13,7 @@ from .semantics import (
     SemanticNode,
     SemanticStructure,
     Severity,
+    compute_abs_position,
 )
 
 from . import cel_semantics
@@ -180,11 +181,11 @@ def _extract_cel_semantic_info(
     modifier: list[Modifier] | None = None,
     diagnostic: NodeDiagnostic | None = None,
 ):
-    node_line = yaml_node.start_mark.line
-    node_column = yaml_node.start_mark.column
-
     last_line = last_token_abs_start.line
     last_column = last_token_abs_start.character
+
+    node_line = yaml_node.start_mark.line
+    node_column = yaml_node.start_mark.column
 
     nodes = []
 
@@ -207,15 +208,18 @@ def _extract_cel_semantic_info(
 
             eq_char_offset += 1
 
+        seed_line = node_line - last_line
         char_offset = eq_char_offset - (0 if node_line > last_line else last_column)
 
         nodes.extend(
             cel_semantics.parse(
                 cel_expression=[yaml_node.value],
                 anchor_base_pos=_compute_rel_position(
-                    line=node_line, character=node_column, relative_to=anchor_abs_start
+                    line=node_line - seed_line,
+                    character=node_column,
+                    relative_to=anchor_abs_start,
                 ),
-                seed_line=0,
+                seed_line=seed_line,
                 seed_offset=char_offset,
                 abs_offset=eq_char_offset - char_offset,
             )
@@ -256,16 +260,11 @@ def _extract_cel_semantic_info(
 
     # Go to the deepest node
     last_node = nodes[-1]
-    if last_node:
-        while True:
-            if not last_node.children:
-                break
+    while last_node and last_node.children:
+        last_node = last_node.children[-1]
 
-            last_node = last_node.children[-1]
-
-    last_abs_position = Position(
-        line=last_node.anchor_rel.line + anchor_abs_start.line,
-        character=last_node.anchor_rel.character,
+    last_abs_position = compute_abs_position(
+        rel_position=last_node.anchor_rel, abs_position=anchor_abs_start
     )
 
     block = [
@@ -334,7 +333,9 @@ def _extract_scalar_semantic_info(
                     character=char_offset,
                 ),
                 anchor_rel=_compute_rel_position(
-                    line=node_line, character=node_column, relative_to=anchor_abs_start
+                    line=node_line,
+                    character=node_column,
+                    relative_to=anchor_abs_start,
                 ),
                 length=value_len,
                 node_type=semantic_type.type,
