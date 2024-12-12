@@ -148,6 +148,7 @@ def _process_workflow(
             step_block,
             raw_config_step_spec,
             semantic_anchor,
+            implicit_inputs=('parent',)
         )
 
         has_step_error = has_step_error or config_step_result.error
@@ -199,7 +200,11 @@ def _process_workflow(
 
 
 def _process_workflow_step(
-    step, step_semantic_block, step_spec, semantic_anchor
+    step,
+    step_semantic_block,
+    step_spec,
+    semantic_anchor,
+    implicit_inputs: Sequence[str] | None = None,
 ) -> ProcessResult:
     if isinstance(step, ErrorStep):
         return ProcessResult(
@@ -223,14 +228,19 @@ def _process_workflow_step(
         if input_key
     )
 
-    raw_mapped_input = step_spec.get("mappedInput", {})
-    mapped_input_key = raw_mapped_input.get("inputKey")
 
     raw_inputs = step_spec.get("inputs", {})
 
     provided_input_keys = list(raw_inputs.keys())
+
+    if implicit_inputs:
+        provided_input_keys.extend(implicit_inputs)
+
+    raw_mapped_input = step_spec.get("mappedInput", {})
+    mapped_input_key = raw_mapped_input.get("inputKey")
     if mapped_input_key:
         provided_input_keys.append(f"{mapped_input_key}")
+
 
     has_error = False
     diagnostics: list[types.Diagnostic] = []
