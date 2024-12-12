@@ -263,7 +263,7 @@ def _generate_return_value_lens(
     test_anchor: SemanticAnchor,
 ) -> LensResult:
     return_value_block = block_range_extract(
-        search_key="expected_return_value",
+        search_key="expected_return",
         search_nodes=test_anchor.children,
         anchor=test_anchor,
     )
@@ -438,9 +438,9 @@ def _code_lens_return_value_action(test_name: str, test_result: TestResults):
 
     return _code_lens_replace_value_block_action(
         test_name=test_name,
-        label_block_key="expected_return_value",
+        label_block_key="expected_return",
         value_block_key="expected_value",
-        new_value=test_result.actual_return_value,
+        new_value=test_result.actual_return,
     )
 
 
