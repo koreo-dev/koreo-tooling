@@ -4,6 +4,7 @@ from typing import Any, Generator, NamedTuple, Sequence
 import hashlib
 import operator
 
+import yaml.parser
 import yaml.scanner
 
 from pygls.workspace import TextDocument
@@ -332,7 +333,7 @@ def _load_all_yamls(stream, Loader, doc) -> Generator[dict | YamlParseError, Any
         while loader.check_data():
             try:
                 yield loader.get_data()
-            except yaml.scanner.ScannerError as err:
+            except (yaml.scanner.ScannerError, yaml.parser.ParserError) as err:
                 problem_pos = None
                 if err.problem_mark:
                     problem_pos = types.Position(
