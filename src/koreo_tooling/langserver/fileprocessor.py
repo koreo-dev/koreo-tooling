@@ -62,6 +62,8 @@ async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
                     )
                 )
 
+                last_line = len(doc.lines) - 1
+
                 if problem_pos:
                     diagnostics.append(
                         types.Diagnostic(
@@ -73,7 +75,9 @@ async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
                                 ),
                                 end=types.Position(
                                     line=problem_pos.line,
-                                    character=len(doc.lines[problem_pos.line]),
+                                    character=len(
+                                        doc.lines[min(problem_pos.line, last_line)]
+                                    ),
                                 ),
                             ),
                         )
@@ -90,7 +94,9 @@ async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
                                 ),
                                 end=types.Position(
                                     line=context_pos.line,
-                                    character=len(doc.lines[context_pos.line]),
+                                    character=len(
+                                        doc.lines[min(context_pos.line, last_line)]
+                                    ),
                                 ),
                             ),
                         )
