@@ -12,7 +12,7 @@ class ProccessRequest(NamedTuple):
 
 
 class FileProcessor(Protocol):
-    async def __call__(self, file_uri: str, monotime: float) -> Awaitable: ...
+    async def __call__(self, file_uri: str) -> Awaitable: ...
 
 
 class HandlerFailure(Exception):
@@ -22,7 +22,7 @@ class HandlerFailure(Exception):
 async def handle_file(file_uri: str, monotime: float, file_processor: FileProcessor):
     worker_queue = _setup_worker(file_uri=file_uri, file_processor=file_processor)
 
-    response_queue = asyncio.Queue(1)
+    response_queue = asyncio.Queue(10)
 
     await worker_queue.put(ProccessRequest(monotime=monotime, response=response_queue))
 
@@ -112,13 +112,15 @@ async def _file_processor_handler(
             match work_request:
                 case KillRequest():
                     break
-                case ProccessRequest(monotime=monotime, response=response_queue):
-                    if monotime <= last_monotime:
-                        await response_queue.put(last_result)
-                        continue
+                case ProccessRequest(
+                    monotime=monotime, response=response_queue
+                ) if monotime <= last_monotime:
+                    await response_queue.put(last_result)
+                    continue
 
+                case ProccessRequest(monotime=monotime, response=response_queue):
                     try:
-                        result = await file_processor(file_uri, monotime)
+                        result = await file_processor(file_uri)
                         await response_queue.put(result)
 
                         last_monotime = monotime

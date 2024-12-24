@@ -30,16 +30,36 @@ def step_path_indexer(value) -> str:
         raise Exception(f"Failed to process '{value}', with {err}")
 
 
+def function_ref_indexer(value) -> tuple[str, str] | None:
+    try:
+        kind = None
+        name = None
+        for key, key_value in value:
+            if key.value == "kind":
+                kind = key_value.value
+
+            if key.value == "name":
+                name = key_value.value
+
+        if not (kind and name):
+            return None
+
+        return ("name", f"{kind}:{name}:ref")
+
+    except Exception as err:
+        raise Exception(f"Failed to process '{value}', with {err}")
+
+
 _api_version: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
-        index_key_fn=lambda value: f"api_version",
+        local_key_fn=lambda value: f"api_version",
         type="namespace",
     )
 )
 
 _kind: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
-        index_key_fn=lambda value: f"kind",
+        local_key_fn=lambda value: f"kind",
         type="type",
     ),
 )
@@ -53,11 +73,16 @@ _namespace: SemanticStructure = SemanticStructure(
 _function_ref: SemanticStructure = SemanticStructure(
     type="property",
     sub_structure=SemanticStructure(
+        strict_sub_structure_keys=True,
+        field_index_key_fn=function_ref_indexer,
         sub_structure={
+            "kind": SemanticStructure(
+                type="property",
+                sub_structure=SemanticStructure(type="type"),
+            ),
             "name": SemanticStructure(
                 type="property",
                 sub_structure=SemanticStructure(
-                    index_key_fn=lambda value: f"Function:{value}:ref",
                     type="function",
                 ),
             ),
@@ -267,6 +292,46 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                             "validators": _validators,
                             "return": SemanticStructure(),
                         },
+                    ),
+                },
+            ),
+        },
+    ),
+    "ValueFunction": SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure={
+                    "name": SemanticStructure(
+                        sub_structure=SemanticStructure(
+                            index_key_fn=lambda value: f"ValueFunction:{value}:def",
+                            type="function",
+                            modifier=[Modifier.definition],
+                        ),
+                    ),
+                    "namespace": _namespace,
+                },
+            ),
+            "spec": SemanticStructure(
+                strict_sub_structure_keys=True,
+                sub_structure={
+                    "validators": _validators,
+                    "constants": SemanticStructure(
+                        type="property",
+                        sub_structure=SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                type="property",
+                            ),
+                        ),
+                    ),
+                    "return": SemanticStructure(
+                        type="property",
+                        sub_structure=SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                type="property",
+                            ),
+                        ),
                     ),
                 },
             ),

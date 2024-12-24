@@ -100,6 +100,10 @@ class IndexFn(Protocol):
     def __call__(self, value: Any) -> str | None: ...
 
 
+class FieldIndexFn(Protocol):
+    def __call__(self, value: Any) -> tuple[str, str] | None: ...
+
+
 type SemanticStructureMap = dict[str, SemanticStructure]
 
 
@@ -109,6 +113,7 @@ class SemanticStructure:
     modifier: list[Modifier] | None = None
     local_key_fn: IndexFn | None = None
     index_key_fn: IndexFn | None = None
+    field_index_key_fn: FieldIndexFn | None = None
     sub_structure: SemanticStructureMap | SemanticStructure | None = None
     strict_sub_structure_keys: bool = False
 
