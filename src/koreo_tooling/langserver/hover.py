@@ -3,16 +3,24 @@ from typing import NamedTuple
 from lsprotocol import types
 
 from koreo import cache
-from koreo.result import is_not_ok, is_unwrapped_ok
+from koreo import registry
+from koreo.result import UnwrappedOutcome, is_not_ok, is_unwrapped_ok
 
 
 from koreo.function.structure import Function
-from koreo.function_test.registry import get_function_tests
+from koreo.resource_template.structure import ResourceTemplate
+from koreo.value_function.structure import ValueFunction
+
+from koreo.function_test.structure import FunctionTest
 from koreo.workflow.structure import Workflow, ErrorStep
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
-from koreo_tooling.indexing.semantics import anchor_local_key_search, compute_abs_range
+from koreo_tooling.indexing.semantics import (
+    SemanticAnchor,
+    anchor_local_key_search,
+    compute_abs_range,
+)
 from koreo_tooling.langserver.workflow import _process_workflow_step
 
 
@@ -47,7 +55,6 @@ def handle_hover(
         return _workflow_hover(
             workflow_name=name,
             resource_key_range=resource_key_range,
-            test_results=test_results,
         )
     elif kind == "Function":
         return _function_hover(
@@ -61,6 +68,16 @@ def handle_hover(
             resource_key_range=resource_key_range,
             test_results=test_results,
         )
+    elif kind == "ValueFunction":
+        return _value_function_hover(
+            function_name=name,
+            resource_key_range=resource_key_range,
+            test_results=test_results,
+        )
+    elif kind == "ResourceTemplate":
+        return _resource_template_hover(
+            template_name=name, resource_key_range=resource_key_range
+        )
 
     return HoverResult()
 
@@ -68,7 +85,6 @@ def handle_hover(
 def _workflow_hover(
     workflow_name: str,
     resource_key_range: types.Range,
-    test_results: dict[str, TestResults],
 ) -> HoverResult:
     hover_content = [f"# {workflow_name}"]
 
@@ -115,7 +131,7 @@ def _workflow_step_hover(
     if not cached or not cached.system_data or "anchor" not in cached.system_data:
         return HoverResult()
 
-    step_key, step_range = local_resource
+    step_key, _ = local_resource
 
     parts = step_key.split(":")
     if not len(parts) == 2:
@@ -175,24 +191,70 @@ def _function_hover(
     resource_key_range: types.Range,
     test_results: dict[str, TestResults],
 ):
-    hover_content = [f"# {function_name}"]
-
     function = cache.get_resource_from_cache(
         resource_class=Function, cache_key=function_name
     )
 
-    if is_unwrapped_ok(function):
-        hover_content.append("*Ready*")
+    function_resource = registry.Resource(resource_type=Function, name=function_name)
 
+    return _common_function_hover(
+        function_name=function_name,
+        function=function,
+        registry_resource=function_resource,
+        resource_key_range=resource_key_range,
+        test_results=test_results,
+    )
+
+
+def _value_function_hover(
+    function_name: str,
+    resource_key_range: types.Range,
+    test_results: dict[str, TestResults],
+):
+    function = cache.get_resource_from_cache(
+        resource_class=ValueFunction, cache_key=function_name
+    )
+
+    function_resource = registry.Resource(
+        resource_type=ValueFunction, name=function_name
+    )
+
+    return _common_function_hover(
+        function_name=function_name,
+        function=function,
+        registry_resource=function_resource,
+        resource_key_range=resource_key_range,
+        test_results=test_results,
+    )
+
+
+def _common_function_hover(
+    function_name: str,
+    function: UnwrappedOutcome[Function | ValueFunction] | None,
+    registry_resource: registry.Resource,
+    resource_key_range: types.Range,
+    test_results: dict[str, TestResults],
+):
+    hover_content = [f"# {function_name}"]
+
+    if function is None:
+        hover_content.append("*Not cached*")
+    elif is_unwrapped_ok(function):
+        hover_content.append("Structure is OK")
     else:
         hover_content.append("Function not ready")
         hover_content.append(f"{function.message}")
 
-    tests = {
-        test_name: test_results[test_name]
-        for test_name in get_function_tests(function_name)
-        if test_name in test_results
-    }
+    tests = {}
+    subscribers = registry.get_subscribers(registry_resource)
+    for subscriber in subscribers:
+        if subscriber.resource_type != FunctionTest.__qualname__:
+            continue
+
+        if subscriber.name not in test_results:
+            continue
+
+        tests[subscriber.name] = test_results[subscriber.name]
 
     if tests:
         hover_content.append("## Test Results")
@@ -281,6 +343,37 @@ def _function_test_hover(
                     f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
                 )
             hover_content.append("\n")
+
+    return HoverResult(
+        hover=types.Hover(
+            contents=types.MarkupContent(
+                kind=types.MarkupKind.Markdown,
+                value="\n".join(hover_content),
+            ),
+            range=resource_key_range,
+        )
+    )
+
+
+def _resource_template_hover(
+    template_name: str,
+    resource_key_range: types.Range,
+) -> HoverResult:
+    hover_content = [f"# {template_name}"]
+
+    resource_template = cache.get_resource_from_cache(
+        resource_class=ResourceTemplate, cache_key=template_name
+    )
+
+    if not resource_template:
+        hover_content.append(f"ResourceTemplate {template_name} not in Koreo Cache")
+
+    elif not is_unwrapped_ok(resource_template):
+        hover_content.append("Resource template not ready")
+        hover_content.append(f"{resource_template.message}")
+
+    else:
+        hover_content.append("ResourceTemplate prepared successfully.")
 
     return HoverResult(
         hover=types.Hover(

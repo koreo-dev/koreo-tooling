@@ -1,10 +1,12 @@
 from typing import Sequence
+import copy
 
 from yaml.nodes import Node, MappingNode, SequenceNode
 
 
 from .koreo_semantics import ALL
 from .semantics import (
+    FieldIndexFn,
     Modifier,
     NodeDiagnostic,
     Position,
@@ -42,6 +44,7 @@ def extract_semantic_structure_info(
             doc=doc,
             semantic_type=clean_semantic_type.sub_structure,
             strict_sub_structure_keys=clean_semantic_type.strict_sub_structure_keys,
+            field_index_key_fn=clean_semantic_type.field_index_key_fn,
         )
 
     if isinstance(yaml_node, SequenceNode):
@@ -69,6 +72,7 @@ def _extract_map_structure_info(
     doc,
     semantic_type: dict[str, SemanticStructure] | SemanticStructure | None,
     strict_sub_structure_keys: bool = False,
+    field_index_key_fn: FieldIndexFn | None = None,
 ) -> tuple[list[SemanticNode], Position]:
     semantic_nodes = []
     new_last_start = last_token_abs_start
@@ -79,6 +83,12 @@ def _extract_map_structure_info(
         semantic_type_map = semantic_type
     elif semantic_type:
         semantic_type_map = {ALL: semantic_type}
+
+    if field_index_key_fn and (index := field_index_key_fn(value=yaml_node.value)):
+        sub_index_field, sub_index_value = index
+    else:
+        sub_index_field = None
+        sub_index_value = None
 
     for key, value in yaml_node.value:
         node_diagnostic = None
@@ -130,6 +140,15 @@ def _extract_map_structure_info(
                     sub_structure=key_semantic_type.sub_structure,
                     strict_sub_structure_keys=key_semantic_type.strict_sub_structure_keys,
                 )
+
+        if (
+            sub_index_field
+            and sub_index_field == key.value
+            and not value_semantic_type.index_key_fn
+        ):
+            value_semantic_type = copy.replace(
+                value_semantic_type, index_key_fn=lambda value: sub_index_value
+            )
 
         value_semantic_nodes, new_last_start = _extract_value_semantic_info(
             anchor_abs_start=anchor_abs_start,

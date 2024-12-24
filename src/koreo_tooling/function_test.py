@@ -6,10 +6,18 @@ from lsprotocol import types
 from celpy import celtypes
 
 from koreo import cache
-from koreo.result import DepSkip, Ok, PermFail, Retry, Skip, is_unwrapped_ok
+from koreo import registry
+from koreo.result import (
+    DepSkip,
+    Ok,
+    PermFail,
+    Retry,
+    Skip,
+    UnwrappedOutcome,
+    is_unwrapped_ok,
+)
 
 
-from koreo.function_test.registry import get_function_tests
 from koreo.function_test.run import run_function_test
 from koreo.function_test.structure import FunctionTest
 
@@ -42,11 +50,20 @@ class TestResults(NamedTuple):
 
 async def run_function_tests(
     tests_to_run: set[str],
-    functions_to_test: set[str],
+    functions_to_test: dict[type, str],
 ) -> tuple[dict[str, TestResults], list[types.LogMessageParams]]:
     function_tests = set[str]()
-    for function_name in functions_to_test:
-        function_tests.update(get_function_tests(function_name))
+    for function_type, function_type_tests in functions_to_test.items():
+        for function_name in function_type_tests:
+            function_resource = registry.Resource(
+                resource_type=function_type, name=function_name
+            )
+            subscribers = registry.get_subscribers(function_resource)
+            for subscriber in subscribers:
+                if subscriber.resource_type != FunctionTest.__qualname__:
+                    continue
+
+                function_tests.add(subscriber.name)
 
     all_tests = tests_to_run.union(function_tests)
 
@@ -90,7 +107,9 @@ async def run_function_tests(
     return (results, logs)
 
 
-async def _run_function_test(test_name: str, test: FunctionTest) -> TestResults:
+async def _run_function_test(
+    test_name: str, test: UnwrappedOutcome[FunctionTest]
+) -> TestResults:
     if not is_unwrapped_ok(test):
         return TestResults(
             success=False,

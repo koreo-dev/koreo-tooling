@@ -1,4 +1,5 @@
 from __future__ import annotations
+import hashlib
 
 from yaml.loader import SafeLoader
 from yaml.nodes import Node
@@ -35,6 +36,11 @@ class IndexingLoader(SafeLoader):
         if not yaml_doc:
             self.doc_count = self.doc_count + 1
             return
+
+        start_line = node.start_mark.line
+        end_line = node.end_mark.line
+        block_value = ("\n".join(self.doc.lines[start_line:end_line])).encode()
+        block_hash = hashlib.md5(block_value, usedforsecurity=False).hexdigest()
 
         doc_kind = yaml_doc.get("kind")
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
@@ -79,4 +85,4 @@ class IndexingLoader(SafeLoader):
 
         self.doc_count = self.doc_count + 1
 
-        return yaml_doc
+        return block_hash, yaml_doc

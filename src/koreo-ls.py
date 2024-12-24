@@ -1,38 +1,44 @@
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable, NamedTuple, Sequence
-import os
+import asyncio
 import time
 
-os.environ["KOREO_DEV_TOOLING"] = "true"
+import logging
 
+logger = logging.getLogger("koreo.ls")
 
-from pygls.lsp.server import LanguageServer
-from pygls.workspace import TextDocument
 from lsprotocol import types
+from pygls.lsp.server import LanguageServer
 
-from koreo import cache
-from koreo.function.structure import Function
-from koreo.function_test.structure import FunctionTest
-from koreo.workflow.structure import Workflow
-
-from koreo_tooling import constants
-from koreo_tooling.function_test import TestResults
-from koreo_tooling.indexing import TokenModifiers, TokenTypes, SemanticAnchor
-
-from koreo_tooling.indexing.semantics import generate_local_range_index
-
-from koreo_tooling.langserver.codelens import LENS_COMMANDS, EditResult, handle_lens
-from koreo_tooling.langserver.fileprocessor import process_file
-from koreo_tooling.langserver.function_test import run_function_tests
-from koreo_tooling.langserver.hover import handle_hover
-from koreo_tooling.langserver.workflow import process_workflows
-from koreo_tooling.langserver.orchestrator import handle_file, shutdown_handlers
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1alpha8"
 
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
+
+from koreo import cache
+from koreo import registry
+from koreo.function.structure import Function
+from koreo.function_test.structure import FunctionTest
+from koreo.resource_template.structure import ResourceTemplate
+from koreo.value_function.structure import ValueFunction
+from koreo.workflow.structure import Workflow
+
+from koreo_tooling import constants
+from koreo_tooling.function_test import TestResults
+from koreo_tooling.indexing import TokenModifiers, TokenTypes, SemanticAnchor
+from koreo_tooling.indexing.semantics import generate_local_range_index
+from koreo_tooling.langserver.codelens import LENS_COMMANDS, EditResult, handle_lens
+from koreo_tooling.langserver.fileprocessor import (
+    ProccessResults,
+    SemanticRangeIndex,
+    process_file,
+)
+from koreo_tooling.langserver.function_test import run_function_tests
+from koreo_tooling.langserver.hover import handle_hover
+from koreo_tooling.langserver.orchestrator import handle_file, shutdown_handlers
+from koreo_tooling.langserver.workflow import process_workflows
 
 
 @server.feature(types.TEXT_DOCUMENT_COMPLETION)
@@ -44,6 +50,8 @@ async def completions(params: types.CompletionParams):
     )
 
     # TODO: Add awareness of the context to surface the correct completions.
+    # Use _lookup_current_line_info to find the context, then offer suitable
+    # suggestion, probably similar to hover.
 
     items = []
 
@@ -58,6 +66,7 @@ async def completions(params: types.CompletionParams):
                 )
             )
 
+    # TODO: If we're confident about where they are, set this as is_incomplete=False
     return types.CompletionList(is_incomplete=True, items=items)
 
 
@@ -98,7 +107,7 @@ def inlay_hints(params: types.InlayHintParams):
     end_line = params.range.end.line
 
     visible_tests = []
-    for path, maybe_resource, maybe_range in __SEMANTIC_RANGE_INDEX:
+    for path, maybe_resource, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
         if path != doc.path:
             continue
 
@@ -227,6 +236,8 @@ _register_lens_commands(LENS_COMMANDS)
 
 @server.feature(types.WORKSPACE_DID_CHANGE_CONFIGURATION)
 async def change_workspace_config(params):
+    # TODO: This should probably load a config file that enumerates
+    # namespaces or something.
 
     suffixes = ("yaml", "yml", "koreo")
 
@@ -237,9 +248,9 @@ async def change_workspace_config(params):
             for match in path.rglob(f"*.{suffix}"):
 
                 await handle_file(
-                    file_uri=f"{match}",
+                    file_uri=f"file://{match}",
                     monotime=time.monotonic(),
-                    file_processor=_handle_file,
+                    file_processor=_parse_file,
                 )
 
 
@@ -249,7 +260,7 @@ async def open_processor(params):
     await handle_file(
         file_uri=params.text_document.uri,
         monotime=time.monotonic(),
-        file_processor=_handle_file,
+        file_processor=_parse_file,
     )
 
 
@@ -259,7 +270,7 @@ async def change_processor(params):
     await handle_file(
         file_uri=params.text_document.uri,
         monotime=time.monotonic(),
-        file_processor=_handle_file,
+        file_processor=_parse_file,
     )
 
 
@@ -275,7 +286,7 @@ class CurrentLineInfo(NamedTuple):
 
 def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
     possible_match: tuple[str, types.Range] | None = None
-    for maybe_path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
+    for maybe_path, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
         if maybe_path != path:
             continue
 
@@ -304,6 +315,10 @@ def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
     elif match := constants.FUNCTION_TEST_ANCHOR.match(possible_match.key):
         cached = cache.get_resource_system_data_from_cache(
             resource_class=FunctionTest, cache_key=match.group("name")
+        )
+    elif match := constants.VALUE_FUNCTION_ANCHOR.match(possible_match.key):
+        cached = cache.get_resource_system_data_from_cache(
+            resource_class=ValueFunction, cache_key=match.group("name")
         )
     else:
         return CurrentLineInfo()
@@ -339,7 +354,7 @@ async def goto_definitiion(params: types.DefinitionParams):
     search_key = f"{resource_key_root}:def"
 
     definitions = []
-    for path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
+    for path, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
         if not isinstance(maybe_range, types.Range):
             # TODO: Get anchors setting a range
             continue
@@ -366,7 +381,7 @@ async def goto_reference(params: types.ReferenceParams):
 
     references: list[types.Location] = []
     definitions: list[types.Location] = []
-    for path, maybe_key, maybe_range in __SEMANTIC_RANGE_INDEX:
+    for path, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
         if not isinstance(maybe_range, types.Range):
             # TODO: Get anchors setting a range
             continue
@@ -387,11 +402,13 @@ async def goto_reference(params: types.ReferenceParams):
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
     if not doc.path in __SEMANTIC_TOKEN_INDEX:
+        # Once processing has finished, a refresh will be issued.
         await handle_file(
             file_uri=params.text_document.uri,
             monotime=time.monotonic(),
-            file_processor=_handle_file,
+            file_processor=_parse_file,
         )
+        return
 
     tokens = __SEMANTIC_TOKEN_INDEX[doc.path]
     return types.SemanticTokens(data=tokens)
@@ -405,39 +422,138 @@ async def shutdown(*_, **__):
         outfile.write("shut down complete")
 
 
-async def _handle_file(doc_uri: str, monotime: float):
+class ParseNotification:
+    pass
+
+
+async def _parse_file(doc_uri: str):
     doc = server.workspace.get_text_document(doc_uri)
 
-    diagnostics = []
+    file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
+    parse_notification_resource = registry.Resource(
+        resource_type=ParseNotification, name=doc_uri
+    )
+    if file_analyzer_resource not in _ANALYZERS:
+        registry.register(registerer=file_analyzer_resource)
+        registry.subscribe(
+            subscriber=file_analyzer_resource, resource=parse_notification_resource
+        )
+
+        analysis_task = asyncio.create_task(
+            _analyzer_manager(file_analyzer_resource), name=doc_uri
+        )
+        _ANALYZERS[file_analyzer_resource] = analysis_task
+        analysis_task.add_done_callback(
+            lambda _: _ANALYZERS.__delitem__(file_analyzer_resource)
+        )
 
     try:
-        processing_result = await _process_file(doc=doc, monotime=monotime)
-        if processing_result.diagnostics:
-            diagnostics.extend(processing_result.diagnostics)
+        processing_result = await process_file(doc=doc)
+
+        if processing_result.logs:
+            for log in processing_result.logs:
+                server.window_log_message(params=log)
+
     except Exception as err:
         return
 
+    __PARSING_RESULT[doc_uri] = (doc.version, processing_result)
+
+    registry.notify_subscribers(
+        notifier=parse_notification_resource, event_time=time.monotonic()
+    )
+
+
+async def _run_doc_analysis(doc_uri: str):
+    parse_info = __PARSING_RESULT.get(doc_uri)
+    if not parse_info:
+        return
+
+    doc_version, parsing_result = parse_info
+
+    await _analyze_file(
+        doc_uri=doc_uri,
+        doc_version=doc_version,
+        parsing_result=parsing_result,
+    )
+
+
+async def _analyze_file(
+    doc_uri: str,
+    doc_version: int | None,
+    parsing_result: ProccessResults,
+):
+    doc = server.workspace.get_text_document(doc_uri)
+
+    if doc_version != doc.version:
+        return
+
+    diagnostics: list[types.Diagnostic] = []
+
+    if parsing_result.diagnostics:
+        diagnostics.extend(parsing_result.diagnostics)
+
     diagnostics.extend(
         _process_workflows(
-            path=doc.path, semantic_range_index=processing_result.semantic_range_index
+            path=doc.path, semantic_range_index=parsing_result.semantic_range_index
         )
     )
 
     test_diagnostics, test_results = await _run_function_test(
-        semantic_range_index=processing_result.semantic_range_index
+        semantic_range_index=parsing_result.semantic_range_index
     )
     diagnostics.extend(test_diagnostics)
 
+    old_resource_defs: dict[registry.Resource, str | None] = _get_defined_resources(
+        [
+            range_index
+            for range_index in __SEMANTIC_RANGE_INDEX
+            if range_index.path == doc.path
+        ]
+    )
     _reset_file_state(doc.path)
 
-    if processing_result.semantic_tokens:
-        __SEMANTIC_TOKEN_INDEX[doc.path] = processing_result.semantic_tokens
+    if parsing_result.semantic_tokens:
+        __SEMANTIC_TOKEN_INDEX[doc.path] = parsing_result.semantic_tokens
     else:
         # Will this break anything?
         __SEMANTIC_TOKEN_INDEX[doc.path] = []
 
-    if processing_result.semantic_range_index:
-        __SEMANTIC_RANGE_INDEX.extend(processing_result.semantic_range_index)
+    if parsing_result.semantic_range_index:
+        __SEMANTIC_RANGE_INDEX.extend(parsing_result.semantic_range_index)
+        used_resources = _get_used_resources(parsing_result.semantic_range_index)
+        current_resource_defs: dict[registry.Resource, str | None] = (
+            _get_defined_resources(parsing_result.semantic_range_index)
+        )
+    else:
+        used_resources: list[registry.Resource] = []
+        current_resource_defs: dict[registry.Resource, str | None] = {}
+
+    file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
+    used_resources.append(
+        registry.Resource(resource_type=ParseNotification, name=doc_uri)
+    )
+    registry.subscribe_only_to(
+        subscriber=file_analyzer_resource, resources=used_resources
+    )
+    if file_analyzer_resource not in _ANALYZERS:
+        analysis_task = asyncio.create_task(
+            _analyzer_manager(file_analyzer_resource), name=doc_uri
+        )
+        _ANALYZERS[file_analyzer_resource] = analysis_task
+        analysis_task.add_done_callback(
+            lambda _: _ANALYZERS.__delitem__(file_analyzer_resource)
+        )
+
+    deleted_resource_defs = set(old_resource_defs.keys()).difference(
+        current_resource_defs.keys()
+    )
+    for deleted_resource in deleted_resource_defs:
+        del_result = await cache.delete_from_cache(
+            resource_class=deleted_resource.resource_type,
+            cache_key=deleted_resource.name,
+            version=old_resource_defs[deleted_resource],
+        )
 
     __TEST_RESULTS[doc.path] = test_results
 
@@ -445,19 +561,105 @@ async def _handle_file(doc_uri: str, monotime: float):
 
     server.text_document_publish_diagnostics(
         types.PublishDiagnosticsParams(
-            uri=doc.uri, version=doc.version, diagnostics=diagnostics
+            uri=doc_uri, version=doc_version, diagnostics=diagnostics
         )
     )
 
 
+class FileAnalyzer: ...
+
+
+_ANALYZERS: dict[registry.Resource[FileAnalyzer], asyncio.Task] = {}
+
+
+async def _analyzer_manager(file_analyzer_resource: registry.Resource):
+    queue = registry.register(registerer=file_analyzer_resource)
+    last_time = 0
+    while True:
+        event = await queue.get()
+        try:
+            match event:
+                case registry.Kill():
+                    logger.info(f"Killing Analysis Manager ({file_analyzer_resource})")
+                    break
+                case registry.ResourceEvent(_, event_time):
+                    await _run_doc_analysis(
+                        doc_uri=file_analyzer_resource.name,
+                    )
+                    server.workspace_inlay_hint_refresh(None)
+                    server.workspace_code_lens_refresh(None)
+                    last_time = event_time
+                    continue
+        finally:
+            queue.task_done()
+
+
+def _get_defined_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
+    definitions = (
+        (match.group("kind"), match.group("name"), version)
+        for match, version in (
+            (constants.RESOURCE_DEF.match(range_index.name), range_index.version)
+            for range_index in semantic_range_index
+        )
+        if match
+    )
+
+    resources = dict[registry.Resource, str | None]()
+    for definition in definitions:
+        match definition:
+            case ("Function", name, version):
+                resource_key = registry.Resource(resource_type=Function, name=name)
+            case ("FunctionTest", name, version):
+                resource_key = registry.Resource(resource_type=FunctionTest, name=name)
+            case ("Workflow", name, version):
+                resource_key = registry.Resource(resource_type=Workflow, name=name)
+            case ("ResourceTemplate", name, version):
+                resource_key = registry.Resource(
+                    resource_type=ResourceTemplate, name=name
+                )
+            case _:
+                continue
+
+        resources[resource_key] = version
+    return resources
+
+
+def _get_used_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
+    references = set(
+        (match.group("kind"), match.group("name"))
+        for match in (
+            constants.TOP_LEVEL_RESOURCE.match(range_index.name)
+            for range_index in semantic_range_index
+        )
+        if match
+    )
+
+    resources: list[registry.Resource] = []
+    for reference in references:
+        match reference:
+            case ("Function", name):
+                resources.append(registry.Resource(resource_type=Function, name=name))
+            case ("FunctionTest", name):
+                resources.append(
+                    registry.Resource(resource_type=FunctionTest, name=name)
+                )
+            case ("Workflow", name):
+                resources.append(registry.Resource(resource_type=Workflow, name=name))
+            case ("ResourceTemplate", name):
+                resources.append(
+                    registry.Resource(resource_type=ResourceTemplate, name=name)
+                )
+    return resources
+
+
 def _process_workflows(
-    path: str, semantic_range_index: Sequence[tuple[str, str, types.Range]] | None
+    path: str, semantic_range_index: Sequence[SemanticRangeIndex] | None
 ) -> list[types.Diagnostic]:
     if not semantic_range_index:
         return []
 
     workflows = []
-    for _, resource_key, resource_range in semantic_range_index:
+    for _, resource_key, resource_range, _ in semantic_range_index:
         match = constants.WORKFLOW_NAME.match(resource_key)
         if not match:
             continue
@@ -468,26 +670,35 @@ def _process_workflows(
 
 
 async def _run_function_test(
-    semantic_range_index: Sequence[tuple[str, str, types.Range]] | None,
+    semantic_range_index: Sequence[SemanticRangeIndex] | None,
 ) -> tuple[list[types.Diagnostic], dict[str, TestResults]]:
     if not semantic_range_index:
         return ([], {})
 
     test_range_map = {}
     tests_to_run = set[str]()
-    functions_to_test = set[str]()
+    plain_functions_to_test = set[str]()
+    value_functions_to_test = set[str]()
 
-    for _, resource_key, resource_range in semantic_range_index:
+    for _, resource_key, resource_range, _ in semantic_range_index:
         if match := constants.FUNCTION_TEST_NAME.match(resource_key):
             test_name = match.group("name")
             tests_to_run.add(test_name)
             test_range_map[test_name] = resource_range
 
         elif match := constants.FUNCTION_NAME.match(resource_key):
-            functions_to_test.add(match.group("name"))
+            plain_functions_to_test.add(match.group("name"))
 
-    if not (tests_to_run or functions_to_test):
+        elif match := constants.VALUE_FUNCTION_NAME.match(resource_key):
+            value_functions_to_test.add(match.group("name"))
+
+    if not (tests_to_run or plain_functions_to_test or value_functions_to_test):
         return ([], {})
+
+    functions_to_test = {
+        Function: plain_functions_to_test,
+        ValueFunction: value_functions_to_test,
+    }
 
     test_results = await run_function_tests(
         tests_to_run=tests_to_run,
@@ -509,18 +720,19 @@ async def _run_function_test(
     return ([], results)
 
 
+__PARSING_RESULT: dict[str, tuple[int | None, ProccessResults]] = {}
 __TEST_RESULTS = defaultdict[str, dict[str, TestResults]](dict)
 __SEMANTIC_TOKEN_INDEX: dict[str, Sequence[int]] = {}
-__SEMANTIC_RANGE_INDEX: list[tuple[str, str, types.Range]] = []
+__SEMANTIC_RANGE_INDEX: list[SemanticRangeIndex] = []
 
 
 def _reset_file_state(path_key: str):
     global __SEMANTIC_RANGE_INDEX
 
     __SEMANTIC_RANGE_INDEX = [
-        (path, node_key, node_range)
-        for path, node_key, node_range in __SEMANTIC_RANGE_INDEX
-        if path != path_key
+        range_index
+        for range_index in __SEMANTIC_RANGE_INDEX
+        if range_index.path != path_key
     ]
 
     if path_key in __SEMANTIC_TOKEN_INDEX:
@@ -530,22 +742,12 @@ def _reset_file_state(path_key: str):
         del __TEST_RESULTS[path_key]
 
 
-async def _process_file(doc: TextDocument, monotime: float):
-    results = await process_file(doc=doc, monotime=monotime)
-
-    if results.logs:
-        for log in results.logs:
-            server.window_log_message(params=log)
-
-    return results
-
-
 def _check_for_duplicate_resources(path: str):
     counts: defaultdict[str, tuple[int, bool, list[tuple]]] = defaultdict(
         lambda: (0, False, [])
     )
 
-    for resource_path, resource_key, resource_range in __SEMANTIC_RANGE_INDEX:
+    for resource_path, resource_key, resource_range, _ in __SEMANTIC_RANGE_INDEX:
         if not constants.RESOURCE_DEF.match(resource_key):
             continue
 

@@ -36,6 +36,16 @@ def process_workflows(
             )
             continue
 
+        if not is_unwrapped_ok(cached_resource.resource):
+            diagnostics.append(
+                types.Diagnostic(
+                    message=f"Workflow ({koreo_cache_key}) is not ready ({cached_resource.resource.message}).",
+                    severity=types.DiagnosticSeverity.Error,
+                    range=resource_range,
+                )
+            )
+            continue
+
         workflow_result = _process_workflow(
             path=path,
             resource_range=resource_range,
@@ -148,7 +158,7 @@ def _process_workflow(
             step_block,
             raw_config_step_spec,
             semantic_anchor,
-            implicit_inputs=('parent',)
+            implicit_inputs=("parent",),
         )
 
         has_step_error = has_step_error or config_step_result.error
@@ -228,7 +238,6 @@ def _process_workflow_step(
         if input_key
     )
 
-
     raw_inputs = step_spec.get("inputs", {})
 
     provided_input_keys = list(raw_inputs.keys())
@@ -240,7 +249,6 @@ def _process_workflow_step(
     mapped_input_key = raw_mapped_input.get("inputKey")
     if mapped_input_key:
         provided_input_keys.append(f"{mapped_input_key}")
-
 
     has_error = False
     diagnostics: list[types.Diagnostic] = []

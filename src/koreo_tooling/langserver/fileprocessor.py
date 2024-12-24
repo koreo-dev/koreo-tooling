@@ -1,11 +1,10 @@
-from asyncio import Semaphore
 from functools import reduce
 from typing import Any, Generator, NamedTuple, Sequence
-import hashlib
 import operator
 
 import yaml.parser
 import yaml.scanner
+import yaml.loader
 
 from pygls.workspace import TextDocument
 from lsprotocol import types
@@ -28,24 +27,26 @@ from koreo_tooling.langserver.rangers import block_range_extract
 
 TypeIndex = {key: idx for idx, key in enumerate(TokenTypes)}
 
-__PREPARE_SEMS: dict[str, Semaphore] = {
-    kind: Semaphore(1) for kind in constants.PREPARE_MAP.keys()
-}
+
+class SemanticRangeIndex(NamedTuple):
+    path: str
+    name: str
+    range: types.Range
+    version: str | None = None
 
 
 class ProccessResults(NamedTuple):
     semantic_tokens: Sequence[int] | None = None
-    semantic_range_index: Sequence[tuple[str, str, types.Range]] | None = None
+    semantic_range_index: Sequence[SemanticRangeIndex] | None = None
     logs: Sequence[types.LogMessageParams] | None = None
     diagnostics: Sequence[types.Diagnostic] | None = None
 
 
-async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
+async def process_file(doc: TextDocument) -> ProccessResults:
     path = doc.path
-    pash = hashlib.md5(path.encode(), usedforsecurity=False).hexdigest()
 
     semantic_tokens: list[int] = []
-    semantic_range_index: list[tuple[str, str, types.Range]] = []
+    semantic_range_index: list[SemanticRangeIndex] = []
     logs: list[types.LogMessageParams] = []
     diagnostics: list[types.Diagnostic] = []
 
@@ -104,23 +105,31 @@ async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
 
                 break
 
-        block_result = await _process_block(
-            path=path, yaml_block=yaml_block, doc=doc, pash=pash, monotime=monotime
-        )
+            case (block_hash, block_doc):
+                block_result = await _process_block(
+                    path=path,
+                    yaml_block=block_doc,
+                    doc=doc,
+                    block_hash=block_hash,
+                )
 
-        if block_result.logs:
-            logs.extend(block_result.logs)
+                if block_result.logs:
+                    logs.extend(block_result.logs)
 
-        if block_result.semantic_tokens:
-            semantic_tokens.extend(
-                value for token in block_result.semantic_tokens for value in token
-            )
+                if block_result.semantic_tokens:
+                    semantic_tokens.extend(
+                        value
+                        for token in block_result.semantic_tokens
+                        for value in token
+                    )
 
-        if block_result.semantic_range_index:
-            semantic_range_index.extend(block_result.semantic_range_index)
+                if block_result.semantic_range_index:
+                    semantic_range_index.extend(block_result.semantic_range_index)
 
-        if block_result.diagnostics:
-            diagnostics.extend(block_result.diagnostics)
+                    # TODO: Extract def and tag version in index?
+
+                if block_result.diagnostics:
+                    diagnostics.extend(block_result.diagnostics)
 
     return ProccessResults(
         semantic_range_index=semantic_range_index,
@@ -132,15 +141,13 @@ async def process_file(doc: TextDocument, monotime: float) -> ProccessResults:
 
 class BlockResults(NamedTuple):
     semantic_tokens: Generator[tuple[int], None, None] | None = None
-    semantic_range_index: Generator[tuple[str, str, types.Range], None, None] | None = (
-        None
-    )
+    semantic_range_index: Generator[SemanticRangeIndex, None, None] | None = None
     logs: Sequence[types.LogMessageParams] | None = None
     diagnostics: Sequence[types.Diagnostic] | None = None
 
 
 async def _process_block(
-    path: str, yaml_block: dict, doc: TextDocument, pash: str, monotime: float
+    path: str, yaml_block: dict, doc: TextDocument, block_hash: str
 ) -> BlockResults:
     try:
         api_version = yaml_block.get("apiVersion")
@@ -157,7 +164,7 @@ async def _process_block(
 
     semantic_anchor: SemanticAnchor | None = yaml_block.get(STRUCTURE_KEY)
     if not semantic_anchor:
-        return BlockResults(
+        block_result = BlockResults(
             logs=[
                 types.LogMessageParams(
                     type=types.MessageType.Info,
@@ -165,9 +172,12 @@ async def _process_block(
                 )
             ]
         )
+        return block_result
 
     semantic_range_index = (
-        (path, node_key, node_range)
+        SemanticRangeIndex(
+            path=path, name=node_key, range=node_range, version=block_hash
+        )
         for node_key, node_range in generate_key_range_index(semantic_anchor)
     )
 
@@ -212,11 +222,12 @@ async def _process_block(
             )
         )
 
-        return BlockResults(
+        block_result = BlockResults(
             semantic_range_index=semantic_range_index,
             semantic_tokens=semantic_tokens,
             diagnostics=diagnostics,
         )
+        return block_result
 
     if kind not in constants.PREPARE_MAP and kind != constants.CRD_KIND:
         kind_version_block = block_range_extract(
@@ -240,17 +251,18 @@ async def _process_block(
                 range=resource_range,
             )
         )
-        return BlockResults(
+        block_result = BlockResults(
             semantic_range_index=semantic_range_index,
             semantic_tokens=semantic_tokens,
             diagnostics=diagnostics,
         )
+        return block_result
 
     resource_class, preparer = constants.PREPARE_MAP[kind]
     metadata = yaml_block.get("metadata", {})
     name = metadata.get("name", "missing-name")
 
-    resource_version = f"{pash}:{monotime}"
+    resource_version = f"{block_hash}"
     metadata["resourceVersion"] = resource_version
 
     raw_spec = yaml_block.get("spec", {})
@@ -261,36 +273,13 @@ async def _process_block(
     }
 
     try:
-        async with __PREPARE_SEMS[kind]:
-            cached = cache.get_resource_system_data_from_cache(
-                resource_class=resource_class, cache_key=name
-            )
-            if not cached:
-                await cache.prepare_and_cache(
-                    resource_class=resource_class,
-                    preparer=preparer,
-                    metadata=metadata,
-                    spec=raw_spec,
-                    _system_data=cached_system_data,
-                )
-            else:
-                cached_version = cached.resource_version
-                cache_pash, cached_monotime = cached_version.split(":")
-                if cache_pash == pash and float(cached_monotime) >= monotime:
-                    logs.append(
-                        types.LogMessageParams(
-                            type=types.MessageType.Info,
-                            message=f"Stale resource update! cached: {cached_version}, attempted: {resource_version}",
-                        )
-                    )
-                else:
-                    await cache.prepare_and_cache(
-                        resource_class=resource_class,
-                        preparer=preparer,
-                        metadata=metadata,
-                        spec=raw_spec,
-                        _system_data=cached_system_data,
-                    )
+        await cache.prepare_and_cache(
+            resource_class=resource_class,
+            preparer=preparer,
+            metadata=metadata,
+            spec=raw_spec,
+            _system_data=cached_system_data,
+        )
 
     except Exception as err:
         resource_name_label = block_range_extract(
@@ -315,12 +304,13 @@ async def _process_block(
             )
         )
 
-    return BlockResults(
+    block_result = BlockResults(
         semantic_range_index=semantic_range_index,
         semantic_tokens=semantic_tokens,
         diagnostics=diagnostics,
         logs=logs,
     )
+    return block_result
 
 
 class YamlParseError(NamedTuple):
@@ -329,7 +319,9 @@ class YamlParseError(NamedTuple):
     context_pos: types.Position | None
 
 
-def _load_all_yamls(stream, Loader, doc) -> Generator[dict | YamlParseError, Any, None]:
+def _load_all_yamls(
+    stream, Loader, doc
+) -> Generator[tuple[str, dict] | YamlParseError, Any, None]:
     """
     Parse all YAML documents in a stream
     and produce corresponding Python objects.
