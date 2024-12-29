@@ -1,4 +1,4 @@
-from typing import Any, Literal, NamedTuple
+from typing import Any, Literal, NamedTuple, Sequence
 import asyncio
 
 from lsprotocol import types
@@ -50,7 +50,7 @@ class TestResults(NamedTuple):
 
 async def run_function_tests(
     tests_to_run: set[str],
-    functions_to_test: dict[type, str],
+    functions_to_test: dict[type, Sequence[str]],
 ) -> tuple[dict[str, TestResults], list[types.LogMessageParams]]:
     function_tests = set[str]()
     for function_type, function_type_tests in functions_to_test.items():

@@ -126,6 +126,42 @@ _managed_resource: SemanticStructure = SemanticStructure(
     },
 )
 
+_api_config: SemanticStructure = SemanticStructure(
+    type="property",
+    strict_sub_structure_keys=True,
+    sub_structure={
+        "apiVersion": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="namespace"),
+        ),
+        "kind": SemanticStructure(
+            type="parameter", sub_structure=SemanticStructure(type="type")
+        ),
+        "plural": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(
+                type="number",
+            ),
+        ),
+        "namespaced": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="number"),
+        ),
+        "owned": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="number"),
+        ),
+        "name": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="string"),
+        ),
+        "namespace": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="string"),
+        ),
+    },
+)
+
 _behavior: SemanticStructure = SemanticStructure(
     strict_sub_structure_keys=True,
     sub_structure={
@@ -297,6 +333,132 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
             ),
         },
     ),
+    "ResourceFunction": SemanticStructure(
+        sub_structure={
+            "apiVersion": _api_version,
+            "kind": _kind,
+            "metadata": SemanticStructure(
+                sub_structure={
+                    "name": SemanticStructure(
+                        sub_structure=SemanticStructure(
+                            index_key_fn=lambda value: f"ResourceFunction:{value}:def",
+                            type="function",
+                            modifier=[Modifier.definition],
+                        ),
+                    ),
+                    "namespace": _namespace,
+                },
+            ),
+            "spec": SemanticStructure(
+                strict_sub_structure_keys=True,
+                sub_structure={
+                    "dynamicResource": SemanticStructure(
+                        type="property",
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "key": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(
+                                    type="function",
+                                    index_key_fn=lambda value: (
+                                        None
+                                        if value.startswith("=")
+                                        else f"ResourceTemplate:{value}:ref"
+                                    ),
+                                ),
+                            ),
+                        },
+                    ),
+                    "inputValidators": _validators,
+                    "locals": SemanticStructure(
+                        type="property",
+                        sub_structure=SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                type="property",
+                            ),
+                        ),
+                    ),
+                    "apiConfig": _api_config,
+                    "base": SemanticStructure(
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "fromTemplate": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(
+                                    type="string",
+                                ),
+                            ),
+                            "overlay": SemanticStructure(
+                                type="property",
+                            ),
+                        },
+                    ),
+                    "create": SemanticStructure(
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "enabled": SemanticStructure(
+                                type="parameter",
+                                sub_structure=SemanticStructure(type="number"),
+                            ),
+                            "delay": SemanticStructure(
+                                type="parameter",
+                                sub_structure=SemanticStructure(type="number"),
+                            ),
+                            "overlay": SemanticStructure(
+                                type="property",
+                            ),
+                        },
+                    ),
+                    "update": SemanticStructure(
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "patch": SemanticStructure(
+                                type="parameter",
+                                strict_sub_structure_keys=True,
+                                sub_structure={
+                                    "delay": SemanticStructure(type="number")
+                                },
+                            ),
+                            "recreate": SemanticStructure(
+                                type="parameter",
+                                strict_sub_structure_keys=True,
+                                sub_structure={
+                                    "delay": SemanticStructure(type="number")
+                                },
+                            ),
+                            "never": SemanticStructure(
+                                type="parameter",
+                                strict_sub_structure_keys=True,
+                                sub_structure={},
+                            ),
+                        },
+                    ),
+                    "delete": SemanticStructure(
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "abandon": SemanticStructure(
+                                type="parameter",
+                                strict_sub_structure_keys=True,
+                                sub_structure={},
+                            ),
+                            "destroy": SemanticStructure(
+                                type="parameter",
+                                strict_sub_structure_keys=True,
+                                sub_structure={},
+                            ),
+                        },
+                    ),
+                    "outcome": SemanticStructure(
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "validators": _validators,
+                            "return": SemanticStructure(),
+                        },
+                    ),
+                },
+            ),
+        },
+    ),
     "ValueFunction": SemanticStructure(
         sub_structure={
             "apiVersion": _api_version,
@@ -317,7 +479,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                 strict_sub_structure_keys=True,
                 sub_structure={
                     "validators": _validators,
-                    "constants": SemanticStructure(
+                    "locals": SemanticStructure(
                         type="property",
                         sub_structure=SemanticStructure(
                             sub_structure=SemanticStructure(
@@ -523,8 +685,6 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
             "spec": SemanticStructure(
                 strict_sub_structure_keys=True,
                 sub_structure={
-                    "behavior": _behavior,
-                    "managedResource": _managed_resource,
                     "template": SemanticStructure(type="property"),
                 },
             ),

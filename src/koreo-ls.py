@@ -23,6 +23,7 @@ from koreo.function.structure import Function
 from koreo.function_test.structure import FunctionTest
 from koreo.resource_template.structure import ResourceTemplate
 from koreo.value_function.structure import ValueFunction
+from koreo.resource_function.structure import ResourceFunction
 from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
@@ -315,6 +316,10 @@ def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
     elif match := constants.FUNCTION_TEST_ANCHOR.match(possible_match.key):
         cached = cache.get_resource_system_data_from_cache(
             resource_class=FunctionTest, cache_key=match.group("name")
+        )
+    elif match := constants.RESOURCE_FUNCTION_ANCHOR.match(possible_match.key):
+        cached = cache.get_resource_system_data_from_cache(
+            resource_class=ResourceFunction, cache_key=match.group("name")
         )
     elif match := constants.VALUE_FUNCTION_ANCHOR.match(possible_match.key):
         cached = cache.get_resource_system_data_from_cache(
@@ -678,6 +683,7 @@ async def _run_function_test(
     test_range_map = {}
     tests_to_run = set[str]()
     plain_functions_to_test = set[str]()
+    resource_functions_to_test = set[str]()
     value_functions_to_test = set[str]()
 
     for _, resource_key, resource_range, _ in semantic_range_index:
@@ -689,15 +695,24 @@ async def _run_function_test(
         elif match := constants.FUNCTION_NAME.match(resource_key):
             plain_functions_to_test.add(match.group("name"))
 
+        elif match := constants.RESOURCE_FUNCTION_NAME.match(resource_key):
+            resource_functions_to_test.add(match.group("name"))
+
         elif match := constants.VALUE_FUNCTION_NAME.match(resource_key):
             value_functions_to_test.add(match.group("name"))
 
-    if not (tests_to_run or plain_functions_to_test or value_functions_to_test):
+    if not (
+        tests_to_run
+        or plain_functions_to_test
+        or value_functions_to_test
+        or resource_functions_to_test
+    ):
         return ([], {})
 
     functions_to_test = {
         Function: plain_functions_to_test,
         ValueFunction: value_functions_to_test,
+        ResourceFunction: resource_functions_to_test,
     }
 
     test_results = await run_function_tests(

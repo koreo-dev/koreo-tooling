@@ -23,7 +23,7 @@ class RunResults(NamedTuple):
 
 async def run_function_tests(
     tests_to_run: set[str],
-    functions_to_test: dict[type, str],
+    functions_to_test: dict[type, Sequence[str]],
     test_range_map: dict[str, types.Range],
 ) -> RunResults:
     if not (tests_to_run or functions_to_test):

@@ -4,6 +4,8 @@ from koreo.function.prepare import prepare_function
 from koreo.function.structure import Function
 from koreo.function_test.prepare import prepare_function_test
 from koreo.function_test.structure import FunctionTest
+from koreo.resource_function.prepare import prepare_resource_function
+from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.prepare import prepare_resource_template
 from koreo.resource_template.structure import ResourceTemplate
 from koreo.value_function.prepare import prepare_value_function
@@ -17,6 +19,7 @@ API_VERSION = "koreo.realkinetic.com/v1alpha8"
 PREPARE_MAP = {
     "Function": (Function, prepare_function),
     "FunctionTest": (FunctionTest, prepare_function_test),
+    "ResourceFunction": (ResourceFunction, prepare_resource_function),
     "ResourceTemplate": (ResourceTemplate, prepare_resource_template),
     "ValueFunction": (ValueFunction, prepare_value_function),
     "Workflow": (Workflow, prepare_workflow),
@@ -32,11 +35,13 @@ TOP_LEVEL_RESOURCE = re.compile("(?P<kind>[A-Z][a-zA-Z0-9.]*):(?P<name>.*)?:[dr]
 
 FUNCTION_NAME = re.compile("Function:(?P<name>.*)?:def")
 FUNCTION_TEST_NAME = re.compile("FunctionTest:(?P<name>.*)?:def")
+RESOURCE_FUNCTION_NAME = re.compile("ResourceFunction:(?P<name>.*)?:def")
 VALUE_FUNCTION_NAME = re.compile("ValueFunction:(?P<name>.*)?:def")
 WORKFLOW_NAME = re.compile("Workflow:(?P<name>[^:]*)?:def")
 
 FUNCTION_ANCHOR = re.compile("Function:(?P<name>.*)")
 FUNCTION_TEST_ANCHOR = re.compile("FunctionTest:(?P<name>.*)")
+RESOURCE_FUNCTION_ANCHOR = re.compile("ResourceFunction:(?P<name>.*)")
 VALUE_FUNCTION_ANCHOR = re.compile("ValueFunction:(?P<name>.*)")
 WORKFLOW_ANCHOR = re.compile("Workflow:(?P<name>[^:]*)")
 
