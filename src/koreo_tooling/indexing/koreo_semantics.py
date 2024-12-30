@@ -379,10 +379,10 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         ),
                     ),
                     "apiConfig": _api_config,
-                    "base": SemanticStructure(
+                    "resourceTemplateRef": SemanticStructure(
                         strict_sub_structure_keys=True,
                         sub_structure={
-                            "fromTemplate": SemanticStructure(
+                            "name": SemanticStructure(
                                 type="property",
                                 sub_structure=SemanticStructure(
                                     type="string",
@@ -392,6 +392,9 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                 type="property",
                             ),
                         },
+                    ),
+                    "resource": SemanticStructure(
+                        type="property",
                     ),
                     "create": SemanticStructure(
                         strict_sub_structure_keys=True,
