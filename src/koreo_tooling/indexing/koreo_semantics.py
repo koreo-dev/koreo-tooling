@@ -151,6 +151,10 @@ _api_config: SemanticStructure = SemanticStructure(
             type="parameter",
             sub_structure=SemanticStructure(type="number"),
         ),
+        "readonly": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="number"),
+        ),
         "name": SemanticStructure(
             type="parameter",
             sub_structure=SemanticStructure(type="string"),
@@ -380,6 +384,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                     ),
                     "apiConfig": _api_config,
                     "resourceTemplateRef": SemanticStructure(
+                        type="property",
                         strict_sub_structure_keys=True,
                         sub_structure={
                             "name": SemanticStructure(
@@ -397,6 +402,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         type="property",
                     ),
                     "create": SemanticStructure(
+                        type="property",
                         strict_sub_structure_keys=True,
                         sub_structure={
                             "enabled": SemanticStructure(
@@ -413,6 +419,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         },
                     ),
                     "update": SemanticStructure(
+                        type="property",
                         strict_sub_structure_keys=True,
                         sub_structure={
                             "patch": SemanticStructure(
@@ -437,6 +444,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         },
                     ),
                     "delete": SemanticStructure(
+                        type="property",
                         strict_sub_structure_keys=True,
                         sub_structure={
                             "abandon": SemanticStructure(
@@ -452,10 +460,13 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         },
                     ),
                     "outcome": SemanticStructure(
+                        type="property",
                         strict_sub_structure_keys=True,
                         sub_structure={
                             "validators": _validators,
-                            "return": SemanticStructure(),
+                            "return": SemanticStructure(
+                                type="property",
+                            ),
                         },
                     ),
                 },
