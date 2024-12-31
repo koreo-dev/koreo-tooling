@@ -614,6 +614,12 @@ def _get_defined_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
         match definition:
             case ("Function", name, version):
                 resource_key = registry.Resource(resource_type=Function, name=name)
+            case ("ValueFunction", name, version):
+                resource_key = registry.Resource(resource_type=ValueFunction, name=name)
+            case ("ResourceFunction", name, version):
+                resource_key = registry.Resource(
+                    resource_type=ResourceFunction, name=name
+                )
             case ("FunctionTest", name, version):
                 resource_key = registry.Resource(resource_type=FunctionTest, name=name)
             case ("Workflow", name, version):
@@ -644,6 +650,14 @@ def _get_used_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
         match reference:
             case ("Function", name):
                 resources.append(registry.Resource(resource_type=Function, name=name))
+            case ("ResourceFunction", name):
+                resources.append(
+                    registry.Resource(resource_type=ResourceFunction, name=name)
+                )
+            case ("ValueFunction", name):
+                resources.append(
+                    registry.Resource(resource_type=ValueFunction, name=name)
+                )
             case ("FunctionTest", name):
                 resources.append(
                     registry.Resource(resource_type=FunctionTest, name=name)
