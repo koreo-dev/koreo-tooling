@@ -21,9 +21,10 @@ from koreo import cache
 from koreo import registry
 from koreo.function.structure import Function
 from koreo.function_test.structure import FunctionTest
-from koreo.resource_template.structure import ResourceTemplate
-from koreo.value_function.structure import ValueFunction
 from koreo.resource_function.structure import ResourceFunction
+from koreo.resource_template.structure import ResourceTemplate
+from koreo.result import is_unwrapped_ok
+from koreo.value_function.structure import ValueFunction
 from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
@@ -509,6 +510,21 @@ async def _analyze_file(
     )
     diagnostics.extend(test_diagnostics)
 
+    if parsing_result.semantic_range_index:
+        used_resources = _get_used_resources(parsing_result.semantic_range_index)
+        current_resource_defs: dict[registry.Resource, str | None] = (
+            _get_defined_resources(parsing_result.semantic_range_index)
+        )
+    else:
+        used_resources: list[registry.Resource] = []
+        current_resource_defs: dict[registry.Resource, str | None] = {}
+
+    diagnostics.extend(
+        _check_defined_resources(
+            current_resource_defs.keys(), parsing_result.semantic_range_index
+        )
+    )
+
     old_resource_defs: dict[registry.Resource, str | None] = _get_defined_resources(
         [
             range_index
@@ -526,13 +542,6 @@ async def _analyze_file(
 
     if parsing_result.semantic_range_index:
         __SEMANTIC_RANGE_INDEX.extend(parsing_result.semantic_range_index)
-        used_resources = _get_used_resources(parsing_result.semantic_range_index)
-        current_resource_defs: dict[registry.Resource, str | None] = (
-            _get_defined_resources(parsing_result.semantic_range_index)
-        )
-    else:
-        used_resources: list[registry.Resource] = []
-        current_resource_defs: dict[registry.Resource, str | None] = {}
 
     file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
     used_resources.append(
@@ -669,6 +678,50 @@ def _get_used_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
                     registry.Resource(resource_type=ResourceTemplate, name=name)
                 )
     return resources
+
+
+def _check_defined_resources(
+    resources: Sequence[registry.Resource],
+    semantic_range_index: Sequence[SemanticRangeIndex] | None,
+) -> Sequence[types.Diagnostic]:
+    diagnostics: list[types.Diagnostic] = []
+
+    if not semantic_range_index:
+        return diagnostics
+
+    resource_defs = {
+        f"{match.group("kind")}:{match.group("name")}": match_range
+        for match, match_range in (
+            (constants.RESOURCE_DEF.match(range_index.name), range_index.range)
+            for range_index in semantic_range_index
+        )
+        if match
+    }
+
+    for resource in resources:
+        if resource.resource_type is Workflow:
+            continue
+
+        cached = cache.get_resource_from_cache(
+            resource_class=resource.resource_type, cache_key=resource.name
+        )
+
+        if is_unwrapped_ok(cached):
+            continue
+
+        resource_range = resource_defs.get(
+            f"{resource.resource_type.__name__}:{resource.name}"
+        )
+        if not resource_range:
+            continue
+
+        diagnostics.append(
+            types.Diagnostic(
+                message=cached.message,
+                severity=types.DiagnosticSeverity.Error,
+                range=resource_range,
+            )
+    return diagnostics
 
 
 def _process_workflows(

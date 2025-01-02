@@ -656,12 +656,8 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                                 type="type"
                                             ),
                                         ),
-                                        "name": SemanticStructure(
-                                            type="property"
-                                        ),
-                                        "step": SemanticStructure(
-                                            type="property"
-                                        ),
+                                        "name": SemanticStructure(type="property"),
+                                        "step": SemanticStructure(type="property"),
                                     },
                                 ),
                             ),
