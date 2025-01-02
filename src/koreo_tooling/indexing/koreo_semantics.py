@@ -589,11 +589,11 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     "functionRef": _function_ref,
                                     "workflowRef": _workflow_ref,
                                     "inputs": _function_inputs,
-                                    "mappedInput": SemanticStructure(
+                                    "forEach": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "mapped_input",
+                                        local_key_fn=lambda value: "for_each",
                                         sub_structure={
-                                            "source": SemanticStructure(
+                                            "itemIn": SemanticStructure(
                                                 type="argument",
                                             ),
                                             "inputKey": SemanticStructure(
@@ -602,6 +602,22 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                                     type="parameter",
                                                     local_key_fn=lambda value: f"input:{value}",
                                                 ),
+                                            ),
+                                            "state": SemanticStructure(type="property"),
+                                            "condition": SemanticStructure(
+                                                type="property",
+                                                strict_sub_structure_keys=True,
+                                                sub_structure={
+                                                    "type": SemanticStructure(
+                                                        type="property",
+                                                        sub_structure=SemanticStructure(
+                                                            type="type",
+                                                        ),
+                                                    ),
+                                                    "name": SemanticStructure(
+                                                        type="property",
+                                                    ),
+                                                },
                                             ),
                                         },
                                     ),
@@ -620,9 +636,37 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                             ),
                                         },
                                     ),
+                                    "state": SemanticStructure(type="property"),
                                 },
                             ),
                         ),
+                    ),
+                    "status": SemanticStructure(
+                        type="property",
+                        strict_sub_structure_keys=True,
+                        sub_structure={
+                            "conditions": SemanticStructure(
+                                type="property",
+                                sub_structure=SemanticStructure(
+                                    strict_sub_structure_keys=True,
+                                    sub_structure={
+                                        "type": SemanticStructure(
+                                            type="property",
+                                            sub_structure=SemanticStructure(
+                                                type="type"
+                                            ),
+                                        ),
+                                        "name": SemanticStructure(
+                                            type="property"
+                                        ),
+                                        "step": SemanticStructure(
+                                            type="property"
+                                        ),
+                                    },
+                                ),
+                            ),
+                            "state": SemanticStructure(type="property"),
+                        },
                     ),
                 },
             ),

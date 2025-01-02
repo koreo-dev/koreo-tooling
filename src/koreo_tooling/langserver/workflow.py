@@ -245,10 +245,10 @@ def _process_workflow_step(
     if implicit_inputs:
         provided_input_keys.extend(implicit_inputs)
 
-    raw_mapped_input = step_spec.get("mappedInput", {})
-    mapped_input_key = raw_mapped_input.get("inputKey")
-    if mapped_input_key:
-        provided_input_keys.append(f"{mapped_input_key}")
+    raw_for_each = step_spec.get("forEach", {})
+    for_each_key = raw_for_each.get("inputKey")
+    if for_each_key:
+        provided_input_keys.append(f"{for_each_key}")
 
     has_error = False
     diagnostics: list[types.Diagnostic] = []
