@@ -569,6 +569,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                 "functionRef": _function_ref,
                                 "workflowRef": _workflow_ref,
                                 "inputs": _function_inputs,
+                                "state": SemanticStructure(type="property"),
                             },
                         ),
                     ),

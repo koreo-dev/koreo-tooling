@@ -46,4 +46,4 @@ VALUE_FUNCTION_ANCHOR = re.compile("ValueFunction:(?P<name>.*)")
 WORKFLOW_ANCHOR = re.compile("Workflow:(?P<name>[^:]*)")
 
 INPUT_NAME_PATTERN = re.compile("inputs.(?P<name>[^.]+).?")
-PARENT_NAME_PATTERN = re.compile("parent.(?P<name>[^.]+).?")
+PARENT_INPUT_PATTERN = re.compile("inputs.parent.(?P<name>[^.]+).?")

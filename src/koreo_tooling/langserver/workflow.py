@@ -7,7 +7,10 @@ os.environ["KOREO_DEV_TOOLING"] = "true"
 from lsprotocol import types
 
 from koreo import cache
-from koreo.workflow.structure import Workflow, ErrorStep
+from koreo.workflow.structure import Workflow, ConfigStep, ErrorStep, Step
+from koreo.function.structure import Function
+from koreo.resource_function.structure import ResourceFunction
+from koreo.value_function.structure import ValueFunction
 from koreo.result import is_unwrapped_ok
 
 from koreo_tooling import constants
@@ -210,7 +213,7 @@ def _process_workflow(
 
 
 def _process_workflow_step(
-    step,
+    step: ConfigStep | Step | ErrorStep,
     step_semantic_block,
     step_spec,
     semantic_anchor,
@@ -227,16 +230,7 @@ def _process_workflow_step(
             ),
         )
 
-    # These are just the "top level" direct inputs. No consideration to
-    # internal structure.
-    first_tier_inputs = set(
-        input_key.group("name")
-        for input_key in (
-            constants.INPUT_NAME_PATTERN.match(key)
-            for key in step.logic.dynamic_input_keys
-        )
-        if input_key
-    )
+    first_tier_inputs = _get_first_tier_inputs(step.logic)
 
     raw_inputs = step_spec.get("inputs", {})
 
@@ -322,6 +316,46 @@ def _process_workflow_step(
             )
         )
     return ProcessResult(error=has_error, diagnostics=diagnostics)
+
+
+def _get_first_tier_inputs(
+    logic: Workflow | ValueFunction | ResourceFunction | Function,
+) -> set[str]:
+    match logic:
+        case (Function() | ValueFunction() | ResourceFunction()) as logic:
+            # These are just the "top level" direct inputs. No consideration to
+            # internal structure.
+            return set(
+                input_key.group("name")
+                for input_key in (
+                    constants.INPUT_NAME_PATTERN.match(key)
+                    for key in logic.dynamic_input_keys
+                )
+                if input_key
+            )
+
+        case Workflow() as workflow:
+            match workflow.config_step:
+                case None | ErrorStep():
+                    return set()
+
+                case ConfigStep(logic=config_logic):
+                    match config_logic:
+                        case Workflow():
+                            return _get_first_tier_inputs(logic=config_logic)
+
+                        case _:
+                            return set(
+                                input_key.group("name")
+                                for input_key in (
+                                    constants.PARENT_INPUT_PATTERN.match(key)
+                                    for key in config_logic.dynamic_input_keys
+                                )
+                                if input_key
+                            )
+
+    # NOTE: This should never happen, but if it does set to empty set.
+    return set()
 
 
 def _step_label_error_diagnostic(
