@@ -721,6 +721,7 @@ def _check_defined_resources(
                 severity=types.DiagnosticSeverity.Error,
                 range=resource_range,
             )
+        )
     return diagnostics
 
 
