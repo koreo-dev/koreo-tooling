@@ -19,7 +19,7 @@ from koreo_tooling.langserver.rangers import block_range_extract
 
 
 def process_workflows(
-    path: str, workflows: Sequence[tuple[str, types.Range]]
+    uri: str, workflows: Sequence[tuple[str, types.Range]]
 ) -> list[types.Diagnostic]:
     diagnostics: list[types.Diagnostic] = []
 
@@ -49,7 +49,7 @@ def process_workflows(
             continue
 
         workflow_result = _process_workflow(
-            path=path,
+            uri=uri,
             resource_range=resource_range,
             workflow_name=koreo_cache_key,
             workflow=cached_resource.resource,
@@ -68,7 +68,7 @@ class ProcessResult(NamedTuple):
 
 
 def _process_workflow(
-    path: str,
+    uri: str,
     resource_range: types.Range,
     workflow_name: str,
     workflow: Workflow,
@@ -87,15 +87,15 @@ def _process_workflow(
             ],
         )
 
-    semantic_path = koreo_metadata.get("path", "")
-    if semantic_path != path:
+    semantic_uri = koreo_metadata.get("uri", "")
+    if semantic_uri != uri:
         return ProcessResult(
             error=True,
             diagnostics=[
                 types.Diagnostic(
                     message=(
                         f"Duplicate Workflow ('{workflow_name}') detected in "
-                        f"('{semantic_path}'), skipping further analysis."
+                        f"('{semantic_uri}'), skipping further analysis."
                     ),
                     severity=types.DiagnosticSeverity.Error,
                     range=resource_range,

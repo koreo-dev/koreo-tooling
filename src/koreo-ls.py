@@ -75,7 +75,7 @@ async def completions(params: types.CompletionParams):
 def hover(params: types.HoverParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
+    resource_info = _lookup_current_line_info(uri=doc.uri, line=params.position.line)
     if not resource_info.index_match:
         return None
 
@@ -83,7 +83,7 @@ def hover(params: types.HoverParams):
         resource_key=resource_info.index_match.key,
         resource_key_range=resource_info.index_match.range,
         local_resource=resource_info.local_match,
-        test_results=__TEST_RESULTS[doc.path],
+        test_results=__TEST_RESULTS[doc.uri],
     )
 
     if not hover_result:
@@ -100,7 +100,7 @@ def hover(params: types.HoverParams):
 def inlay_hints(params: types.InlayHintParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    test_results = __TEST_RESULTS[doc.path]
+    test_results = __TEST_RESULTS[doc.uri]
     if not test_results:
         return []
 
@@ -108,8 +108,8 @@ def inlay_hints(params: types.InlayHintParams):
     end_line = params.range.end.line
 
     visible_tests = []
-    for path, maybe_resource, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
-        if path != doc.path:
+    for uri, maybe_resource, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
+        if uri != doc.uri:
             continue
 
         if not isinstance(maybe_range, types.Range):
@@ -130,7 +130,7 @@ def inlay_hints(params: types.InlayHintParams):
 
     inlays = []
     for test_name, name_range in visible_tests:
-        result = __TEST_RESULTS[doc.path].get(test_name)
+        result = __TEST_RESULTS[doc.uri].get(test_name)
 
         if not result:
             inlay = "Not Ran"
@@ -154,6 +154,11 @@ def inlay_hints(params: types.InlayHintParams):
     return inlays
 
 
+@server.feature(types.INITIALIZE)
+async def initialize(params):
+    await _process_workspace_directories()
+
+
 @server.feature(types.TEXT_DOCUMENT_CODE_LENS)
 def code_lens(params: types.CodeLensParams):
     """Return a list of code lens to insert into the given document.
@@ -163,13 +168,13 @@ def code_lens(params: types.CodeLensParams):
     """
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    test_results = __TEST_RESULTS[doc.path]
+    test_results = __TEST_RESULTS[doc.uri]
     if not test_results:
         return []
 
     lens_result = handle_lens(
         doc_uri=params.text_document.uri,
-        path=doc.path,
+        uri=doc.uri,
         doc_version=doc.version if doc.version else -1,
         test_results=test_results,
     )
@@ -196,9 +201,9 @@ def _lens_action_wrapper(fn: Callable[[str, TestResults], EditResult]):
         if doc.version != doc_version:
             return
 
-        doc_path = doc.path
+        doc_uri = doc.uri
 
-        test_result = __TEST_RESULTS[doc_path][test_name]
+        test_result = __TEST_RESULTS[doc_uri][test_name]
 
         edit_result = fn(test_name, test_result)
         if edit_result.logs:
@@ -240,6 +245,10 @@ async def change_workspace_config(params):
     # TODO: This should probably load a config file that enumerates
     # namespaces or something.
 
+    await _process_workspace_directories()
+
+
+async def _process_workspace_directories():
     suffixes = ("yaml", "yml", "koreo")
 
     for folder_key in server.workspace.folders:
@@ -285,10 +294,10 @@ class CurrentLineInfo(NamedTuple):
     local_match: ResourceMatch | None = None
 
 
-def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
+def _lookup_current_line_info(uri: str, line: int) -> CurrentLineInfo:
     possible_match: tuple[str, types.Range] | None = None
-    for maybe_path, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
-        if maybe_path != path:
+    for maybe_uri, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
+        if maybe_uri != uri:
             continue
 
         if not isinstance(maybe_range, types.Range):
@@ -347,7 +356,7 @@ def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
 async def goto_definitiion(params: types.DefinitionParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
+    resource_info = _lookup_current_line_info(uri=doc.uri, line=params.position.line)
     if not resource_info.index_match:
         return []
 
@@ -355,7 +364,7 @@ async def goto_definitiion(params: types.DefinitionParams):
     search_key = f"{resource_key_root}:def"
 
     definitions = []
-    for path, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
+    for uri, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
         if not isinstance(maybe_range, types.Range):
             # TODO: Get anchors setting a range
             continue
@@ -363,7 +372,7 @@ async def goto_definitiion(params: types.DefinitionParams):
         if maybe_key != search_key:
             continue
 
-        definitions.append(types.Location(uri=path, range=maybe_range))
+        definitions.append(types.Location(uri=uri, range=maybe_range))
 
     return definitions
 
@@ -372,7 +381,7 @@ async def goto_definitiion(params: types.DefinitionParams):
 async def goto_reference(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_info = _lookup_current_line_info(path=doc.path, line=params.position.line)
+    resource_info = _lookup_current_line_info(uri=doc.uri, line=params.position.line)
     if not resource_info.index_match:
         return []
 
@@ -382,16 +391,16 @@ async def goto_reference(params: types.ReferenceParams):
 
     references: list[types.Location] = []
     definitions: list[types.Location] = []
-    for path, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
+    for uri, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
         if not isinstance(maybe_range, types.Range):
             # TODO: Get anchors setting a range
             continue
 
         if maybe_key == reference_key:
-            references.append(types.Location(uri=path, range=maybe_range))
+            references.append(types.Location(uri=uri, range=maybe_range))
 
         if maybe_key == definition_key:
-            definitions.append(types.Location(uri=path, range=maybe_range))
+            definitions.append(types.Location(uri=uri, range=maybe_range))
 
     return references + definitions
 
@@ -402,7 +411,7 @@ async def goto_reference(params: types.ReferenceParams):
 )
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
-    if not doc.path in __SEMANTIC_TOKEN_INDEX:
+    if not doc.uri in __SEMANTIC_TOKEN_INDEX:
         # Once processing has finished, a refresh will be issued.
         await handle_file(
             file_uri=params.text_document.uri,
@@ -411,7 +420,7 @@ async def semantic_tokens_full(params: types.ReferenceParams):
         )
         return
 
-    tokens = __SEMANTIC_TOKEN_INDEX[doc.path]
+    tokens = __SEMANTIC_TOKEN_INDEX[doc.uri]
     return types.SemanticTokens(data=tokens)
 
 
@@ -496,7 +505,7 @@ async def _analyze_file(
 
     diagnostics.extend(
         _process_workflows(
-            path=doc.path, semantic_range_index=parsing_result.semantic_range_index
+            uri=doc.uri, semantic_range_index=parsing_result.semantic_range_index
         )
     )
 
@@ -524,16 +533,16 @@ async def _analyze_file(
         [
             range_index
             for range_index in __SEMANTIC_RANGE_INDEX
-            if range_index.path == doc.path
+            if range_index.uri == doc.uri
         ]
     )
-    _reset_file_state(doc.path)
+    _reset_file_state(doc.uri)
 
     if parsing_result.semantic_tokens:
-        __SEMANTIC_TOKEN_INDEX[doc.path] = parsing_result.semantic_tokens
+        __SEMANTIC_TOKEN_INDEX[doc.uri] = parsing_result.semantic_tokens
     else:
         # Will this break anything?
-        __SEMANTIC_TOKEN_INDEX[doc.path] = []
+        __SEMANTIC_TOKEN_INDEX[doc.uri] = []
 
     if parsing_result.semantic_range_index:
         __SEMANTIC_RANGE_INDEX.extend(parsing_result.semantic_range_index)
@@ -564,9 +573,9 @@ async def _analyze_file(
             version=old_resource_defs[deleted_resource],
         )
 
-    __TEST_RESULTS[doc.path] = test_results
+    __TEST_RESULTS[doc.uri] = test_results
 
-    diagnostics.extend(_check_for_duplicate_resources(path=doc.path))
+    diagnostics.extend(_check_for_duplicate_resources(uri=doc.uri))
 
     server.text_document_publish_diagnostics(
         types.PublishDiagnosticsParams(
@@ -717,7 +726,7 @@ def _check_defined_resources(
 
 
 def _process_workflows(
-    path: str, semantic_range_index: Sequence[SemanticRangeIndex] | None
+    uri: str, semantic_range_index: Sequence[SemanticRangeIndex] | None
 ) -> list[types.Diagnostic]:
     if not semantic_range_index:
         return []
@@ -730,7 +739,7 @@ def _process_workflows(
 
         workflows.append((match.group("name"), resource_range))
 
-    return process_workflows(path=path, workflows=workflows)
+    return process_workflows(uri=uri, workflows=workflows)
 
 
 async def _run_function_test(
@@ -790,47 +799,47 @@ __SEMANTIC_TOKEN_INDEX: dict[str, Sequence[int]] = {}
 __SEMANTIC_RANGE_INDEX: list[SemanticRangeIndex] = []
 
 
-def _reset_file_state(path_key: str):
+def _reset_file_state(uri: str):
     global __SEMANTIC_RANGE_INDEX
 
     __SEMANTIC_RANGE_INDEX = [
         range_index
         for range_index in __SEMANTIC_RANGE_INDEX
-        if range_index.path != path_key
+        if range_index.uri != uri
     ]
 
-    if path_key in __SEMANTIC_TOKEN_INDEX:
-        del __SEMANTIC_TOKEN_INDEX[path_key]
+    if uri in __SEMANTIC_TOKEN_INDEX:
+        del __SEMANTIC_TOKEN_INDEX[uri]
 
-    if path_key in __TEST_RESULTS:
-        del __TEST_RESULTS[path_key]
+    if uri in __TEST_RESULTS:
+        del __TEST_RESULTS[uri]
 
 
-def _check_for_duplicate_resources(path: str):
+def _check_for_duplicate_resources(uri: str):
     counts: defaultdict[str, tuple[int, bool, list[tuple]]] = defaultdict(
         lambda: (0, False, [])
     )
 
-    for resource_path, resource_key, resource_range, _ in __SEMANTIC_RANGE_INDEX:
+    for resource_uri, resource_key, resource_range, _ in __SEMANTIC_RANGE_INDEX:
         if not constants.RESOURCE_DEF.match(resource_key):
             continue
 
-        count, seen_in_path, locations = counts[resource_key]
-        locations.append((resource_path, resource_range))
+        count, seen_in_uri, locations = counts[resource_key]
+        locations.append((resource_uri, resource_range))
         counts[resource_key] = (
             count + 1,
-            seen_in_path or resource_path == path,
+            seen_in_uri or resource_uri == uri,
             locations,
         )
 
     duplicate_diagnostics: list[types.Diagnostic] = []
 
-    for resource_key, (count, seen_in_path, locations) in counts.items():
-        if count <= 1 or not seen_in_path:
+    for resource_key, (count, seen_in_uri, locations) in counts.items():
+        if count <= 1 or not seen_in_uri:
             continue
 
-        for resource_path, resource_range in locations:
-            if resource_path != path:
+        for resource_uri, resource_range in locations:
+            if resource_uri != uri:
                 continue
 
             duplicate_diagnostics.append(

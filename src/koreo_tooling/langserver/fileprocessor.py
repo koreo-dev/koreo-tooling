@@ -29,7 +29,7 @@ TypeIndex = {key: idx for idx, key in enumerate(TokenTypes)}
 
 
 class SemanticRangeIndex(NamedTuple):
-    path: str
+    uri: str
     name: str
     range: types.Range
     version: str | None = None
@@ -43,7 +43,7 @@ class ProccessResults(NamedTuple):
 
 
 async def process_file(doc: TextDocument) -> ProccessResults:
-    path = doc.path
+    uri = doc.uri
 
     semantic_tokens: list[int] = []
     semantic_range_index: list[SemanticRangeIndex] = []
@@ -107,7 +107,7 @@ async def process_file(doc: TextDocument) -> ProccessResults:
 
             case (block_hash, block_doc):
                 block_result = await _process_block(
-                    path=path,
+                    uri=uri,
                     yaml_block=block_doc,
                     doc=doc,
                     block_hash=block_hash,
@@ -147,7 +147,7 @@ class BlockResults(NamedTuple):
 
 
 async def _process_block(
-    path: str, yaml_block: dict, doc: TextDocument, block_hash: str
+    uri: str, yaml_block: dict, doc: TextDocument, block_hash: str
 ) -> BlockResults:
     try:
         api_version = yaml_block.get("apiVersion")
@@ -175,9 +175,7 @@ async def _process_block(
         return block_result
 
     semantic_range_index = (
-        SemanticRangeIndex(
-            path=path, name=node_key, range=node_range, version=block_hash
-        )
+        SemanticRangeIndex(uri=uri, name=node_key, range=node_range, version=block_hash)
         for node_key, node_range in generate_key_range_index(semantic_anchor)
     )
 
@@ -268,7 +266,7 @@ async def _process_block(
     raw_spec = yaml_block.get("spec", {})
 
     cached_system_data = {
-        "path": path,
+        "uri": uri,
         "anchor": semantic_anchor,
     }
 

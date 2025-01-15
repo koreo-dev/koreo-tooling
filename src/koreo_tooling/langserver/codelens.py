@@ -31,7 +31,7 @@ class EditResult(NamedTuple):
 
 
 def handle_lens(
-    path: str, doc_uri: str, doc_version: int, test_results: dict[str, TestResults]
+    uri: str, doc_uri: str, doc_version: int, test_results: dict[str, TestResults]
 ):
     if not test_results:
         return LensResult()
@@ -50,7 +50,7 @@ def handle_lens(
         if not (cached and cached.resource and cached.system_data):
             continue
 
-        if cached.system_data.get("path") != path:
+        if cached.system_data.get("uri") != uri:
             continue
 
         test_anchor = cached.system_data.get("anchor")
