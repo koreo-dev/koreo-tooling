@@ -8,7 +8,6 @@ from lsprotocol import types
 
 from koreo import cache
 from koreo.workflow.structure import Workflow, ConfigStep, ErrorStep, Step
-from koreo.function.structure import Function
 from koreo.resource_function.structure import ResourceFunction
 from koreo.value_function.structure import ValueFunction
 from koreo.result import is_unwrapped_ok
@@ -319,10 +318,10 @@ def _process_workflow_step(
 
 
 def _get_first_tier_inputs(
-    logic: Workflow | ValueFunction | ResourceFunction | Function,
+    logic: Workflow | ValueFunction | ResourceFunction,
 ) -> set[str]:
     match logic:
-        case (Function() | ValueFunction() | ResourceFunction()) as logic:
+        case (ValueFunction() | ResourceFunction()) as logic:
             # These are just the "top level" direct inputs. No consideration to
             # internal structure.
             return set(

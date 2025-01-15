@@ -4,7 +4,6 @@ from __future__ import annotations
 from .semantics import Modifier, SemanticStructure
 
 
-VALUE = "."
 ALL = "*"
 
 
@@ -103,29 +102,6 @@ _workflow_ref: SemanticStructure = SemanticStructure(
     },
 )
 
-_managed_resource: SemanticStructure = SemanticStructure(
-    type="property",
-    sub_structure={
-        "apiVersion": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(type="namespace"),
-        ),
-        "kind": SemanticStructure(
-            type="parameter", sub_structure=SemanticStructure(type="type")
-        ),
-        "plural": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(
-                type="number",
-            ),
-        ),
-        "namespaced": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(type="number"),
-        ),
-    },
-)
-
 _api_config: SemanticStructure = SemanticStructure(
     type="property",
     strict_sub_structure_keys=True,
@@ -162,30 +138,6 @@ _api_config: SemanticStructure = SemanticStructure(
         "namespace": SemanticStructure(
             type="parameter",
             sub_structure=SemanticStructure(type="string"),
-        ),
-    },
-)
-
-_behavior: SemanticStructure = SemanticStructure(
-    strict_sub_structure_keys=True,
-    sub_structure={
-        "load": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(type="enumMember"),
-        ),
-        "create": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(
-                type="number",
-            ),
-        ),
-        "update": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(type="enumMember"),
-        ),
-        "delete": SemanticStructure(
-            type="parameter",
-            sub_structure=SemanticStructure(type="enumMember"),
         ),
     },
 )
@@ -262,81 +214,6 @@ _validators = SemanticStructure(
 )
 
 SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
-    "Function": SemanticStructure(
-        sub_structure={
-            "apiVersion": _api_version,
-            "kind": _kind,
-            "metadata": SemanticStructure(
-                sub_structure={
-                    "name": SemanticStructure(
-                        sub_structure=SemanticStructure(
-                            index_key_fn=lambda value: f"Function:{value}:def",
-                            type="function",
-                            modifier=[Modifier.definition],
-                        ),
-                    ),
-                    "namespace": _namespace,
-                },
-            ),
-            "spec": SemanticStructure(
-                strict_sub_structure_keys=True,
-                sub_structure={
-                    "staticResource": SemanticStructure(
-                        strict_sub_structure_keys=True,
-                        type="property",
-                        sub_structure={
-                            "managedResource": _managed_resource,
-                            "behavior": _behavior,
-                            "context": SemanticStructure(
-                                type="property",
-                                sub_structure={
-                                    ALL: SemanticStructure(
-                                        type="variable",
-                                    )
-                                },
-                            ),
-                        },
-                    ),
-                    "dynamicResource": SemanticStructure(
-                        type="property",
-                        strict_sub_structure_keys=True,
-                        sub_structure={
-                            "key": SemanticStructure(
-                                type="property",
-                                sub_structure=SemanticStructure(
-                                    type="function",
-                                    index_key_fn=lambda value: (
-                                        None
-                                        if value.startswith("=")
-                                        else f"ResourceTemplate:{value}:ref"
-                                    ),
-                                ),
-                            ),
-                        },
-                    ),
-                    "inputValidators": _validators,
-                    "materializers": SemanticStructure(
-                        strict_sub_structure_keys=True,
-                        sub_structure={
-                            "base": SemanticStructure(
-                                type="property",
-                            ),
-                            "onCreate": SemanticStructure(
-                                type="property",
-                            ),
-                        },
-                    ),
-                    "outcome": SemanticStructure(
-                        strict_sub_structure_keys=True,
-                        sub_structure={
-                            "validators": _validators,
-                            "return": SemanticStructure(),
-                        },
-                    ),
-                },
-            ),
-        },
-    ),
     "ResourceFunction": SemanticStructure(
         sub_structure={
             "apiVersion": _api_version,

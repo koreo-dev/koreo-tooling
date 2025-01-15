@@ -19,7 +19,6 @@ server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
 from koreo import cache
 from koreo import registry
-from koreo.function.structure import Function
 from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
@@ -309,10 +308,6 @@ def _lookup_current_line_info(path: str, line: int) -> CurrentLineInfo:
     if match := constants.WORKFLOW_ANCHOR.match(possible_match.key):
         cached = cache.get_resource_system_data_from_cache(
             resource_class=Workflow, cache_key=match.group("name")
-        )
-    elif match := constants.FUNCTION_ANCHOR.match(possible_match.key):
-        cached = cache.get_resource_system_data_from_cache(
-            resource_class=Function, cache_key=match.group("name")
         )
     elif match := constants.FUNCTION_TEST_ANCHOR.match(possible_match.key):
         cached = cache.get_resource_system_data_from_cache(
@@ -621,8 +616,6 @@ def _get_defined_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
     resources = dict[registry.Resource, str | None]()
     for definition in definitions:
         match definition:
-            case ("Function", name, version):
-                resource_key = registry.Resource(resource_type=Function, name=name)
             case ("ValueFunction", name, version):
                 resource_key = registry.Resource(resource_type=ValueFunction, name=name)
             case ("ResourceFunction", name, version):
@@ -657,8 +650,6 @@ def _get_used_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
     resources: list[registry.Resource] = []
     for reference in references:
         match reference:
-            case ("Function", name):
-                resources.append(registry.Resource(resource_type=Function, name=name))
             case ("ResourceFunction", name):
                 resources.append(
                     registry.Resource(resource_type=ResourceFunction, name=name)
@@ -750,7 +741,6 @@ async def _run_function_test(
 
     test_range_map = {}
     tests_to_run = set[str]()
-    plain_functions_to_test = set[str]()
     resource_functions_to_test = set[str]()
     value_functions_to_test = set[str]()
 
@@ -760,27 +750,18 @@ async def _run_function_test(
             tests_to_run.add(test_name)
             test_range_map[test_name] = resource_range
 
-        elif match := constants.FUNCTION_NAME.match(resource_key):
-            plain_functions_to_test.add(match.group("name"))
-
         elif match := constants.RESOURCE_FUNCTION_NAME.match(resource_key):
             resource_functions_to_test.add(match.group("name"))
 
         elif match := constants.VALUE_FUNCTION_NAME.match(resource_key):
             value_functions_to_test.add(match.group("name"))
 
-    if not (
-        tests_to_run
-        or plain_functions_to_test
-        or value_functions_to_test
-        or resource_functions_to_test
-    ):
+    if not (tests_to_run or value_functions_to_test or resource_functions_to_test):
         return ([], {})
 
-    functions_to_test = {
-        Function: plain_functions_to_test,
-        ValueFunction: value_functions_to_test,
-        ResourceFunction: resource_functions_to_test,
+    functions_to_test: dict[type, Sequence[str]] = {
+        ValueFunction: tuple(value_functions_to_test),
+        ResourceFunction: tuple(resource_functions_to_test),
     }
 
     test_results = await run_function_tests(

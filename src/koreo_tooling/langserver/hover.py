@@ -7,7 +7,6 @@ from koreo import registry
 from koreo.result import UnwrappedOutcome, is_not_ok, is_unwrapped_ok
 
 
-from koreo.function.structure import Function
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
 from koreo.value_function.structure import ValueFunction
@@ -56,12 +55,6 @@ def handle_hover(
         return _workflow_hover(
             workflow_name=name,
             resource_key_range=resource_key_range,
-        )
-    elif kind == "Function":
-        return _function_hover(
-            function_name=name,
-            resource_key_range=resource_key_range,
-            test_results=test_results,
         )
     elif kind == "FunctionTest":
         return _function_test_hover(
@@ -197,26 +190,6 @@ def _workflow_step_hover(
     return HoverResult()
 
 
-def _function_hover(
-    function_name: str,
-    resource_key_range: types.Range,
-    test_results: dict[str, TestResults],
-):
-    function = cache.get_resource_from_cache(
-        resource_class=Function, cache_key=function_name
-    )
-
-    function_resource = registry.Resource(resource_type=Function, name=function_name)
-
-    return _common_function_hover(
-        function_name=function_name,
-        function=function,
-        registry_resource=function_resource,
-        resource_key_range=resource_key_range,
-        test_results=test_results,
-    )
-
-
 def _resource_function_hover(
     function_name: str,
     resource_key_range: types.Range,
@@ -263,7 +236,7 @@ def _value_function_hover(
 
 def _common_function_hover(
     function_name: str,
-    function: UnwrappedOutcome[Function | ResourceFunction | ValueFunction] | None,
+    function: UnwrappedOutcome[ResourceFunction | ValueFunction] | None,
     registry_resource: registry.Resource,
     resource_key_range: types.Range,
     test_results: dict[str, TestResults],
