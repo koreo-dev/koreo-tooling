@@ -9,12 +9,18 @@ More helpfully, we provide a language server that surfaces issues within your
 IDE.
 
 
-## CLI
+## Inspector
 
-    pdm run python src/koreo-cli.py --yaml-dir=<your-koreo-yamls> --check
+A helper to get information about Workflow trigger resource, and the resources
+created by a Workflow. Without `-v`, basic summary information will be printed
+for each resource. With each additional `-v`, more information is output (up to
+the full object).
+
+    pdm run python src/inspector.py TriggerDummy -n koreo-update-loop difference-demo -v
 
 
-## LSP
+
+## Language Server
 
 Register the Koreo LSP with your IDE. Maybe in a config block like this:
 
