@@ -212,7 +212,7 @@ async def _run_function_test(
             if test_outcome.expected_resource:
                 success = False
                 messages.append(
-                    "Can not assert expectedResource unless changes requested."
+                    "Can not assert expectResource unless changes requested."
                 )
 
             actual_return = return_value
@@ -232,9 +232,7 @@ async def _run_function_test(
     ):
         success = False
         missing_test_assertion = True
-        messages.append(
-            "Must define expectedResource, expectedOutcome, or expectedReturn."
-        )
+        messages.append("Must define expectResource, expectOutcome, or expectReturn.")
 
     return TestResults(
         success=success,

@@ -187,7 +187,7 @@ def _generate_resource_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) has multiple expectedResource blocks",
+                        message=f"FunctionTest ({test_name}) has multiple expectResource blocks",
                     )
                 ]
             )
@@ -275,7 +275,7 @@ def _generate_return_value_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"Test ({test_name}) has multiple expectedReturn blocks",
+                        message=f"Test ({test_name}) has multiple expectReturn blocks",
                     )
                 ]
             )

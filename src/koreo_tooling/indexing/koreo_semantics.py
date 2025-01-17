@@ -233,23 +233,6 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
             "spec": SemanticStructure(
                 strict_sub_structure_keys=True,
                 sub_structure={
-                    "dynamicResource": SemanticStructure(
-                        type="property",
-                        strict_sub_structure_keys=True,
-                        sub_structure={
-                            "key": SemanticStructure(
-                                type="property",
-                                sub_structure=SemanticStructure(
-                                    type="function",
-                                    index_key_fn=lambda value: (
-                                        None
-                                        if value.startswith("=")
-                                        else f"ResourceTemplate:{value}:ref"
-                                    ),
-                                ),
-                            ),
-                        },
-                    ),
                     "inputValidators": _validators,
                     "locals": SemanticStructure(
                         type="property",
@@ -268,6 +251,11 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                 type="property",
                                 sub_structure=SemanticStructure(
                                     type="string",
+                                    index_key_fn=lambda value: (
+                                        None
+                                        if value.startswith("=")
+                                        else f"ResourceTemplate:{value}:ref"
+                                    ),
                                 ),
                             ),
                             "overlay": SemanticStructure(
@@ -577,15 +565,15 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         ),
                     ),
                     "inputs": _function_inputs,
-                    "expectedResource": SemanticStructure(
+                    "expectResource": SemanticStructure(
                         type="property",
                         local_key_fn=lambda value: "expected_resource",
                         sub_structure=SemanticStructure(
                             local_key_fn=lambda value: "expected_value",
                         ),
                     ),
-                    "expectedOutcome": _validators,
-                    "expectedReturn": SemanticStructure(
+                    "expectOutcome": _validators,
+                    "expectReturn": SemanticStructure(
                         type="property",
                         local_key_fn=lambda value: "expected_return",
                         sub_structure=SemanticStructure(
