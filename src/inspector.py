@@ -5,6 +5,8 @@ import json
 import kr8s
 from kr8s._objects import APIObject
 
+from colorist import BrightColor, Color
+
 BAD_RESPONSE = 10
 
 MANAGED_RESOURCES_ANNOTATION = "koreo.realkinetic.com/managed-resources"
@@ -14,8 +16,13 @@ VERBOSE = 0
 
 def main():
     arg_parser = argparse.ArgumentParser(
-        description="Inpsect Koreo Workflow resources and resource hierarchy.",
-        epilog="Example usage: inspector ResourceKind -n resource-namespace resource-name",
+        description=(
+            f"Inpsect Koreo {_kind('Workflow')} " "resources and resource hierarchy."
+        ),
+        epilog=(
+            f"Example usage: inspector {_kind('ResourceKind')} "
+            f"-n {_namespace('resource-namespace')} {_name('resource-name')}"
+        ),
     )
 
     arg_parser.add_argument(
@@ -63,23 +70,47 @@ def main():
     load_resource(resource_ref)
 
 
-RESOURCE_PRINTER = """
-apiVersion: {apiVersion}
-kind: {kind}
-metadata:
-    name: {metadata.name}
-    namespace: {metadata.namespace}
-    uid: {metadata.uid}
+def _api_version(api_version: str):
+    return f"{Color.CYAN}{api_version}{Color.OFF}"
+
+
+def _kind(kind: str):
+    return f"{BrightColor.BLUE}{kind}{BrightColor.OFF}"
+
+
+def _namespace(namespace: str):
+    return f"{BrightColor.GREEN}{namespace}{BrightColor.OFF}"
+
+
+def _name(name: str):
+    return f"{Color.YELLOW}{name}{Color.OFF}"
+
+
+def _label(name: str):
+    return f"{Color.MAGENTA}{name}{Color.OFF}"
+
+
+def _step_name(name: str):
+    return f"{BrightColor.RED}{name}{BrightColor.OFF}"
+
+
+RESOURCE_PRINTER = f"""
+{_label('apiVersion')}: {_api_version('{apiVersion}')}
+{_label('kind')}: {_kind('{kind}')}
+{_label('metadata')}:
+    {_label('name')}: {_name('{metadata.name}')}
+    {_label('namespace')}: {_namespace('{metadata.namespace}')}
+    {_label('uid')}: {{metadata.uid}}
 """
 
-CONDITION_PRINTER = """
-              type: {type}
-            reason: {reason}
-           message: {message}
-          location: {location}
-            status: {status}
-lastTransitionTime: {lastTransitionTime}
-    lastUpdateTime: {lastUpdateTime}
+CONDITION_PRINTER = f"""
+              {_label('type')}: {_api_version('{type}')}
+            {_label('reason')}: {_kind('{reason}')}
+           {_label('message')}: {{message}}
+          {_label('location')}: {{location}}
+            {_label('status')}: {{status}}
+{_label('lastTransitionTime')}: {{lastTransitionTime}}
+    {_label('lastUpdateTime')}: {{lastUpdateTime}}
 """
 
 
@@ -109,11 +140,11 @@ def inspect_resource(resource: APIObject):
             case None:
                 continue
             case list():
-                print(f"Step '{step}' managed resources:")
+                print(f"Step '{_step_name(step)}' managed resources:")
                 for sub_resource_ref in resource_ref:
                     load_resource(resource_ref=sub_resource_ref)
             case {}:
-                print(f"Step '{step}' managed resources:")
+                print(f"Step '{_step_name(step)}' managed resources:")
                 load_resource(resource_ref=resource_ref)
 
 

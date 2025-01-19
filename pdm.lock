@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:993ffd7f52575a56288537a091f6f5b0abe5b468bfd96e2794d2634a5c2ca522"
+content_hash = "sha256:94dfcf43950cb09744ba81fa370c91b397d6d1df61e5bb010bdd763e5a3aca72"
 
 [[metadata.targets]]
 requires_python = ">=3.13"
@@ -282,6 +282,17 @@ marker = "sys_platform == \"win32\" or platform_system == \"Windows\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
+]
+
+[[package]]
+name = "colorist"
+version = "1.8.3"
+requires_python = ">=3.10"
+summary = "Colorist for Python"
+groups = ["dev"]
+files = [
+    {file = "colorist-1.8.3-py3-none-any.whl", hash = "sha256:71845994a2c30ba582e563876685e5add5151237463ea27672314ed196a61821"},
+    {file = "colorist-1.8.3.tar.gz", hash = "sha256:8a6741feae39eebfe25436f2c9f564072f3c0c37bdabc5cc75a35149b483b72c"},
 ]
 
 [[package]]
@@ -573,6 +584,7 @@ dependencies = [
     "jsonpath-ng==1.7.0",
     "kopf==1.37.4",
     "kr8s==0.18.1",
+    "pyright>=1.1.391",
     "uvloop==0.21.0",
 ]
 
