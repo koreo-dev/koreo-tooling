@@ -113,39 +113,37 @@ CONDITION_PRINTER = f"""
     {_label('lastUpdateTime')}: {{lastUpdateTime}}
 """
 
+default_condition = {
+    "type": "<missing>",
+    "reason": "<missing>",
+    "message": "<missing>",
+    "location": "<missing>",
+    "status": "<missing>",
+    "lastTransitionTime": "<missing>",
+    "lastUpdateTime": "<missing>",
+}
+
 
 def inspect_resource(resource: APIObject):
     print(RESOURCE_PRINTER.format_map(resource.raw))
     if VERBOSE and "status" in resource.raw:
         conditions = resource.status.get("conditions")
         if conditions:
+            print("Conditions:")
             for condition in conditions:
-                print("Conditions:")
-                print(CONDITION_PRINTER.format_map(condition))
+                print(CONDITION_PRINTER.format_map(default_condition | condition))
 
     if VERBOSE > 2:
         print(json.dumps(resource.raw, indent="  "))
     elif VERBOSE > 1:
-        print(json.dumps(resource.spec, indent="  "))
+        if "spec" in resource.raw:
+            print(json.dumps(resource.spec, indent="  "))
 
     managed_resources_raw = resource.annotations.get(MANAGED_RESOURCES_ANNOTATION)
     if not managed_resources_raw:
         return
 
-    managed_resources: dict[
-        str, ManagedResourceRef | list[ManagedResourceRef] | None
-    ] = json.loads(managed_resources_raw)
-    for step, resource_ref in managed_resources.items():
-        match resource_ref:
-            case None:
-                continue
-            case list():
-                print(f"Step '{_step_name(step)}' managed resources:")
-                for sub_resource_ref in resource_ref:
-                    load_resource(resource_ref=sub_resource_ref)
-            case {}:
-                print(f"Step '{_step_name(step)}' managed resources:")
-                load_resource(resource_ref=resource_ref)
+    _process_managed_resources(json.loads(managed_resources_raw))
 
 
 class ManagedResourceRef(TypedDict):
@@ -155,6 +153,32 @@ class ManagedResourceRef(TypedDict):
     name: str
     namespace: str
     readonly: bool
+
+
+def _process_managed_resources(
+    managed_resources: dict[
+        str,
+        ManagedResourceRef
+        | list[ManagedResourceRef]
+        | dict[str, ManagedResourceRef]
+        | None,
+    ]
+):
+    for step, resource_ref in managed_resources.items():
+        match resource_ref:
+            case None:
+                continue
+            case list():
+                print(f"Step '{_step_name(step)}' managed resources:")
+                for sub_resource_ref in resource_ref:
+                    load_resource(resource_ref=sub_resource_ref)
+            case {"apiVersion": _, "kind": _, "name": _, "namespace": _}:
+                print(f"Step '{_step_name(step)}' managed resource:")
+                load_resource(resource_ref=resource_ref)
+
+            case {}:
+                print(f"Step '{_step_name(step)}' managed resources (sub-workflow):")
+                _process_managed_resources(resource_ref)
 
 
 def load_resource(resource_ref: ManagedResourceRef):
