@@ -155,6 +155,47 @@ async def _run_function_test(
         )
 
     messages = []
+    success = True
+
+    if not test_outcome.test_results:
+        messages.append("No tests run.")
+    else:
+        error_messages = []
+        for result in test_outcome.test_results:
+            if result.test_pass:
+                continue
+
+            if result.message:
+                error_messages.append(f"{result.label}: {result.message}")
+                continue
+
+            if result.differences:
+                error_messages.append(f"{result.label}: {result.differences}")
+
+        if error_messages:
+            messages.append(f"### Test Failures\n{'\n'.join(error_messages)}")
+            success = False
+        else:
+            messages.append(f"### {len(test_outcome.test_results)} Tests passed")
+
+        return TestResults(
+            success=success,
+            messages=messages,
+            resource_field_errors=None,
+            outcome_fields_errors=None,
+            input_mismatches=field_mismatches,
+            actual_resource=None,
+        )
+
+    return TestResults(
+        success=success,
+        messages=messages,
+        resource_field_errors=None,
+        outcome_fields_errors=None,
+        input_mismatches=field_mismatches,
+        actual_resource=None,
+    )
+
     resource_field_errors = []
     outcome_fields_errors = []
     actual_return = None

@@ -304,6 +304,10 @@ def _function_test_hover(
     if result.success:
         hover_content.append(f"# *Success*")
 
+        if result.messages:
+            hover_content.append("## Test Notes")
+            hover_content.extend(result.messages)
+
         if result.input_mismatches:
             hover_content.append("## Unused Inputs")
             hover_content.append("| Field | Issue | Severity |")

@@ -155,6 +155,20 @@ _function_inputs: SemanticStructure = SemanticStructure(
     ),
 )
 
+_function_input_overrides: SemanticStructure = SemanticStructure(
+    type="property",
+    local_key_fn=lambda value: "input_overrides",
+    sub_structure=SemanticStructure(
+        local_key_fn=lambda value: "InputValues",
+        sub_structure={
+            ALL: SemanticStructure(
+                local_key_fn=lambda value: f"input:{value}", type="variable"
+            )
+        },
+    ),
+)
+
+
 _validators = SemanticStructure(
     type="property",
     strict_sub_structure_keys=True,
@@ -565,6 +579,58 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         ),
                     ),
                     "inputs": _function_inputs,
+                    "testCases": SemanticStructure(
+                        type="property",
+                        local_key_fn=lambda value: "input_validator_tests",
+                        sub_structure=SemanticStructure(
+                            sub_structure=SemanticStructure(
+                                type="property",
+                                sub_structure={
+                                    "label": SemanticStructure(
+                                        type="property",
+                                        sub_structure=SemanticStructure(type="string"),
+                                    ),
+                                    "variant": SemanticStructure(
+                                        type="property",
+                                        sub_structure=SemanticStructure(type="number"),
+                                    ),
+                                    "skip": SemanticStructure(
+                                        type="property",
+                                        sub_structure=SemanticStructure(type="number"),
+                                    ),
+                                    "currentResource": SemanticStructure(
+                                        type="property",
+                                        local_key_fn=lambda value: "resource_state_label",
+                                        sub_structure=SemanticStructure(
+                                            local_key_fn=lambda value: "resource_state_value",
+                                        ),
+                                    ),
+                                    "inputOverrides": _function_input_overrides,
+                                    "expectResource": SemanticStructure(
+                                        type="property",
+                                        local_key_fn=lambda value: "case_expected_resource",
+                                        sub_structure=SemanticStructure(
+                                            local_key_fn=lambda value: "case_expected_value",
+                                        ),
+                                    ),
+                                    "expectOutcome": _validators,
+                                    "expectReturn": SemanticStructure(
+                                        type="property",
+                                        local_key_fn=lambda value: "case_expected_return",
+                                        sub_structure=SemanticStructure(
+                                            local_key_fn=lambda value: "case_expected_value",
+                                        ),
+                                    ),
+                                    "expectDelete": SemanticStructure(
+                                        type="property",
+                                        sub_structure=SemanticStructure(
+                                            type="number",
+                                        ),
+                                    ),
+                                },
+                            ),
+                        ),
+                    ),
                     "expectResource": SemanticStructure(
                         type="property",
                         local_key_fn=lambda value: "expected_resource",
