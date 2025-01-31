@@ -171,7 +171,7 @@ def _process_managed_resources(
             case list():
                 print(f"Step '{_step_name(step)}' managed resources:")
                 for sub_resource_ref in resource_ref:
-                    load_resource(resource_ref=sub_resource_ref)
+                    _process_managed_resources(sub_resource_ref)
             case {"apiVersion": _, "kind": _, "name": _, "namespace": _}:
                 print(f"Step '{_step_name(step)}' managed resource:")
                 load_resource(resource_ref=resource_ref)
