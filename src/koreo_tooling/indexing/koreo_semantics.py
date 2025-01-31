@@ -600,9 +600,16 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     ),
                                     "currentResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "resource_state_label",
+                                        local_key_fn=lambda value: "current_resource",
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "resource_state_value",
+                                            local_key_fn=lambda value: "current_resource_value",
+                                        ),
+                                    ),
+                                    "overlayResource": SemanticStructure(
+                                        type="property",
+                                        local_key_fn=lambda value: "overlay_resource",
+                                        sub_structure=SemanticStructure(
+                                            local_key_fn=lambda value: "overlay_resource_value",
                                         ),
                                     ),
                                     "inputOverrides": _function_input_overrides,
