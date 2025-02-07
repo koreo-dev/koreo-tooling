@@ -13,7 +13,7 @@ from pygls.lsp.server import LanguageServer
 
 
 KOREO_LSP_NAME = "koreo-ls"
-KOREO_LSP_VERSION = "v1alpha8"
+KOREO_LSP_VERSION = "v1beta1"
 
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 

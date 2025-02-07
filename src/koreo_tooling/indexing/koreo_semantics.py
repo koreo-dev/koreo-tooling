@@ -247,7 +247,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
             "spec": SemanticStructure(
                 strict_sub_structure_keys=True,
                 sub_structure={
-                    "inputValidators": _validators,
+                    "preconditions": _validators,
                     "locals": SemanticStructure(
                         type="property",
                         sub_structure=SemanticStructure(
@@ -338,15 +338,9 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                             ),
                         },
                     ),
-                    "outcome": SemanticStructure(
+                    "postconditions": _validators,
+                    "return": SemanticStructure(
                         type="property",
-                        strict_sub_structure_keys=True,
-                        sub_structure={
-                            "validators": _validators,
-                            "return": SemanticStructure(
-                                type="property",
-                            ),
-                        },
                     ),
                 },
             ),
@@ -371,7 +365,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
             "spec": SemanticStructure(
                 strict_sub_structure_keys=True,
                 sub_structure={
-                    "validators": _validators,
+                    "preconditions": _validators,
                     "locals": SemanticStructure(
                         type="property",
                         sub_structure=SemanticStructure(
@@ -469,6 +463,12 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     "functionRef": _function_ref,
                                     "workflowRef": _workflow_ref,
                                     "inputs": _function_inputs,
+                                    "skipIf": SemanticStructure(
+                                        type="property",
+                                        sub_structure=SemanticStructure(
+                                            type="string",
+                                        ),
+                                    ),
                                     "forEach": SemanticStructure(
                                         type="property",
                                         local_key_fn=lambda value: "for_each",

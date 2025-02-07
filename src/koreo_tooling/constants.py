@@ -12,7 +12,7 @@ from koreo.workflow.prepare import prepare_workflow
 from koreo.workflow.structure import Workflow
 
 
-API_VERSION = "koreo.realkinetic.com/v1alpha8"
+API_VERSION = "koreo.realkinetic.com/v1beta1"
 
 PREPARE_MAP = {
     "FunctionTest": (FunctionTest, prepare_function_test),
