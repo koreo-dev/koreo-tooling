@@ -272,13 +272,28 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     ),
                                 ),
                             ),
-                            "overlay": SemanticStructure(
-                                type="property",
-                            ),
                         },
                     ),
                     "resource": SemanticStructure(
                         type="property",
+                    ),
+                    "overlays": SemanticStructure(
+                        type="property",
+                        strict_sub_structure_keys=True,
+                        sub_structure=SemanticStructure(
+                            type="property",
+                            strict_sub_structure_keys=True,
+                            sub_structure={
+                                "skipIf": SemanticStructure(
+                                    type="property",
+                                ),
+                                "overlay": SemanticStructure(
+                                    type="property",
+                                ),
+                                "overlayRef": _function_ref,
+                                "inputs": _function_inputs,
+                            },
+                        ),
                     ),
                     "create": SemanticStructure(
                         type="property",
