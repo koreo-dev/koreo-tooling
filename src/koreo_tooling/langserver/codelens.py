@@ -354,7 +354,7 @@ def _code_lens_inputs_action(test_name: str, test_result: TestResults):
             )
 
     inputs_value_block = block_range_extract(
-        search_key="InputValues",
+        search_key="input-values",
         search_nodes=inputs_block.children,
         anchor=test_anchor,
     )

@@ -73,37 +73,31 @@ async def run_function_tests(
     logs = []
 
     tasks = []
-    async with asyncio.TaskGroup() as task_group:
-        for test_key in all_tests:
-            test = cache.get_resource_from_cache(
-                resource_class=FunctionTest, cache_key=test_key
-            )
-            if not test:
-                logs.append(
-                    types.LogMessageParams(
-                        type=types.MessageType.Error,
-                        message=f"Failed to find FunctionTest ('{test_key}') in Koreo cache.",
+    try:
+        async with asyncio.TaskGroup() as task_group:
+            for test_key in all_tests:
+                test = cache.get_resource_from_cache(
+                    resource_class=FunctionTest, cache_key=test_key
+                )
+                if not test:
+                    logs.append(
+                        types.LogMessageParams(
+                            type=types.MessageType.Error,
+                            message=f"Failed to find FunctionTest ('{test_key}') in Koreo cache.",
+                        )
+                    )
+                    continue
+
+                tasks.append(
+                    task_group.create_task(
+                        _run_function_test(test_key, test), name=test_key
                     )
                 )
-                continue
+    except:
+        # exceptions handled for each task
+        pass
 
-            tasks.append(
-                task_group.create_task(
-                    _run_function_test(test_key, test), name=test_key
-                )
-            )
-
-    done, pending = await asyncio.wait(tasks)
-    if pending:
-        for timeout in pending:
-            logs.append(
-                types.LogMessageParams(
-                    type=types.MessageType.Error,
-                    message=f"Timeout running FunctionTest ('{timeout.get_name()}')!",
-                )
-            )
-
-    results = {task.get_name(): task.result() for task in done}
+    results = {task.get_name(): task.result() for task in tasks if task.done()}
     return (results, logs)
 
 

@@ -7,7 +7,7 @@ os.environ["KOREO_DEV_TOOLING"] = "true"
 from lsprotocol import types
 
 from koreo import cache
-from koreo.workflow.structure import Workflow, ConfigStep, ErrorStep, Step
+from koreo.workflow.structure import ConfigStep, ErrorStep, LogicSwitch, Step, Workflow
 from koreo.resource_function.structure import ResourceFunction
 from koreo.value_function.structure import ValueFunction
 from koreo.result import is_unwrapped_ok
@@ -322,10 +322,10 @@ def _process_workflow_step(
 
 
 def _get_first_tier_inputs(
-    logic: Workflow | ValueFunction | ResourceFunction,
+    logic: Workflow | ValueFunction | ResourceFunction | LogicSwitch,
 ) -> set[str]:
     match logic:
-        case (ValueFunction() | ResourceFunction()) as logic:
+        case (LogicSwitch() | ValueFunction() | ResourceFunction()) as logic:
             # These are just the "top level" direct inputs. No consideration to
             # internal structure.
             return set(

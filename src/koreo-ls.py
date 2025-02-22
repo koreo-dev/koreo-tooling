@@ -567,7 +567,7 @@ async def _analyze_file(
         current_resource_defs.keys()
     )
     for deleted_resource in deleted_resource_defs:
-        del_result = await cache.delete_from_cache(
+        await cache.delete_from_cache(
             resource_class=deleted_resource.resource_type,
             cache_key=deleted_resource.name,
             version=old_resource_defs[deleted_resource],
@@ -745,6 +745,12 @@ def _process_workflows(
 async def _run_function_test(
     semantic_range_index: Sequence[SemanticRangeIndex] | None,
 ) -> tuple[list[types.Diagnostic], dict[str, TestResults]]:
+    """For the given `semantic_range_index`, get all `FunctionTests`. It will
+    also accumulate all `ResourceFunction` and `ValueFunction` resources, the
+    test runner will lookup all associated `FunctionTests` and run them as
+    well. This allows tests and functions in different files, to cause the
+    tests are re-run update test results.
+    """
     if not semantic_range_index:
         return ([], {})
 
@@ -793,6 +799,7 @@ async def _run_function_test(
     return ([], results)
 
 
+# Globals? Are you evil or just stupid? Yes.
 __PARSING_RESULT: dict[str, tuple[int | None, ProccessResults]] = {}
 __TEST_RESULTS = defaultdict[str, dict[str, TestResults]](dict)
 __SEMANTIC_TOKEN_INDEX: dict[str, Sequence[int]] = {}
@@ -803,9 +810,7 @@ def _reset_file_state(uri: str):
     global __SEMANTIC_RANGE_INDEX
 
     __SEMANTIC_RANGE_INDEX = [
-        range_index
-        for range_index in __SEMANTIC_RANGE_INDEX
-        if range_index.uri != uri
+        range_index for range_index in __SEMANTIC_RANGE_INDEX if range_index.uri != uri
     ]
 
     if uri in __SEMANTIC_TOKEN_INDEX:

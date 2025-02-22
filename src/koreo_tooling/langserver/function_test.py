@@ -71,6 +71,7 @@ def _process_results(
         ):
             continue
 
+        # This is the test's location within the file.
         anchor = cached_resource.system_data.get("anchor")
         if not anchor:
             continue
@@ -91,8 +92,13 @@ def _process_results(
         )
         match test_spec_block:
             case None:
+                # Could not find the FunctionTest's spec. Hopefully they're
+                # typing it right now.
                 continue
             case list(block_diagnostics):
+                # There was some type of structural issue that resulted in the
+                # spec block lookup returning errors. The diagnostics should
+                # explain the issue.
                 test_diagnostics.extend(block_diagnostics)
                 continue
 
@@ -149,7 +155,7 @@ def _process_input_errors(
             return block_diagnostics
 
     input_values_block = block_range_extract(
-        search_key="InputValues",
+        search_key="input-values",
         search_nodes=inputs_block.children,
         anchor=anchor,
     )

@@ -182,6 +182,10 @@ def _process_managed_resources(
 
 
 def load_resource(resource_ref: ManagedResourceRef):
+    if not resource_ref:
+        print("No resource")
+        return
+
     resources = kr8s.get(
         resource_ref.get("kind"),
         resource_ref.get("name"),

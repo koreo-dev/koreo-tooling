@@ -69,7 +69,7 @@ _namespace: SemanticStructure = SemanticStructure(
     ),
 )
 
-_function_ref: SemanticStructure = SemanticStructure(
+_logic_ref: SemanticStructure = SemanticStructure(
     type="property",
     sub_structure=SemanticStructure(
         strict_sub_structure_keys=True,
@@ -87,19 +87,6 @@ _function_ref: SemanticStructure = SemanticStructure(
             ),
         },
     ),
-)
-
-_workflow_ref: SemanticStructure = SemanticStructure(
-    type="property",
-    sub_structure={
-        "name": SemanticStructure(
-            type="property",
-            sub_structure=SemanticStructure(
-                index_key_fn=lambda value: f"Workflow:{value}:ref",
-                type="class",
-            ),
-        ),
-    },
 )
 
 _api_config: SemanticStructure = SemanticStructure(
@@ -146,7 +133,7 @@ _function_inputs: SemanticStructure = SemanticStructure(
     type="property",
     local_key_fn=lambda value: "inputs",
     sub_structure=SemanticStructure(
-        local_key_fn=lambda value: "InputValues",
+        local_key_fn=lambda value: "input-values",
         sub_structure={
             ALL: SemanticStructure(
                 local_key_fn=lambda value: f"input:{value}", type="variable"
@@ -159,7 +146,7 @@ _function_input_overrides: SemanticStructure = SemanticStructure(
     type="property",
     local_key_fn=lambda value: "input_overrides",
     sub_structure=SemanticStructure(
-        local_key_fn=lambda value: "InputValues",
+        local_key_fn=lambda value: "input-values",
         sub_structure={
             ALL: SemanticStructure(
                 local_key_fn=lambda value: f"input:{value}", type="variable"
@@ -290,7 +277,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                 "overlay": SemanticStructure(
                                     type="property",
                                 ),
-                                "overlayRef": _function_ref,
+                                "overlayRef": _logic_ref,
                                 "inputs": _function_inputs,
                             },
                         ),
@@ -454,8 +441,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                         modifier=[Modifier.definition],
                                     ),
                                 ),
-                                "functionRef": _function_ref,
-                                "workflowRef": _workflow_ref,
+                                "ref": _logic_ref,
                                 "inputs": _function_inputs,
                                 "state": SemanticStructure(type="property"),
                             },
@@ -475,8 +461,56 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                             modifier=[Modifier.definition],
                                         ),
                                     ),
-                                    "functionRef": _function_ref,
-                                    "workflowRef": _workflow_ref,
+                                    "ref": _logic_ref,
+                                    "refSwitch": SemanticStructure(
+                                        type="property",
+                                        strict_sub_structure_keys=True,
+                                        sub_structure=SemanticStructure(
+                                            type="property",
+                                            strict_sub_structure_keys=True,
+                                            sub_structure={
+                                                "switchOn": SemanticStructure(
+                                                    type="property"
+                                                ),
+                                                "cases": SemanticStructure(
+                                                    type="property",
+                                                    sub_structure=SemanticStructure(
+                                                        strict_sub_structure_keys=True,
+                                                        sub_structure=SemanticStructure(
+                                                            strict_sub_structure_keys=True,
+                                                            field_index_key_fn=function_ref_indexer,
+                                                            sub_structure={
+                                                                "case": SemanticStructure(
+                                                                    type="property",
+                                                                    sub_structure=SemanticStructure(
+                                                                        type="string"
+                                                                    ),
+                                                                ),
+                                                                "default": SemanticStructure(
+                                                                    type="property",
+                                                                    sub_structure=SemanticStructure(
+                                                                        type="number"
+                                                                    ),
+                                                                ),
+                                                                "kind": SemanticStructure(
+                                                                    type="property",
+                                                                    sub_structure=SemanticStructure(
+                                                                        type="type"
+                                                                    ),
+                                                                ),
+                                                                "name": SemanticStructure(
+                                                                    type="property",
+                                                                    sub_structure=SemanticStructure(
+                                                                        type="function",
+                                                                    ),
+                                                                ),
+                                                            },
+                                                        ),
+                                                    ),
+                                                ),
+                                            },
+                                        ),
+                                    ),
                                     "inputs": _function_inputs,
                                     "skipIf": SemanticStructure(
                                         type="property",
@@ -585,24 +619,26 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                 local_key_fn=lambda value: "spec",
                 strict_sub_structure_keys=True,
                 sub_structure={
-                    "functionRef": _function_ref,
+                    "functionRef": _logic_ref,
                     "currentResource": SemanticStructure(
                         type="property",
-                        local_key_fn=lambda value: "current_resource",
+                        local_key_fn=lambda value: "current-resource",
                         sub_structure=SemanticStructure(
-                            local_key_fn=lambda value: "current_value",
+                            local_key_fn=lambda value: "current-value",
                         ),
                     ),
                     "inputs": _function_inputs,
                     "testCases": SemanticStructure(
                         type="property",
-                        local_key_fn=lambda value: "input_validator_tests",
+                        local_key_fn=lambda value: "test-cases",
                         sub_structure=SemanticStructure(
                             sub_structure=SemanticStructure(
                                 type="property",
+                                local_key_fn=lambda value: "test-case-body",
                                 sub_structure={
                                     "label": SemanticStructure(
                                         type="property",
+                                        local_key_fn=lambda value: "label",
                                         sub_structure=SemanticStructure(type="string"),
                                     ),
                                     "variant": SemanticStructure(
@@ -615,32 +651,32 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     ),
                                     "currentResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "current_resource",
+                                        local_key_fn=lambda value: "current-resource",
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "current_resource_value",
+                                            local_key_fn=lambda value: "current-resource-value",
                                         ),
                                     ),
                                     "overlayResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "overlay_resource",
+                                        local_key_fn=lambda value: "overlay-resource",
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "overlay_resource_value",
+                                            local_key_fn=lambda value: "overlay-resource-value",
                                         ),
                                     ),
                                     "inputOverrides": _function_input_overrides,
                                     "expectResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "case_expected_resource",
+                                        local_key_fn=lambda value: "expected-resource",
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "case_expected_value",
+                                            local_key_fn=lambda value: "expected-value",
                                         ),
                                     ),
                                     "expectOutcome": _validators,
                                     "expectReturn": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "case_expected_return",
+                                        local_key_fn=lambda value: "expected-return",
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "case_expected_value",
+                                            local_key_fn=lambda value: "expected-value",
                                         ),
                                     ),
                                     "expectDelete": SemanticStructure(
