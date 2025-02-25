@@ -9,7 +9,7 @@ from colorist import BrightColor, Color
 
 BAD_RESPONSE = 10
 
-MANAGED_RESOURCES_ANNOTATION = "koreo.realkinetic.com/managed-resources"
+MANAGED_RESOURCES_ANNOTATION = "koreo.dev/managed-resources"
 
 VERBOSE = 0
 
