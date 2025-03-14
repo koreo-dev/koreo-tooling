@@ -305,14 +305,14 @@ def _get_first_tier_inputs(
             )
 
         case Workflow() as workflow:
-            return set(
-                input_key.group("name")
-                for input_key in (
-                    constants.PARENT_INPUT_PATTERN.match(key)
+            return {
+                parent_key.group("root")
+                for parent_key in (
+                    constants.PARENT_ROOT_PATTERN.match(key)
                     for key in workflow.dynamic_input_keys
                 )
-                if input_key
-            )
+                if parent_key
+            }
 
     # NOTE: This should never happen, but if it does set to empty set.
     return set()
