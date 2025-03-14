@@ -7,19 +7,6 @@ from .semantics import Modifier, SemanticStructure
 ALL = "*"
 
 
-def config_step_path_indexer(value) -> str:
-    try:
-        label = "config"
-        for key, name in value:
-            if key.value == "label":
-                label = name.value
-                break
-
-        return f"Step:{label}"
-    except Exception as err:
-        raise Exception(f"Failed to process '{value}', with {err}")
-
-
 def step_path_indexer(value) -> str:
     try:
         return (
@@ -426,26 +413,6 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                 sub_structure=SemanticStructure(type="class"),
                             ),
                         },
-                    ),
-                    "configStep": SemanticStructure(
-                        local_key_fn=lambda value: f"config_step_block",
-                        sub_structure=SemanticStructure(
-                            local_key_fn=config_step_path_indexer,
-                            strict_sub_structure_keys=True,
-                            sub_structure={
-                                "label": SemanticStructure(
-                                    type="property",
-                                    sub_structure=SemanticStructure(
-                                        local_key_fn=lambda value: f"label:{value}",
-                                        type="event",
-                                        modifier=[Modifier.definition],
-                                    ),
-                                ),
-                                "ref": _logic_ref,
-                                "inputs": _function_inputs,
-                                "state": SemanticStructure(type="property"),
-                            },
-                        ),
                     ),
                     "steps": SemanticStructure(
                         sub_structure=SemanticStructure(

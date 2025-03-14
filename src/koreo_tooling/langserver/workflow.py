@@ -7,7 +7,7 @@ os.environ["KOREO_DEV_TOOLING"] = "true"
 from lsprotocol import types
 
 from koreo import cache
-from koreo.workflow.structure import ConfigStep, ErrorStep, LogicSwitch, Step, Workflow
+from koreo.workflow.structure import ErrorStep, LogicSwitch, Step, Workflow
 from koreo.resource_function.structure import ResourceFunction
 from koreo.value_function.structure import ValueFunction
 from koreo.result import is_unwrapped_ok
@@ -116,8 +116,6 @@ def _process_workflow(
             ],
         )
 
-    has_step_error = False
-
     diagnostics: list[types.Diagnostic] = []
     if not is_unwrapped_ok(workflow.steps_ready):
         diagnostics.append(
@@ -147,34 +145,7 @@ def _process_workflow(
         )
         return ProcessResult(error=True, diagnostics=diagnostics)
 
-    raw_config_step_spec = raw_spec.get("configStep")
-
-    if raw_config_step_spec and workflow.config_step:
-        step_block = block_range_extract(
-            search_key=f"config_step_block",
-            search_nodes=semantic_anchor.children,
-            anchor=semantic_anchor,
-        )
-        config_step_result = _process_workflow_step(
-            workflow.config_step,
-            step_block,
-            raw_config_step_spec,
-            semantic_anchor,
-            implicit_inputs=("parent",),
-        )
-
-        has_step_error = has_step_error or config_step_result.error
-        if config_step_result.diagnostics:
-            diagnostics.extend(config_step_result.diagnostics)
-
-    if has_step_error:
-        diagnostics.append(
-            types.Diagnostic(
-                message=f"Workflow steps are not ready.",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
-        )
+    has_step_error = False
 
     for step in workflow.steps:
         step_block = block_range_extract(
@@ -212,7 +183,7 @@ def _process_workflow(
 
 
 def _process_workflow_step(
-    step: ConfigStep | Step | ErrorStep,
+    step: Step | ErrorStep,
     step_semantic_block,
     step_spec,
     semantic_anchor,
@@ -260,10 +231,6 @@ def _process_workflow_step(
     inputs = call_arg_compare(provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
         if not expected and provided:
-            # TODO: This should really only apply if it is the `configStep`.
-            if argument == "parent":
-                continue
-
             has_error = True
 
             # This is not done earlier so that we can still flag issues at the
@@ -338,24 +305,14 @@ def _get_first_tier_inputs(
             )
 
         case Workflow() as workflow:
-            match workflow.config_step:
-                case None | ErrorStep():
-                    return set()
-
-                case ConfigStep(logic=config_logic):
-                    match config_logic:
-                        case Workflow():
-                            return _get_first_tier_inputs(logic=config_logic)
-
-                        case _:
-                            return set(
-                                input_key.group("name")
-                                for input_key in (
-                                    constants.PARENT_INPUT_PATTERN.match(key)
-                                    for key in config_logic.dynamic_input_keys
-                                )
-                                if input_key
-                            )
+            return set(
+                input_key.group("name")
+                for input_key in (
+                    constants.PARENT_INPUT_PATTERN.match(key)
+                    for key in workflow.dynamic_input_keys
+                )
+                if input_key
+            )
 
     # NOTE: This should never happen, but if it does set to empty set.
     return set()
