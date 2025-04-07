@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:975a6d109b2e4d99eb10b62907e3ab110e80c764e07731617cb9ff578cfe2bea"
+content_hash = "sha256:20ef0d6f943510f71534d1eaa50f52b8e0662997bdb3cb7a377183c9cd7358cb"
 
 [[metadata.targets]]
 requires_python = ">=3.13"
@@ -190,7 +190,7 @@ name = "colorist"
 version = "1.8.3"
 requires_python = ">=3.10"
 summary = "Colorist for Python"
-groups = ["dev"]
+groups = ["default", "dev"]
 files = [
     {file = "colorist-1.8.3-py3-none-any.whl", hash = "sha256:71845994a2c30ba582e563876685e5add5151237463ea27672314ed196a61821"},
     {file = "colorist-1.8.3.tar.gz", hash = "sha256:8a6741feae39eebfe25436f2c9f564072f3c0c37bdabc5cc75a35149b483b72c"},
