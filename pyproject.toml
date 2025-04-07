@@ -1,6 +1,6 @@
 [project]
 name = "koreo"
-version = "0.1.1"
+version = "0.1.2"
 description = "Tooling package for Koreo"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},
@@ -29,6 +29,10 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
+
+[tool.pdm.build]
+package-dir = "src"
+includes = ["src/koreo_tooling", "src/inspector.py", "src/server.py"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
