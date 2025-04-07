@@ -1,14 +1,15 @@
 [project]
-name = "koreo-tooling"
+name = "koreo"
 version = "0.1.0"
 description = "Default template for PDM package"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},
 ]
 dependencies = [
-    "cel-python==0.1.5",
+    "cel-python==0.2.0",
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
+    "koreo-core==0.1.6",
 ]
 requires-python = ">=3.13"
 readme = "README.md"
@@ -19,11 +20,6 @@ Homepage = "https://koreo.dev"
 
 [tool.pdm]
 distribution = false
-
-[tool.pdm.dev-dependencies]
-dev = [
-    "-e file:///${PROJECT_ROOT}/../koreo-core#egg=koreo",
-]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
