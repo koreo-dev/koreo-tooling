@@ -30,6 +30,10 @@ build-backend = "pdm.backend"
 [tool.pdm]
 distribution = true
 
+[tool.pdm.build]
+package-dir = "src"
+includes = ["src/koreo_tooling", "src/inspector.py", "src/server.py"]
+
 [tool.pytest.ini_options]
 pythonpath = "src"
 testpaths = "tests"
