@@ -18,8 +18,12 @@ license = {text = "Apache-2.0"}
 [project.urls]
 Homepage = "https://koreo.dev"
 
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
 [tool.pdm]
-distribution = false
+distribution = true
 
 [tool.pytest.ini_options]
 pythonpath = "src"
