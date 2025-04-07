@@ -101,6 +101,10 @@ _api_config: SemanticStructure = SemanticStructure(
             type="parameter",
             sub_structure=SemanticStructure(type="number"),
         ),
+        "deleteIfExists": SemanticStructure(
+            type="parameter",
+            sub_structure=SemanticStructure(type="number"),
+        ),
         "readonly": SemanticStructure(
             type="parameter",
             sub_structure=SemanticStructure(type="number"),
