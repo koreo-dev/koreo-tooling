@@ -858,5 +858,9 @@ def _check_for_duplicate_resources(uri: str):
     return duplicate_diagnostics
 
 
-if __name__ == "__main__":
+def main():
     server.start_io()
+
+
+if __name__ == "__main__":
+    main()

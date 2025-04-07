@@ -1,7 +1,7 @@
 [project]
 name = "koreo"
-version = "0.1.0"
-description = "Default template for PDM package"
+version = "0.1.1"
+description = "Tooling package for Koreo"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},
 ]
@@ -10,6 +10,7 @@ dependencies = [
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
     "koreo-core==0.1.6",
+    "colorist>=1.8.3",
 ]
 requires-python = ">=3.13"
 readme = "README.md"
@@ -17,6 +18,10 @@ license = {text = "Apache-2.0"}
 
 [project.urls]
 Homepage = "https://koreo.dev"
+
+[project.scripts]
+koreo-ls = "server:main"
+koreo-inspector = "inspector:main"
 
 [build-system]
 requires = ["pdm-backend"]
