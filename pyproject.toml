@@ -1,6 +1,6 @@
 [project]
 name = "koreo"
-version = "0.1.2"
+version = "0.1.3"
 description = "Tooling package for Koreo"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},
@@ -9,9 +9,10 @@ dependencies = [
     "cel-python==0.2.0",
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
-    "koreo-core==0.1.6",
+    "koreo-core==0.1.7",
     "colorist>=1.8.3",
 ]
+
 requires-python = ">=3.13"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -32,7 +33,7 @@ distribution = true
 
 [tool.pdm.build]
 package-dir = "src"
-includes = ["src/koreo_tooling", "src/inspector.py", "src/server.py"]
+includes = ["src/koreo_tooling", "src/inspector.py", "src/server.py", "crd"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
