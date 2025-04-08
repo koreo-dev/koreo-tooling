@@ -15,7 +15,7 @@ from koreo import schema
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
-CRD_ROOT = pathlib.Path(__file__).parent.parent.joinpath("crd")
+CRD_ROOT = pathlib.Path(__file__).parent.joinpath("crd")
 
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
