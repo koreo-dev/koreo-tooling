@@ -1,5 +1,4 @@
 from typing import TypedDict
-import argparse
 import json
 
 import kr8s
@@ -12,62 +11,6 @@ BAD_RESPONSE = 10
 MANAGED_RESOURCES_ANNOTATION = "koreo.dev/managed-resources"
 
 VERBOSE = 0
-
-
-def main():
-    arg_parser = argparse.ArgumentParser(
-        description=(
-            f"Inpsect Koreo {_kind('Workflow')} " "resources and resource hierarchy."
-        ),
-        epilog=(
-            f"Example usage: inspector {_kind('ResourceKind')} "
-            f"-n {_namespace('resource-namespace')} {_name('resource-name')}"
-        ),
-    )
-
-    arg_parser.add_argument(
-        "kind",
-        help="Kubernetes Resource Kind for the workflow resource to inspect.",
-    )
-
-    arg_parser.add_argument(
-        "name",
-        help="Kubernetes Resource name for the workflow resource to inspect.",
-    )
-
-    arg_parser.add_argument(
-        "--namespace",
-        "-n",
-        help="Kubernetes namespace containing the workflow resource.",
-        default="default",
-    )
-
-    arg_parser.add_argument(
-        "--verbose",
-        "-v",
-        help="Verbose output, each -v adds another level of verbosity.",
-        action="count",
-    )
-
-    arguments = arg_parser.parse_args()
-
-    if arguments.verbose:
-        global VERBOSE
-        VERBOSE = arguments.verbose
-
-    print(f"Getting {arguments.kind}:{arguments.namespace}:{arguments.name}")
-
-    resource_ref = ManagedResourceRef(
-        kind=arguments.kind,
-        name=arguments.name,
-        namespace=arguments.namespace,
-        apiVersion="",
-        plural="",
-        readonly=False,
-    )
-
-    print("Workflow Trigger")
-    load_resource(resource_ref)
 
 
 def _api_version(api_version: str):
@@ -162,7 +105,7 @@ def _process_managed_resources(
         | list[ManagedResourceRef]
         | dict[str, ManagedResourceRef]
         | None,
-    ]
+    ],
 ):
     for step, resource_ref in managed_resources.items():
         match resource_ref:
@@ -216,5 +159,36 @@ def load_resource(resource_ref: ManagedResourceRef):
             exit(BAD_RESPONSE)
 
 
-if __name__ == "__main__":
-    main()
+def run_inspector(args):
+    if args.verbose:
+        global VERBOSE
+        VERBOSE = args.verbose
+
+    print(f"Getting {args.kind}:{args.namespace}:{args.name}")
+
+    resource_ref = ManagedResourceRef(
+        kind=args.kind,
+        name=args.name,
+        namespace=args.namespace,
+        apiVersion="",
+        plural="",
+        readonly=False,
+    )
+
+    print("Workflow Trigger")
+    load_resource(resource_ref)
+
+
+def register_inspector_subcommand(subparsers):
+    inspect_parser = subparsers.add_parser(
+        "inspect", help="Inspect a Koreo Workflow and resource hierarchy."
+    )
+    inspect_parser.add_argument("kind", help="Kubernetes Resource Kind")
+    inspect_parser.add_argument("name", help="Resource name")
+    inspect_parser.add_argument(
+        "--namespace", "-n", default="default", help="Namespace"
+    )
+    inspect_parser.add_argument(
+        "--verbose", "-v", action="count", help="Verbose output"
+    )
+    inspect_parser.set_defaults(func=run_inspector)
