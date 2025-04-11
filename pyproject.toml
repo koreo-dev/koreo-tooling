@@ -22,7 +22,7 @@ Homepage = "https://koreo.dev"
 
 [project.scripts]
 koreo-ls = "server:main"
-koreo-inspector = "inspector:main"
+koreo = "cli.__main__:main"
 
 [build-system]
 requires = ["pdm-backend"]
