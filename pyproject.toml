@@ -9,7 +9,7 @@ dependencies = [
     "cel-python==0.2.0",
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
-    "koreo-core==0.1.7",
+    "koreo-core==0.1.8",
     "colorist>=1.8.3",
 ]
 
