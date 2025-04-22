@@ -7,9 +7,7 @@ KIND_TO_PLURAL = {
 
 
 def prune_orphaned_functions(namespace=None, dry_run=True):
-    workflows = list(
-        kr8s.get("workflows.koreo.dev/v1beta1", namespace=namespace or kr8s.ALL)
-    )
+    workflows = list(kr8s.get("workflows.koreo.dev", namespace=namespace or kr8s.ALL))
 
     used_functions = set()
 
