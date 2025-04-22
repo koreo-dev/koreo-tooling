@@ -1,3 +1,4 @@
+import types
 from typing import TypedDict
 import json
 
@@ -134,6 +135,10 @@ def load_resource(resource_ref: ManagedResourceRef):
         resource_ref.get("name"),
         namespace=resource_ref.get("namespace"),
     )
+
+    # 🔍 Detect and exhaust generator
+    if isinstance(resources, types.GeneratorType):
+        resources = list(resources)
 
     match resources:
         case list():
