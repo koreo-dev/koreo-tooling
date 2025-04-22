@@ -68,7 +68,7 @@ default_condition = {
 }
 
 
-def inspect_resource(resource: APIObject):
+def inspect_resource(api: kr8s.Api, resource: APIObject):
     print(RESOURCE_PRINTER.format_map(resource.raw))
     if VERBOSE and "status" in resource.raw:
         conditions = resource.status.get("conditions")
@@ -87,7 +87,7 @@ def inspect_resource(resource: APIObject):
     if not managed_resources_raw:
         return
 
-    _process_managed_resources(json.loads(managed_resources_raw))
+    _process_managed_resources(api, json.loads(managed_resources_raw))
 
 
 class ManagedResourceRef(TypedDict):
@@ -100,6 +100,7 @@ class ManagedResourceRef(TypedDict):
 
 
 def _process_managed_resources(
+    api: kr8s.Api,
     managed_resources: dict[
         str,
         ManagedResourceRef
@@ -115,51 +116,29 @@ def _process_managed_resources(
             case list():
                 print(f"Step '{_step_name(step)}' managed resources:")
                 for sub_resource_ref in resource_ref:
-                    load_resource(sub_resource_ref)
+                    load_resource(api, sub_resource_ref)
             case {"apiVersion": _, "kind": _, "name": _, "namespace": _}:
                 print(f"Step '{_step_name(step)}' managed resource:")
-                load_resource(resource_ref=resource_ref)
+                load_resource(api, resource_ref)
 
             case {}:
                 print(f"Step '{_step_name(step)}' managed resources (sub-workflow):")
-                _process_managed_resources(resource_ref)
+                _process_managed_resources(api, resource_ref)
 
 
-def load_resource(resource_ref: ManagedResourceRef):
+def load_resource(api: kr8s.Api, resource_ref: ManagedResourceRef):
     if not resource_ref:
         print("No resource")
         return
 
-    resources = list(
-        kr8s.get(
-            resource_ref.get("kind"),
-            resource_ref.get("name"),
-            namespace=resource_ref.get("namespace"),
-        )
+    resources = api.get(
+        resource_ref.get("kind"),
+        resource_ref.get("name"),
+        namespace=resource_ref.get("namespace"),
     )
 
-    match resources:
-        case list():
-            for resource in resources:
-                match resource:
-                    case APIObject():
-                        inspect_resource(resource)
-                    case _:
-                        print(
-                            f"Unexpected response type from Kubernetes API Server {type(resource)}"
-                        )
-                        if VERBOSE:
-                            print(resource)
-                        exit(BAD_RESPONSE)
-
-        case APIObject():
-            inspect_resource(resources)
-
-        case other:
-            print(f"Unexpected response type from Kubernetes API Server {type(other)}")
-            if VERBOSE:
-                print(other)
-            exit(BAD_RESPONSE)
+    for resource in resources:
+        inspect_resource(api, resource)
 
 
 def run_inspector(args):
@@ -168,6 +147,8 @@ def run_inspector(args):
         VERBOSE = args.verbose
 
     print(f"Getting {args.kind}:{args.namespace}:{args.name}")
+
+    kr8s_api = kr8s.api()
 
     resource_ref = ManagedResourceRef(
         kind=args.kind,
@@ -179,7 +160,7 @@ def run_inspector(args):
     )
 
     print("Workflow Trigger")
-    load_resource(resource_ref)
+    load_resource(kr8s_api, resource_ref)
 
 
 def register_inspector_subcommand(subparsers):
