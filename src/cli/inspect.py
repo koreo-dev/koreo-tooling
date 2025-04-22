@@ -136,7 +136,6 @@ def load_resource(resource_ref: ManagedResourceRef):
         namespace=resource_ref.get("namespace"),
     )
 
-    # 🔍 Detect and exhaust generator
     if isinstance(resources, types.GeneratorType):
         resources = list(resources)
 
