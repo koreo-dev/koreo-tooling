@@ -29,9 +29,7 @@ def prune_orphaned_functions(namespace=None, dry_run=True):
                     if plural:
                         used_functions.add((wf_ns, plural, name))
 
-        resource_funcs = list(
-            kr8s.get("resourcefunctions.koreo.dev/v1beta1", namespace=wf_ns)
-        )
+        resource_funcs = list(kr8s.get("resourcefunctions.koreo.dev", namespace=wf_ns))
 
         for func in resource_funcs:
             overlays = func.spec.get("overlays", [])
@@ -45,9 +43,7 @@ def prune_orphaned_functions(namespace=None, dry_run=True):
                         used_functions.add((wf_ns, plural, name))
 
     def check_and_delete(plural):
-        funcs = list(
-            kr8s.get(f"{plural}.koreo.dev/v1beta1", namespace=namespace or kr8s.ALL)
-        )
+        funcs = list(kr8s.get(f"{plural}.koreo.dev", namespace=namespace or kr8s.ALL))
         for func in funcs:
             key = (func.metadata.namespace, plural, func.metadata.name)
             if key not in used_functions:
