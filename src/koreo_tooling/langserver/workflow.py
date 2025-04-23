@@ -163,18 +163,25 @@ def _process_workflow(
         step_spec = step_specs.get(step.label)
 
         # TODO Remove this in favor of searching subworkflows inputs.parent usage
-        skip_step = False
+        skip_input_validation = False
         switch_cases = step_spec.get("refSwitch", {}).get("cases", [])
         for case in switch_cases:
             if case.get("kind") == "Workflow":
-                skip_step = True
+                skip_input_validation = True
                 break
 
-        if skip_step:
+        if step_spec.get("ref", {}).get("kind") == "Workflow":
+            skip_input_validation = True
+
+        if skip_input_validation:
             continue
 
         step_result = _process_workflow_step(
-            step, step_block, step_spec, semantic_anchor
+            step,
+            step_block,
+            step_spec,
+            semantic_anchor,
+            skip_input_validation=skip_input_validation,
         )
 
         has_step_error = has_step_error or step_result.error
@@ -199,7 +206,10 @@ def _process_workflow_step(
     step_spec,
     semantic_anchor,
     implicit_inputs: Sequence[str] | None = None,
+    skip_input_validation: bool = False,
 ) -> ProcessResult:
+    has_error = False
+    diagnostics: list[types.Diagnostic] = []
     if isinstance(step, ErrorStep):
         return ProcessResult(
             error=True,
@@ -210,6 +220,9 @@ def _process_workflow_step(
                 message=f"Not ready {step.outcome.message}.",
             ),
         )
+
+    elif skip_input_validation:
+        return ProcessResult(error=False, diagnostics=diagnostics)
 
     first_tier_inputs = _get_first_tier_inputs(step.logic)
 
@@ -224,9 +237,6 @@ def _process_workflow_step(
     for_each_key = raw_for_each.get("inputKey")
     if for_each_key:
         provided_input_keys.append(f"{for_each_key}")
-
-    has_error = False
-    diagnostics: list[types.Diagnostic] = []
 
     inputs_block = block_range_extract(
         search_key="inputs",
