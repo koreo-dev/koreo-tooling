@@ -13,6 +13,7 @@ dependencies = [
     "pyyaml==6.0.2",
     "koreo-core==0.1.8",
     "colorist>=1.8.3",
+    "kr8s>=0.20.6",
 ]
 
 requires-python = ">=3.13"

@@ -1,4 +1,5 @@
 import argparse
+
 from .apply import register_apply_subcommand
 from .inspect import register_inspector_subcommand
 
@@ -11,11 +12,7 @@ def main():
     register_inspector_subcommand(subparsers)
 
     args = parser.parse_args()
-
-    if hasattr(args, "func"):
-        args.func(args)
-    else:
-        parser.print_help()
+    args.func(args)
 
 
 if __name__ == "__main__":
