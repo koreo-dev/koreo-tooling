@@ -162,6 +162,17 @@ def _process_workflow(
 
         step_spec = step_specs.get(step.label)
 
+        # TODO Remove this in favor of searching subworkflows inputs.parent usage
+        skip_step = False
+        switch_cases = step_spec.get("refSwitch", {}).get("cases", [])
+        for case in switch_cases:
+            if case.get("kind") == "Workflow":
+                skip_step = True
+                break
+
+        if skip_step:
+            continue
+
         step_result = _process_workflow_step(
             step, step_block, step_spec, semantic_anchor
         )
