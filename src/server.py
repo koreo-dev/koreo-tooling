@@ -251,7 +251,7 @@ async def change_workspace_config(params):
 
 
 async def _process_workspace_directories():
-    suffixes = ("yaml", "yml", "koreo")
+    suffixes = (".k", ".k.yaml", ".k.yml", "koreo")
 
     for folder_key in server.workspace.folders:
         path = Path(server.workspace.get_text_document(folder_key).path)
