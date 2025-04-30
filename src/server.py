@@ -428,7 +428,7 @@ async def semantic_tokens_full(params: types.ReferenceParams):
 
 @server.feature(types.SHUTDOWN)
 async def shutdown(*_, **__):
-    with open("/Users/bobert/tmp/koreo-ls.log", "w") as outfile:
+    with open("/tmp/koreo-ls.log", "w") as outfile:
         outfile.write("shutting down")
         await shutdown_handlers()
         outfile.write("shut down complete")
