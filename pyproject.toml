@@ -1,6 +1,6 @@
 [project]
 name = "koreo"
-version = "0.2.2"
+version = "0.3.0"
 description = "Tooling package for Koreo"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},

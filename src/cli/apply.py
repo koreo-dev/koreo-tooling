@@ -17,31 +17,37 @@ def apply_command(source_dir: str, namespace: str, force: bool):
         last_modified_file = dir_path / ".last_modified"
 
         if not force and last_modified_file.exists():
-            with open(last_modified_file) as f:
-                try:
-                    last_run = int(f.read().strip())
-                except ValueError:
-                    last_run = 0
+            try:
+                last_run = int(last_modified_file.read_text().strip())
+            except ValueError:
+                last_run = 0
         else:
             last_run = 0
 
         yaml_files = []
+        should_apply = force  # Default to apply if force is set
 
-        for koreo_file in dir_path.glob("*.koreo"):
-            try:
-                file_mod_time = int(koreo_file.stat().st_mtime)
-            except OSError:
-                continue
+        for ext in [".k", ".koreo"]:
+            for file in dir_path.glob(f"*{ext}"):
+                try:
+                    file_mod_time = int(file.stat().st_mtime)
+                except OSError:
+                    continue
 
-            if not force and file_mod_time <= last_run:
-                continue
+                if not force and file_mod_time <= last_run:
+                    continue
 
-            yaml_file = koreo_file.with_suffix(".yaml")
-            yaml_file.write_text(koreo_file.read_text())
-            print(f"Converted {koreo_file} to {yaml_file}")
-            yaml_files.append(yaml_file)
+                yaml_file = file.with_suffix(".yaml")
+                yaml_file.write_text(file.read_text())
+                print(f"Converted {file} to {yaml_file}")
+                yaml_files.append(yaml_file)
+                should_apply = True
 
-        if yaml_files:
+        # If there are .k.yaml or .k.yml files in the directory, we assume they should be applied as-is
+        if any(dir_path.glob("*.k.yaml")) or any(dir_path.glob("*.k.yml")):
+            should_apply = True
+
+        if should_apply:
             try:
                 subprocess.run(
                     ["kubectl", "apply", "-f", str(dir_path), "-n", namespace],
@@ -54,20 +60,20 @@ def apply_command(source_dir: str, namespace: str, force: bool):
 
             for yaml_file in yaml_files:
                 yaml_file.unlink()
-            print(f"Cleaned up YAML files in {dir_path}.")
+            if yaml_files:
+                print(f"Cleaned up generated YAML files in {dir_path}.")
 
-        # Write new timestamp
+        # Update timestamp
         with open(last_modified_file, "w") as f:
             f.write(str(int(time.time())))
         print(f"Updated last modified time for {dir_path}.")
 
-    print("All .koreo files processed and cleaned up successfully.")
+    print("All files processed and applied successfully.")
 
 
-# To integrate with your CLI, add this to your argparse setup
 def register_apply_subcommand(subparsers):
     apply_parser = subparsers.add_parser(
-        "apply", help="Apply updated .koreo files as YAML via kubectl."
+        "apply", help="Apply updated .koreo/.k files as YAML via kubectl."
     )
     apply_parser.add_argument("source_dir", help="Directory containing .koreo files.")
     apply_parser.add_argument(
