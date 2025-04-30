@@ -251,7 +251,7 @@ async def change_workspace_config(params):
 
 
 async def _process_workspace_directories():
-    suffixes = ("yaml", "yml", "koreo")
+    suffixes = ("k", "k.yaml", "k.yml", "koreo")
 
     for folder_key in server.workspace.folders:
         path = Path(server.workspace.get_text_document(folder_key).path)
@@ -428,7 +428,7 @@ async def semantic_tokens_full(params: types.ReferenceParams):
 
 @server.feature(types.SHUTDOWN)
 async def shutdown(*_, **__):
-    with open("/Users/bobert/tmp/koreo-ls.log", "w") as outfile:
+    with open("/tmp/koreo-ls.log", "w") as outfile:
         outfile.write("shutting down")
         await shutdown_handlers()
         outfile.write("shut down complete")
