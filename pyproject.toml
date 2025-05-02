@@ -1,6 +1,6 @@
 [project]
 name = "koreo"
-version = "0.3.0"
+version = "0.3.1"
 description = "Tooling package for Koreo"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},
@@ -11,7 +11,7 @@ dependencies = [
     "cel-python==0.2.0",
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
-    "koreo-core==0.1.8",
+    "koreo-core==0.1.9",
     "colorist>=1.8.3",
     "kr8s>=0.20.6",
 ]

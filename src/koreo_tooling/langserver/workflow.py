@@ -231,6 +231,9 @@ def _process_workflow_step(
     inputs = call_arg_compare(provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
         if not expected and provided:
+            if argument.startswith('_'):
+                continue
+
             has_error = True
 
             # This is not done earlier so that we can still flag issues at the
