@@ -14,7 +14,7 @@ def run_reconcile(args):
 
     kr8s_api = kr8s.api()
 
-    respources = kr8s_api.get(
+    resources = kr8s_api.get(
         args.kind,
         args.name,
         namespace=args.namespace,
@@ -26,7 +26,7 @@ def run_reconcile(args):
     patch = {"metadata": {"annotations": {ANNOTATION: now}}}
 
     # Apply patch
-    for resource in respources:
+    for resource in resources:
         resource.patch(patch)
         print(
             f"Updated {args.kind}/{args.name} in {args.namespace} with last reconciled={now}"
