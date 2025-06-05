@@ -84,10 +84,15 @@ def get_completion_context(doc: TextDocument, position: types.Position) -> tuple
     if re.search(r'inputs:\s*$', prefix):
         return "inputs", "", position.character
         
-    # Check for step label reference
-    step_ref_match = re.search(r'\$\{?\s*(\w*)$', prefix)
+    # Check for step reference in CEL expressions (=step_name.property)
+    step_ref_match = re.search(r'=\s*(\w+)\.(\w*)$', prefix)
     if step_ref_match:
-        return "step_ref", step_ref_match.group(1), step_ref_match.start(1)
+        return "step_property", step_ref_match.group(2), step_ref_match.start(2)
+    
+    # Check for step name completion in CEL expressions (=step_)
+    step_name_match = re.search(r'=\s*(\w*)$', prefix)
+    if step_name_match and not cel_match:
+        return "step_name", step_name_match.group(1), step_name_match.start(1)
     
     # Default context
     return "general", prefix.strip().split()[-1] if prefix.strip() else "", 0
@@ -117,12 +122,17 @@ def get_cel_completions(prefix: str) -> list[types.CompletionItem]:
             ))
     
     # Add common variables
-    for var in ["inputs", "parent", "self"]:
+    for var in ["inputs", "parent", "self", "locals"]:
         if var.startswith(prefix.lower()):
             items.append(types.CompletionItem(
                 label=var,
                 kind=types.CompletionItemKind.Variable,
                 detail=f"Access {var} object",
+                insert_text=f"{var}.",
+                command=types.Command(
+                    title="Trigger completion",
+                    command="editor.action.triggerSuggest"
+                ) if var in ["inputs", "locals", "parent", "self"] else None
             ))
     
     return items
@@ -155,8 +165,8 @@ def get_reference_completions(ref_type: str, prefix: str) -> list[types.Completi
     return items
 
 
-def get_step_reference_completions(workflow_anchor: SemanticAnchor | None, prefix: str) -> list[types.CompletionItem]:
-    """Get completions for step label references"""
+def get_step_name_completions(workflow_anchor: SemanticAnchor | None, prefix: str) -> list[types.CompletionItem]:
+    """Get completions for step names in CEL expressions (=step_name)"""
     items = []
     
     if not workflow_anchor:
@@ -183,8 +193,40 @@ def get_step_reference_completions(workflow_anchor: SemanticAnchor | None, prefi
                         label=label,
                         kind=types.CompletionItemKind.Variable,
                         detail="Step reference",
-                        insert_text=f"${{{{ {label} }}}}",
+                        insert_text=f"{label}.",
+                        command=types.Command(
+                            title="Trigger completion",
+                            command="editor.action.triggerSuggest"
+                        )
                     ))
+    
+    return items
+
+
+def get_step_property_completions(workflow_anchor: SemanticAnchor | None, step_name: str, prefix: str) -> list[types.CompletionItem]:
+    """Get completions for step properties (=step_name.property)"""
+    items = []
+    
+    # Common step output properties based on function types
+    common_properties = [
+        ("status", "Step execution status"),
+        ("error", "Error information if step failed"),
+        ("metadata", "Step metadata"),
+        ("result", "Step return value (ValueFunction)"),
+        ("output", "Step output (ResourceFunction)"),
+        ("resource", "Created/managed resource (ResourceFunction)"),
+        ("name", "Resource name"),
+        ("namespace", "Resource namespace"),
+    ]
+    
+    for prop, detail in common_properties:
+        if prop.startswith(prefix.lower()):
+            items.append(types.CompletionItem(
+                label=prop,
+                kind=types.CompletionItemKind.Property,
+                detail=detail,
+                insert_text=prop,
+            ))
     
     return items
 
@@ -219,8 +261,14 @@ def provide_completions(
         items.extend(get_cel_completions(prefix))
     elif context.startswith("ref_"):
         items.extend(get_reference_completions(context, prefix))
-    elif context == "step_ref":
-        items.extend(get_step_reference_completions(semantic_anchor, prefix))
+    elif context == "step_name":
+        items.extend(get_step_name_completions(semantic_anchor, prefix))
+    elif context == "step_property":
+        # Extract step name from the line to provide relevant property completions
+        line = doc.lines[position.line]
+        step_match = re.search(r'=(\w+)\.', line[:position.character])
+        step_name = step_match.group(1) if step_match else ""
+        items.extend(get_step_property_completions(semantic_anchor, step_name, prefix))
     elif context == "inputs":
         # Suggest common input patterns
         items.append(types.CompletionItem(

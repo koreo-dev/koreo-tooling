@@ -127,7 +127,7 @@ def flatten(
         | Sequence[SemanticAnchor | SemanticNode]
     ),
 ) -> Sequence[SemanticNode]:
-    if isinstance(nodes, (SemanticAnchor, SemanticBlock, SemanticNode)):
+    if isinstance(nodes, SemanticAnchor | SemanticBlock | SemanticNode):
         return flatten_node(nodes)
 
     flattened = []

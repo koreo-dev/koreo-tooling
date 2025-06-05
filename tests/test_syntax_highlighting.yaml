@@ -56,13 +56,13 @@ spec:
         name: deploy-resource
       inputs:
         # Test step reference
-        baseValue: =${ calculate_base.result }
+        baseValue: =calculate_base.result
         
         # Test complex expressions
         conditionalValue: =inputs.env == "prod" ? 3 : 1
         
         # Test list operations
-        activeItems: =${ calculate_base.items }.filter(i, i.active)
+        activeItems: =calculate_base.items.filter(i, i.active)
         
     - label: validate_output
       skipIf: =inputs.skipValidation == true
@@ -71,7 +71,7 @@ spec:
         name: validator
       inputs:
         expected: =100 * 2 + 3.14159
-        actual: =${ process_result.output }
+        actual: =process_result.output
 
 ---
 apiVersion: koreo.dev/v1beta1

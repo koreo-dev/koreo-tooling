@@ -19,6 +19,20 @@ from .semantics import (
     compute_abs_range,
 )
 
+__all__ = [
+    "Position",
+    "SemanticAnchor", 
+    "SemanticBlock",
+    "SemanticNode",
+    "SemanticStructure",
+    "TokenModifiers",
+    "TokenTypes",
+    "compute_abs_position",
+    "compute_abs_range",
+    "STRUCTURE_KEY",
+    "IndexingLoader",
+]
+
 STRUCTURE_KEY = "..structure.."
 
 

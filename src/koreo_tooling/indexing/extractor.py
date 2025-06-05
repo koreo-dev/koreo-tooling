@@ -420,7 +420,7 @@ def _extract_value_semantic_info(
         case _:
             clean_semantic_type = SemanticStructure()
 
-    if isinstance(yaml_node, (MappingNode, SequenceNode)):
+    if isinstance(yaml_node, MappingNode | SequenceNode):
         nodes, last_token_pos = extract_semantic_structure_info(
             anchor_abs_start=anchor_abs_start,
             last_token_abs_start=last_token_abs_start,
