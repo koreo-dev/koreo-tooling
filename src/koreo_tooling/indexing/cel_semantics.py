@@ -1,11 +1,11 @@
-from typing import NamedTuple
 import re
+from typing import NamedTuple
 
 from .semantics import (
     Modifier,
     NodeDiagnostic,
-    SemanticNode,
     Position,
+    SemanticNode,
     Severity,
     TokenType,
 )
@@ -153,8 +153,15 @@ def _extract_semantic_structure(
 
         token_type = token.token_type if token.token_type else ""
         
-        # If already has a type (like "number" or "string"), keep it
-        if token_type in ["number", "string"]:
+        # Special handling for string tokens
+        if token_type == "string":
+            # Check if this string is followed by a closing quote then a colon in an object context
+            next_token = next(idx)
+            next_next_token = next(idx + 1) if idx + 1 < len(tokens) - 1 else None
+            if next_token and (is_dquote(next_token) or is_squote(next_token)) and is_colon(next_next_token) and in_brace:
+                token_type = "property"
+        elif token_type == "number":
+            # Keep number type
             pass
         elif in_dquote or in_squote:
             if is_colon(next(idx + 1)) and in_brace:

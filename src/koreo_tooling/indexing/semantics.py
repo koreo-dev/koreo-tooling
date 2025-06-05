@@ -1,14 +1,15 @@
 from __future__ import annotations
+
+import enum
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import (
     Any,
     Literal,
     NamedTuple,
     Protocol,
-    Sequence,
     get_args,
 )
-import enum
 
 from lsprotocol.types import Position, Range
 

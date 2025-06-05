@@ -1,11 +1,8 @@
 """CEL expression diagnostics for common issues"""
 
 import re
-from typing import List, Optional, Tuple
 
 from lsprotocol import types
-from koreo_tooling.indexing.semantics import SemanticNode, Position
-
 
 # Common CEL expression patterns that might be problematic
 CEL_DIAGNOSTIC_PATTERNS = [
@@ -62,7 +59,7 @@ CEL_DIAGNOSTIC_PATTERNS = [
 ]
 
 
-def check_balanced_brackets(expression: str) -> List[Tuple[int, str]]:
+def check_balanced_brackets(expression: str) -> list[tuple[int, str]]:
     """Check for unbalanced brackets, parentheses, and braces"""
     issues = []
     stack = []
@@ -84,7 +81,7 @@ def check_balanced_brackets(expression: str) -> List[Tuple[int, str]]:
     return issues
 
 
-def check_string_interpolation(expression: str) -> List[Tuple[int, str]]:
+def check_string_interpolation(expression: str) -> list[tuple[int, str]]:
     """Check for common string interpolation mistakes"""
     issues = []
     
@@ -105,7 +102,7 @@ def check_string_interpolation(expression: str) -> List[Tuple[int, str]]:
     return issues
 
 
-def check_function_calls(expression: str) -> List[Tuple[int, str]]:
+def check_function_calls(expression: str) -> list[tuple[int, str]]:
     """Check for common function call mistakes"""
     issues = []
     
@@ -129,7 +126,7 @@ def check_function_calls(expression: str) -> List[Tuple[int, str]]:
     return issues
 
 
-def analyze_cel_expression(expression: str, line_offset: int = 0) -> List[types.Diagnostic]:
+def analyze_cel_expression(expression: str, line_offset: int = 0) -> list[types.Diagnostic]:
     """Analyze a CEL expression and return diagnostics"""
     diagnostics = []
     
@@ -190,7 +187,7 @@ def analyze_cel_expression(expression: str, line_offset: int = 0) -> List[types.
     return diagnostics
 
 
-def validate_step_references(expression: str, available_steps: List[str], line_offset: int = 0) -> List[types.Diagnostic]:
+def validate_step_references(expression: str, available_steps: list[str], line_offset: int = 0) -> list[types.Diagnostic]:
     """Validate step references in expressions"""
     diagnostics = []
     

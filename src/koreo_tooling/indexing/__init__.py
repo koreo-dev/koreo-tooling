@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import hashlib
 
 from yaml.loader import SafeLoader
 from yaml.nodes import Node
 
-
+from .extractor import extract_semantic_structure_info
 from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE
 from .semantics import (
     Position,
@@ -17,8 +18,6 @@ from .semantics import (
     compute_abs_position,
     compute_abs_range,
 )
-
-from .extractor import extract_semantic_structure_info
 
 STRUCTURE_KEY = "..structure.."
 

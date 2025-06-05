@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-
 from .semantics import Modifier, SemanticStructure
-
 
 ALL = "*"
 
@@ -38,14 +36,14 @@ def function_ref_indexer(value) -> tuple[str, str] | None:
 
 _api_version: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
-        local_key_fn=lambda value: f"api_version",
+        local_key_fn=lambda value: "api_version",
         type="namespace",
     )
 )
 
 _kind: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
-        local_key_fn=lambda value: f"kind",
+        local_key_fn=lambda value: "kind",
         type="type",
     ),
 )

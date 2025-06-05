@@ -1,15 +1,13 @@
 """Context-aware completion provider for Koreo language server"""
 
-from typing import List, Optional, Tuple
 import re
 
+from koreo import cache
 from lsprotocol import types
 from pygls.workspace import TextDocument
 
-from koreo import cache
 from koreo_tooling.indexing.semantics import SemanticAnchor
 from koreo_tooling.langserver.rangers import block_range_extract
-
 
 # CEL function signatures for better completions
 CEL_FUNCTIONS = {
@@ -67,7 +65,7 @@ spec:
 }
 
 
-def get_completion_context(doc: TextDocument, position: types.Position) -> Tuple[str, str, int]:
+def get_completion_context(doc: TextDocument, position: types.Position) -> tuple[str, str, int]:
     """Get the context for completion at the given position"""
     line = doc.lines[position.line]
     prefix = line[:position.character]
@@ -95,7 +93,7 @@ def get_completion_context(doc: TextDocument, position: types.Position) -> Tuple
     return "general", prefix.strip().split()[-1] if prefix.strip() else "", 0
 
 
-def get_cel_completions(prefix: str) -> List[types.CompletionItem]:
+def get_cel_completions(prefix: str) -> list[types.CompletionItem]:
     """Get CEL-specific completions"""
     items = []
     
@@ -130,7 +128,7 @@ def get_cel_completions(prefix: str) -> List[types.CompletionItem]:
     return items
 
 
-def get_reference_completions(ref_type: str, prefix: str) -> List[types.CompletionItem]:
+def get_reference_completions(ref_type: str, prefix: str) -> list[types.CompletionItem]:
     """Get completions for references (kind/name)"""
     items = []
     
@@ -157,7 +155,7 @@ def get_reference_completions(ref_type: str, prefix: str) -> List[types.Completi
     return items
 
 
-def get_step_reference_completions(workflow_anchor: Optional[SemanticAnchor], prefix: str) -> List[types.CompletionItem]:
+def get_step_reference_completions(workflow_anchor: SemanticAnchor | None, prefix: str) -> list[types.CompletionItem]:
     """Get completions for step label references"""
     items = []
     
@@ -191,11 +189,11 @@ def get_step_reference_completions(workflow_anchor: Optional[SemanticAnchor], pr
     return items
 
 
-def get_pattern_completions(context: str, prefix: str) -> List[types.CompletionItem]:
+def get_pattern_completions(context: str, prefix: str) -> list[types.CompletionItem]:
     """Get pattern-based completions"""
     items = []
     
-    for pattern_id, pattern in KOREO_PATTERNS.items():
+    for _pattern_id, pattern in KOREO_PATTERNS.items():
         if pattern["label"].lower().startswith(prefix.lower()):
             items.append(types.CompletionItem(
                 label=pattern["label"],
@@ -211,7 +209,7 @@ def get_pattern_completions(context: str, prefix: str) -> List[types.CompletionI
 def provide_completions(
     doc: TextDocument,
     position: types.Position,
-    semantic_anchor: Optional[SemanticAnchor] = None
+    semantic_anchor: SemanticAnchor | None = None
 ) -> types.CompletionList:
     """Main completion provider function"""
     context, prefix, start_col = get_completion_context(doc, position)

@@ -1,12 +1,11 @@
-from typing import Any, Literal, NamedTuple, Sequence
 import asyncio
-
-from lsprotocol import types
+from collections.abc import Sequence
+from typing import Any, Literal, NamedTuple
 
 from celpy import celtypes
-
-from koreo import cache
-from koreo import registry
+from koreo import cache, registry
+from koreo.function_test.run import run_function_test
+from koreo.function_test.structure import FunctionTest
 from koreo.result import (
     DepSkip,
     Ok,
@@ -16,10 +15,7 @@ from koreo.result import (
     UnwrappedOutcome,
     is_unwrapped_ok,
 )
-
-
-from koreo.function_test.run import run_function_test
-from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
 
 from . import constants
 
@@ -93,7 +89,7 @@ async def run_function_tests(
                         _run_function_test(test_key, test), name=test_key
                     )
                 )
-    except:
+    except Exception:
         # exceptions handled for each task
         pass
 
@@ -371,7 +367,7 @@ def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[Compare
 
         key = f"{base_prefix}{mutual_key}"
 
-        if type(actual_value) != type(expected_value):
+        if type(actual_value) is not type(expected_value):
             differences.append(
                 CompareResult(
                     field=key,
@@ -397,7 +393,7 @@ def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[Compare
 
 
 def _values_match(field: str, actual, expected) -> list[CompareResult]:
-    if type(actual) != type(expected):
+    if type(actual) is not type(expected):
         return [
             CompareResult(
                 field=field,
@@ -420,7 +416,7 @@ def _values_match(field: str, actual, expected) -> list[CompareResult]:
             ]
 
         mismatches = []
-        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected)):
+        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected, strict=False)):
             mismatches.extend(
                 _values_match(
                     field=f"{field}[{idx}]",

@@ -1,17 +1,17 @@
-from collections import defaultdict
-from pathlib import Path
-import pathlib
-from typing import Callable, NamedTuple, Sequence
 import asyncio
-import time
-
 import logging
+import pathlib
+import time
+from collections import defaultdict
+from collections.abc import Callable, Sequence
+from pathlib import Path
+from typing import NamedTuple
 
 logger = logging.getLogger("koreo.ls")
 
+from koreo import schema
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
-from koreo import schema
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
@@ -19,8 +19,7 @@ CRD_ROOT = pathlib.Path(__file__).parent.joinpath("crd")
 
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
-from koreo import cache
-from koreo import registry
+from koreo import cache, registry
 from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
@@ -30,15 +29,15 @@ from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
-from koreo_tooling.indexing import TokenModifiers, TokenTypes, SemanticAnchor
+from koreo_tooling.indexing import SemanticAnchor, TokenModifiers, TokenTypes
 from koreo_tooling.indexing.semantics import generate_local_range_index
 from koreo_tooling.langserver.codelens import LENS_COMMANDS, EditResult, handle_lens
+from koreo_tooling.langserver.completions import provide_completions
 from koreo_tooling.langserver.fileprocessor import (
     ProccessResults,
     SemanticRangeIndex,
     process_file,
 )
-from koreo_tooling.langserver.completions import provide_completions
 from koreo_tooling.langserver.function_test import run_function_tests
 from koreo_tooling.langserver.hover import handle_hover
 from koreo_tooling.langserver.orchestrator import handle_file, shutdown_handlers
@@ -61,7 +60,7 @@ async def completions(params: types.CompletionParams):
         line_info = _lookup_current_line_info(doc, params.position)
         if line_info and line_info.anchor:
             semantic_anchor = line_info.anchor
-    except:
+    except Exception:
         # Fall back to basic completions if context lookup fails
         pass
     
@@ -408,7 +407,7 @@ async def goto_reference(params: types.ReferenceParams):
 )
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
-    if not doc.uri in __SEMANTIC_TOKEN_INDEX:
+    if doc.uri not in __SEMANTIC_TOKEN_INDEX:
         # Once processing has finished, a refresh will be issued.
         await handle_file(
             file_uri=params.text_document.uri,
@@ -461,7 +460,7 @@ async def _parse_file(doc_uri: str):
             for log in processing_result.logs:
                 server.window_log_message(params=log)
 
-    except Exception as err:
+    except Exception:
         return
 
     __PARSING_RESULT[doc_uri] = (doc.version, processing_result)
@@ -589,7 +588,7 @@ _ANALYZERS: dict[registry.Resource[FileAnalyzer], asyncio.Task] = {}
 
 async def _analyzer_manager(file_analyzer_resource: registry.Resource):
     queue = registry.register(registerer=file_analyzer_resource)
-    last_time = 0
+    # last_time = 0  # Future use for tracking timing
     while True:
         event = await queue.get()
         try:
@@ -597,13 +596,13 @@ async def _analyzer_manager(file_analyzer_resource: registry.Resource):
                 case registry.Kill():
                     logger.info(f"Killing Analysis Manager ({file_analyzer_resource})")
                     break
-                case registry.ResourceEvent(_, event_time):
+                case registry.ResourceEvent(_, _event_time):
                     await _run_doc_analysis(
                         doc_uri=file_analyzer_resource.name,
                     )
                     server.workspace_inlay_hint_refresh(None)
                     server.workspace_code_lens_refresh(None)
-                    last_time = event_time
+                    # last_time = event_time  # Future use for tracking timing
                     continue
         finally:
             queue.task_done()
