@@ -1,0 +1,130 @@
+# Test file for Koreo syntax highlighting improvements
+---
+apiVersion: koreo.dev/v1beta1
+kind: ValueFunction
+metadata:
+  name: test-cel-expressions
+spec:
+  locals:
+    # Test number parsing improvements
+    floatValue: =3.14159
+    scientificNotation: =1.23e-4
+    integerValue: =42
+    
+    # Test new operators
+    division: =10 / 2
+    modulo: =10 % 3
+    
+    # Test CEL keywords
+    booleanTrue: =true
+    booleanFalse: =false
+    nullValue: =null
+    
+    # Test CEL functions
+    stringSize: =size("hello")
+    hasField: =has(inputs.name)
+    filterList: =inputs.items.filter(item, item.active == true)
+    mapTransform: =inputs.values.map(v, v * 2)
+    
+    # Test string functions
+    contains: ="hello world".contains("world")
+    startsWith: =inputs.name.startsWith("test-")
+    endsWith: =inputs.file.endsWith(".yaml")
+    matches: =inputs.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
+    
+  return:
+    result: =inputs.value * 2 + locals.floatValue
+
+---
+apiVersion: koreo.dev/v1beta1
+kind: Workflow
+metadata:
+  name: test-workflow-highlighting
+spec:
+  steps:
+    - label: calculate_base
+      ref:
+        kind: ValueFunction
+        name: test-cel-expressions
+      inputs:
+        value: =100
+        items: =[{"name": "item1", "active": true}, {"name": "item2", "active": false}]
+        
+    - label: process_result
+      ref:
+        kind: ResourceFunction
+        name: deploy-resource
+      inputs:
+        # Test step reference
+        baseValue: =${ calculate_base.result }
+        
+        # Test complex expressions
+        conditionalValue: =inputs.env == "prod" ? 3 : 1
+        
+        # Test list operations
+        activeItems: =${ calculate_base.items }.filter(i, i.active)
+        
+    - label: validate_output
+      skipIf: =inputs.skipValidation == true
+      ref:
+        kind: ValueFunction
+        name: validator
+      inputs:
+        expected: =100 * 2 + 3.14159
+        actual: =${ process_result.output }
+
+---
+apiVersion: koreo.dev/v1beta1
+kind: ResourceFunction
+metadata:
+  name: deploy-resource
+spec:
+  preconditions:
+    - assert: =inputs.baseValue > 0
+      permFail:
+        message: "Base value must be positive"
+        
+  apiConfig:
+    apiVersion: apps/v1
+    kind: Deployment
+    
+  resource:
+    metadata:
+      name: =inputs.name + "-deployment"
+      labels:
+        app: =inputs.name
+        version: =inputs.version || "1.0.0"
+        
+    spec:
+      replicas: =inputs.replicas
+      selector:
+        matchLabels:
+          app: =inputs.name
+          
+  overlays:
+    - skipIf: =inputs.env != "prod"
+      overlay:
+        spec:
+          replicas: =inputs.replicas * 3
+          
+  return:
+    output: =self.metadata.name
+    replicas: =self.spec.replicas
+
+---
+# Test error cases for diagnostics
+apiVersion: koreo.dev/v1beta1
+kind: ValueFunction  
+metadata:
+  name: test-cel-errors
+spec:
+  locals:
+    # These should trigger diagnostics
+    quotedString: ="this should warn"  # Warning: CEL expression with quoted string
+    wrongOperator: =inputs.a and inputs.b  # Error: should use &&
+    wrongComparison: =inputs.x = 5  # Error: should use ==
+    unbalancedBracket: =inputs.list[0  # Error: unmatched bracket
+    missingParens: =size inputs.name  # Error: function needs parentheses
+    
+  return:
+    result: =true
