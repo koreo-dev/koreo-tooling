@@ -11,13 +11,14 @@ from .semantics import (
 )
 
 SYMBOL = re.compile(r"[\w]+")
-QUOTED = re.compile(r"(?P<quote>['\"])(?P<string>.*?)(?P=quote)")
-OP = re.compile(r"->|[\{\}\(\)\.,+:*-=\[\]^$!<>|?&\\]")
+QUOTED = re.compile(r"(?P<quote>['\"])(?P<string>(?:[^\\]|\\.)*?)(?P=quote)")
+OP = re.compile(r"->|[\{\}\(\)\.,+:*-=\[\]^$!<>|?&\\/%]")
 SPACE = re.compile(r"\s+")
 
-NUMBER = re.compile(r"\d+")
+NUMBER = re.compile(r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?")
 
-KEYWORDS = {"has", "all", "exists", "exists_one", "map", "filter"}
+KEYWORDS = {"has", "all", "exists", "exists_one", "map", "filter", "size", "matches", 
+            "contains", "startsWith", "endsWith", "in", "true", "false", "null"}
 
 
 class Token(NamedTuple):
@@ -150,24 +151,23 @@ def _extract_semantic_structure(
 
             continue
 
-        token_type = ""
-        if in_dquote or in_squote:
+        token_type = token.token_type if token.token_type else ""
+        
+        # If already has a type (like "number" or "string"), keep it
+        if token_type in ["number", "string"]:
+            pass
+        elif in_dquote or in_squote:
             if is_colon(next(idx + 1)) and in_brace:
                 token_type = "property"
             else:
                 token_type = "string"
-
         elif token.text in KEYWORDS:
             token_type = "keyword"
-
         elif is_lparen(next(idx)):
             token_type = "function"
-
         else:
-            if NUMBER.match(token.text):
-                token_type = "number"
-            else:
-                token_type = "variable"
+            # Default to variable for symbols
+            token_type = "variable"
 
         nodes.append(
             SemanticNode(
@@ -271,6 +271,28 @@ def lex(
                 prev_offset = current_offset
                 # Closing quote
                 current_offset += quote_group_len
+
+            elif (match := NUMBER.match(line)) is not None:
+                tokens.append(
+                    Token(
+                        position=Position(
+                            line=current_line - prev_line,
+                            character=current_offset - prev_offset,
+                        ),
+                        start_rel=Position(
+                            line=current_line,
+                            character=abs_offset + current_offset,
+                        ),
+                        text=match.group(0),
+                        token_type="number",
+                        token_modifiers=[],
+                    )
+                )
+
+                line = line[match.end() :]
+                prev_offset = current_offset
+                prev_line = current_line
+                current_offset += len(match.group(0))
 
             elif (match := SYMBOL.match(line)) is not None:
                 tokens.append(

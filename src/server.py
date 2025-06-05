@@ -38,6 +38,7 @@ from koreo_tooling.langserver.fileprocessor import (
     SemanticRangeIndex,
     process_file,
 )
+from koreo_tooling.langserver.completions import provide_completions
 from koreo_tooling.langserver.function_test import run_function_tests
 from koreo_tooling.langserver.hover import handle_hover
 from koreo_tooling.langserver.orchestrator import handle_file, shutdown_handlers
@@ -52,25 +53,19 @@ async def completions(params: types.CompletionParams):
         )
     )
 
-    # TODO: Add awareness of the context to surface the correct completions.
-    # Use _lookup_current_line_info to find the context, then offer suitable
-    # suggestion, probably similar to hover.
-
-    items = []
-
-    for cache_type, cached in cache.__CACHE.items():
-        for resource_key, _ in cached.items():
-            items.append(
-                types.CompletionItem(
-                    label=resource_key,
-                    label_details=types.CompletionItemLabelDetails(
-                        detail=f" {cache_type}"
-                    ),
-                )
-            )
-
-    # TODO: If we're confident about where they are, set this as is_incomplete=False
-    return types.CompletionList(is_incomplete=True, items=items)
+    doc = server.workspace.get_text_document(params.text_document.uri)
+    
+    # Try to get semantic anchor for context
+    semantic_anchor = None
+    try:
+        line_info = _lookup_current_line_info(doc, params.position)
+        if line_info and line_info.anchor:
+            semantic_anchor = line_info.anchor
+    except:
+        # Fall back to basic completions if context lookup fails
+        pass
+    
+    return provide_completions(doc, params.position, semantic_anchor)
 
 
 @server.feature(types.TEXT_DOCUMENT_HOVER)
