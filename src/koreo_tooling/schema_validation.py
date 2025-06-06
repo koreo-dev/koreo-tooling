@@ -13,6 +13,7 @@ from koreo.workflow.structure import Workflow
 from lsprotocol import types
 
 from koreo_tooling.k8s_validation import validate_resource_function_k8s
+from koreo_tooling.k8s_validation_enhanced import validate_resource_function_with_positions
 
 logger = logging.getLogger("koreo.tooling.schema_validation")
 
@@ -45,10 +46,27 @@ class ValidationError:
     
     def to_diagnostic(self) -> types.Diagnostic:
         """Convert to LSP Diagnostic"""
+        # Calculate end position based on error type
+        if 'must contain' in self.message or 'is required' in self.message:
+            # For missing fields, highlight more of the line
+            end_char = self.character + 40
+        elif 'Unknown field' in self.message or 'additional property' in self.message:
+            # For extra fields, try to highlight just the field name
+            import re
+            match = re.search(r"'([^']+)'", self.message)
+            if match:
+                field_name = match.group(1)
+                end_char = self.character + len(field_name) + 2  # +2 for quotes
+            else:
+                end_char = self.character + 20
+        else:
+            # Default highlighting
+            end_char = self.character + (len(self.path.split(".")[-1]) if self.path else 10)
+        
         return types.Diagnostic(
             range=types.Range(
                 start=types.Position(line=self.line, character=self.character),
-                end=types.Position(line=self.line, character=self.character + len(self.path.split(".")[-1]) if self.path else 10)
+                end=types.Position(line=self.line, character=end_char)
             ),
             message=self.message,
             severity=self.severity,
@@ -89,17 +107,54 @@ class SchemaValidator:
             ))
             return errors
         
-        # Validate each document
+        # Check if we have ResourceFunction documents for enhanced K8s validation
+        has_resource_function = any(
+            doc and doc.get('kind') == 'ResourceFunction' 
+            for doc in docs
+        )
+        
+        logger.info(f"Found ResourceFunction documents: {has_resource_function}")
+        
+        if has_resource_function:
+            # Use enhanced validation for better error positioning
+            try:
+                try:
+                    from koreo_tooling.k8s_validation_enhanced import validate_resource_function_with_positions
+                except ImportError:
+                    from .k8s_validation_enhanced import validate_resource_function_with_positions
+                
+                positioned_errors = validate_resource_function_with_positions(yaml_content)
+                
+                for pos_error in positioned_errors:
+                    errors.append(ValidationError(
+                        message=pos_error.message,
+                        path=pos_error.path,
+                        line=pos_error.line,
+                        character=pos_error.column,
+                        severity=pos_error.severity
+                    ))
+                            
+            except Exception as e:
+                logger.error(f"Enhanced K8s validation failed: {e}")
+                errors.append(ValidationError(
+                    message=f"K8s validation error: {e}",
+                    line=0,
+                    character=0,
+                    severity=types.DiagnosticSeverity.Warning
+                ))
+        
+        # Validate each document with standard validation
         for doc_idx, doc in enumerate(docs):
             if not doc:
                 continue
             
-            doc_errors = self.validate_document(doc, doc_idx)
+            # Skip ResourceFunction K8s validation here since we did it above
+            doc_errors = self.validate_document(doc, doc_idx, skip_k8s=has_resource_function)
             errors.extend(doc_errors)
         
         return errors
     
-    def validate_document(self, document: dict, doc_index: int = 0) -> list[ValidationError]:
+    def validate_document(self, document: dict, doc_index: int = 0, skip_k8s: bool = False) -> list[ValidationError]:
         """Validate a single Koreo document"""
         errors = []
         
@@ -156,7 +211,7 @@ class SchemaValidator:
         errors.extend(spec_errors)
         
         # Add Kubernetes CRD validation for ResourceFunction
-        if kind == "ResourceFunction":
+        if kind == "ResourceFunction" and not skip_k8s:
             k8s_errors = self.validate_resource_function_k8s(document.get("spec", {}))
             errors.extend(k8s_errors)
         
