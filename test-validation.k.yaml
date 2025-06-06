@@ -1,0 +1,16 @@
+apiVersion: koreo.dev/v1beta1
+kind: ValueFunction
+metadata:
+  name: valid-function
+spec:
+  return:
+    result: =inputs.value * 2
+---
+apiVersion: koreo.dev/v1beta1
+kind: ValueFunction
+metadata:
+  name: invalid-function
+spec:
+  # Missing required 'return' field
+  locals:
+    value: =10

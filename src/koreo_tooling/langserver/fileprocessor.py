@@ -22,6 +22,7 @@ from koreo_tooling.indexing.semantics import (
     generate_key_range_index,
 )
 from koreo_tooling.langserver.rangers import block_range_extract
+from koreo_tooling.schema_validation import get_diagnostics_for_file
 
 TypeIndex = {key: idx for idx, key in enumerate(TokenTypes)}
 
@@ -128,6 +129,18 @@ async def process_file(doc: TextDocument) -> ProccessResults:
 
                 if block_result.diagnostics:
                     diagnostics.extend(block_result.diagnostics)
+
+    # Add schema validation diagnostics
+    try:
+        schema_diagnostics = get_diagnostics_for_file(doc.source)
+        diagnostics.extend(schema_diagnostics)
+    except Exception as e:
+        logs.append(
+            types.LogMessageParams(
+                type=types.MessageType.Error,
+                message=f"Schema validation failed: {e}",
+            )
+        )
 
     return ProccessResults(
         semantic_range_index=semantic_range_index,

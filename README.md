@@ -37,6 +37,12 @@ koreo inspect <resource_type> -n <namespace> <name> [-v]
 
 # Prune unused or orphaned resources
 koreo prune [options]
+
+# Validate Koreo YAML files against schemas
+koreo validate <file_or_directory> [--summary] [--quiet]
+
+# Reconcile resources (if available)
+koreo reconcile [options]
 ```
 
 #### Examples
@@ -50,6 +56,15 @@ koreo inspect Workflow -n default my-workflow -vv
 
 # Get detailed information about resource relationships
 koreo inspect TriggerDummy -n koreo-update-loop difference-demo -v
+
+# Validate all Koreo resources in a directory
+koreo validate ./workflows/
+
+# Validate with summary only
+koreo validate . --summary
+
+# Validate and fail on warnings
+koreo validate workflow.k.yaml --fail-on-warning
 ```
 
 ### Inspector Tool
@@ -60,6 +75,22 @@ The inspector helps you understand resource relationships and troubleshoot issue
 - **Verbose (`-v`)**: Shows detailed resource information  
 - **Very verbose (`-vv`)**: Shows full object details
 - **Extremely verbose (`-vvv`)**: Shows all related resources
+
+### Validator Tool
+
+The validator ensures your Koreo resources comply with their schemas:
+
+- **Basic validation**: Shows errors and warnings for each file
+- **Summary mode (`--summary`)**: Shows only validation statistics
+- **Quiet mode (`--quiet`)**: Suppresses informational messages
+- **CI/CD mode (`--fail-on-warning`)**: Exit with error code on warnings
+
+Features:
+- Validates YAML syntax
+- Checks required fields (apiVersion, kind, metadata, spec)
+- Validates against OpenAPI schemas from CRDs
+- Supports all Koreo resource types
+- Provides detailed error messages with line numbers
 
 ## Language Server
 
@@ -92,7 +123,10 @@ require('lspconfig').koreo_ls.setup({
 - CEL expression syntax checking
 - Function test result integration
 - Resource reference validation
-- Schema compliance checking
+- Full OpenAPI schema compliance checking
+- Required field validation
+- Type checking for all resource properties
+- Pattern matching for field constraints
 
 #### 🎨 **Semantic Syntax Highlighting**
 - Rich syntax highlighting for CEL expressions
@@ -112,8 +146,10 @@ require('lspconfig').koreo_ls.setup({
 - Context-aware suggestions based on cursor position
 - CEL function signatures with parameter hints
 - Resource name completion from cache
-- Workflow step reference completion
+- Workflow step reference completion (`=step_name.property`)
+- Step property suggestions (result, output, status, etc.)
 - Common Koreo patterns as snippets
+- Variable completions (inputs, parent, self, locals)
 
 #### 💡 **Inlay Hints**
 - Function test success/failure indicators
@@ -174,6 +210,8 @@ Command-line interface for resource management:
 - **`apply.py`**: Resource application and deployment
 - **`inspect.py`**: Resource inspection and relationship analysis
 - **`prune.py`**: Cleanup of unused resources
+- **`validate.py`**: Schema validation for Koreo resources
+- **`reconcile.py`**: Resource reconciliation (if available)
 
 #### 4. **Function Testing** (`src/koreo_tooling/function_test.py`)
 
@@ -184,6 +222,17 @@ Integrated testing framework for Koreo functions:
 - Generates detailed mismatch reports
 - Integrates with language server for real-time feedback
 
+#### 5. **Schema Validation** (`src/koreo_tooling/schema_validation.py`)
+
+Comprehensive schema validation system:
+
+- Leverages koreo-core's OpenAPI schema validators
+- Validates YAML syntax and structure
+- Checks resource compliance with CRD schemas
+- Provides detailed error messages with line/column information
+- Integrates with both CLI and language server
+- Supports all Koreo resource types (ValueFunction, ResourceFunction, Workflow, etc.)
+
 ### CEL Expression Support
 
 The tooling provides comprehensive support for CEL (Common Expression Language):
@@ -193,7 +242,7 @@ The tooling provides comprehensive support for CEL (Common Expression Language):
 - **Strings**: Single/double quotes with escape sequences
 - **Operators**: Arithmetic (`+`, `-`, `*`, `/`, `%`), comparison, logical
 - **Functions**: `size()`, `has()`, `map()`, `filter()`, `matches()`, etc.
-- **Variables**: `inputs`, `parent`, `self`, step references (`${step_name}`)
+- **Variables**: `inputs`, `parent`, `self`, `locals`, step references (`=step_name.property`)
 - **Collections**: Arrays, objects with proper indexing
 
 #### Expression Detection:
@@ -262,7 +311,7 @@ spec:
         kind: ResourceFunction
         name: deploy-app
       inputs:
-        image: =${build.image_url}
+        image: =build.image_url
 ```
 
 #### **FunctionTest**
