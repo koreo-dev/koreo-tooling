@@ -15,7 +15,10 @@ from pygls.lsp.server import LanguageServer
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
-CRD_ROOT = pathlib.Path(__file__).parent.joinpath("crd")
+
+from koreo_tooling import CRD_PATH
+
+CRD_ROOT = CRD_PATH
 
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
