@@ -1,17 +1,17 @@
-from functools import reduce
-from typing import Any, Generator, NamedTuple, Sequence
 import operator
+from collections.abc import Generator, Sequence
+from functools import reduce
+from typing import Any, NamedTuple
 
+import yaml.loader
 import yaml.parser
 import yaml.scanner
-import yaml.loader
-
-from pygls.workspace import TextDocument
-from lsprotocol import types
-
 from koreo import cache
+from lsprotocol import types
+from pygls.workspace import TextDocument
 
-from koreo_tooling.indexing import IndexingLoader, STRUCTURE_KEY
+from koreo_tooling import constants
+from koreo_tooling.indexing import STRUCTURE_KEY, IndexingLoader
 from koreo_tooling.indexing.semantics import (
     SemanticAnchor,
     SemanticNode,
@@ -21,9 +21,8 @@ from koreo_tooling.indexing.semantics import (
     flatten,
     generate_key_range_index,
 )
-
-from koreo_tooling import constants
 from koreo_tooling.langserver.rangers import block_range_extract
+from koreo_tooling.schema_validation import get_diagnostics_for_file
 
 TypeIndex = {key: idx for idx, key in enumerate(TokenTypes)}
 
@@ -131,6 +130,18 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                 if block_result.diagnostics:
                     diagnostics.extend(block_result.diagnostics)
 
+    # Add schema validation diagnostics
+    try:
+        schema_diagnostics = get_diagnostics_for_file(doc.source)
+        diagnostics.extend(schema_diagnostics)
+    except Exception as e:
+        logs.append(
+            types.LogMessageParams(
+                type=types.MessageType.Error,
+                message=f"Schema validation failed: {e}",
+            )
+        )
+
     return ProccessResults(
         semantic_range_index=semantic_range_index,
         semantic_tokens=semantic_tokens,
@@ -140,8 +151,8 @@ async def process_file(doc: TextDocument) -> ProccessResults:
 
 
 class BlockResults(NamedTuple):
-    semantic_tokens: Generator[tuple[int], None, None] | None = None
-    semantic_range_index: Generator[SemanticRangeIndex, None, None] | None = None
+    semantic_tokens: Generator[tuple[int]] | None = None
+    semantic_range_index: Generator[SemanticRangeIndex] | None = None
     logs: Sequence[types.LogMessageParams] | None = None
     diagnostics: Sequence[types.Diagnostic] | None = None
 
@@ -152,7 +163,7 @@ async def _process_block(
     try:
         api_version = yaml_block.get("apiVersion")
         kind = yaml_block.get("kind")
-    except:
+    except Exception:
         return BlockResults(
             logs=[
                 types.LogMessageParams(
@@ -319,7 +330,7 @@ class YamlParseError(NamedTuple):
 
 def _load_all_yamls(
     stream, Loader, doc
-) -> Generator[tuple[str, dict] | YamlParseError, Any, None]:
+) -> Generator[tuple[str, dict] | YamlParseError, Any]:
     """
     Parse all YAML documents in a stream
     and produce corresponding Python objects.
@@ -350,7 +361,7 @@ def _load_all_yamls(
         loader.dispose()
 
 
-def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple, None, None]:
+def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple]:
     for node in nodes:
         yield (
             node.position.line,

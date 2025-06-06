@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-
 from .semantics import Modifier, SemanticStructure
-
 
 ALL = "*"
 
@@ -13,7 +11,7 @@ def step_path_indexer(value) -> str:
             f"Step:{''.join(name.value for key, name in value if key.value == 'label')}"
         )
     except Exception as err:
-        raise Exception(f"Failed to process '{value}', with {err}")
+        raise Exception(f"Failed to process '{value}', with {err}") from err
 
 
 def function_ref_indexer(value) -> tuple[str, str] | None:
@@ -33,19 +31,19 @@ def function_ref_indexer(value) -> tuple[str, str] | None:
         return ("name", f"{kind}:{name}:ref")
 
     except Exception as err:
-        raise Exception(f"Failed to process '{value}', with {err}")
+        raise Exception(f"Failed to process '{value}', with {err}") from err
 
 
 _api_version: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
-        local_key_fn=lambda value: f"api_version",
+        local_key_fn=lambda value: "api_version",
         type="namespace",
     )
 )
 
 _kind: SemanticStructure = SemanticStructure(
     sub_structure=SemanticStructure(
-        local_key_fn=lambda value: f"kind",
+        local_key_fn=lambda value: "kind",
         type="type",
     ),
 )

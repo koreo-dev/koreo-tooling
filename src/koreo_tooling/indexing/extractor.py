@@ -1,9 +1,9 @@
-from typing import Sequence
 import copy
+from collections.abc import Sequence
 
-from yaml.nodes import Node, MappingNode, SequenceNode
+from yaml.nodes import MappingNode, Node, SequenceNode
 
-
+from . import cel_semantics
 from .koreo_semantics import ALL
 from .semantics import (
     FieldIndexFn,
@@ -17,8 +17,6 @@ from .semantics import (
     Severity,
     compute_abs_position,
 )
-
-from . import cel_semantics
 
 
 def extract_semantic_structure_info(
@@ -218,14 +216,16 @@ def _extract_cel_semantic_info(
         # The quotes throw off the column position, but are not represented
         # in the value.
         eq_char_offset = yaml_node.start_mark.column
-        while True:
+        found_eq = False
+        while eq_char_offset < line_len:
             if line_data[eq_char_offset] == "=":
+                found_eq = True
                 break
-
-            if eq_char_offset >= line_len:
-                break
-
             eq_char_offset += 1
+        
+        # If no '=' found, use the start position
+        if not found_eq:
+            eq_char_offset = yaml_node.start_mark.column
 
         seed_line = node_line - last_line
         char_offset = eq_char_offset - (0 if node_line > last_line else last_column)
@@ -420,7 +420,7 @@ def _extract_value_semantic_info(
         case _:
             clean_semantic_type = SemanticStructure()
 
-    if isinstance(yaml_node, (MappingNode, SequenceNode)):
+    if isinstance(yaml_node, MappingNode | SequenceNode):
         nodes, last_token_pos = extract_semantic_structure_info(
             anchor_abs_start=anchor_abs_start,
             last_token_abs_start=last_token_abs_start,

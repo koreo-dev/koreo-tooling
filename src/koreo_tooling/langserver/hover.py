@@ -1,18 +1,13 @@
 from typing import NamedTuple
 
-from lsprotocol import types
-
-from koreo import cache
-from koreo import registry
-from koreo.result import UnwrappedOutcome, is_not_ok, is_unwrapped_ok
-
-
+from koreo import cache, registry
+from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
+from koreo.result import UnwrappedOutcome, is_not_ok, is_unwrapped_ok
 from koreo.value_function.structure import ValueFunction
-
-from koreo.function_test.structure import FunctionTest
-from koreo.workflow.structure import Workflow, ErrorStep
+from koreo.workflow.structure import ErrorStep, Workflow
+from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
@@ -302,7 +297,7 @@ def _function_test_hover(
     hover_content = []
 
     if result.success:
-        hover_content.append(f"# *Success*")
+        hover_content.append("# *Success*")
 
         if result.messages:
             hover_content.append("## Test Notes")

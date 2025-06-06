@@ -1,10 +1,9 @@
-from typing import TypedDict
 import json
+from typing import TypedDict
 
 import kr8s
-from kr8s._objects import APIObject
-
 from colorist import BrightColor, Color
+from kr8s._objects import APIObject
 
 BAD_RESPONSE = 10
 

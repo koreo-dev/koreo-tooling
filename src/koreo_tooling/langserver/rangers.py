@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from lsprotocol import types
 
@@ -9,7 +9,6 @@ from koreo_tooling.indexing.semantics import (
     anchor_local_key_search,
     compute_abs_range,
 )
-
 
 type SemanticReturn = SemanticAnchor | SemanticBlock | SemanticNode
 type RangerError = list[types.Diagnostic]

@@ -1,5 +1,6 @@
-from typing import Any, Awaitable, Callable, NamedTuple, Protocol
 import asyncio
+from collections.abc import Awaitable, Callable
+from typing import Any, NamedTuple, Protocol
 
 
 class KillRequest:
