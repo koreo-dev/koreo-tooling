@@ -10,22 +10,23 @@ def get_crd_path():
     if dev_crd.exists():
         return dev_crd
     
-    # Check if CRD files were installed alongside the package
+    # Installed mode - CRD files packaged with the module
     package_crd = pathlib.Path(__file__).parent / "crd"
     if package_crd.exists():
         return package_crd
     
-    # Try to find in parent directories
-    current = pathlib.Path(__file__).parent
-    for _ in range(3):
-        test_crd = current / "crd"
-        if test_crd.exists():
-            return test_crd
-        current = current.parent
-    
-    # Last resort - assume development structure
+    # Fallback - assume development structure
     return dev_crd
 
 
-# Export the CRD path for use by other modules
+def load_schema_validators():
+    """Load schema validators, using appropriate path for the environment"""
+    from koreo import schema
+    
+    crd_path = get_crd_path()
+    # Always use our CRD files since koreo-core doesn't package them
+    schema.load_validators_from_files(path=crd_path)
+
+
+# Export the CRD path for use by other modules (may be None for installed packages)
 CRD_PATH = get_crd_path()

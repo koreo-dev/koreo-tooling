@@ -63,8 +63,8 @@ class SchemaValidator:
     def ensure_validators_loaded(self):
         """Ensure schema validators are loaded"""
         if not self.validators_loaded:
-            from koreo_tooling import CRD_PATH
-            schema.load_validators_from_files(path=CRD_PATH)
+            from koreo_tooling import load_schema_validators
+            load_schema_validators()
             self.validators_loaded = True
     
     def validate_yaml_content(self, yaml_content: str) -> list[ValidationError]:

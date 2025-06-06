@@ -16,9 +16,7 @@ from pygls.lsp.server import LanguageServer
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
 
-from koreo_tooling import CRD_PATH
-
-CRD_ROOT = CRD_PATH
+from koreo_tooling import load_schema_validators
 
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
@@ -858,7 +856,7 @@ def _check_for_duplicate_resources(uri: str):
 
 
 def main():
-    schema.load_validators_from_files(path=CRD_ROOT)
+    load_schema_validators()
     server.start_io()
 
 
