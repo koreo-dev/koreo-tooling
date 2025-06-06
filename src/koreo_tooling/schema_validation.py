@@ -12,6 +12,8 @@ from koreo.value_function.structure import ValueFunction
 from koreo.workflow.structure import Workflow
 from lsprotocol import types
 
+from koreo_tooling.k8s_validation import validate_resource_function_k8s
+
 logger = logging.getLogger("koreo.tooling.schema_validation")
 
 # Map API kinds to their corresponding structure classes
@@ -153,6 +155,11 @@ class SchemaValidator:
         spec_errors = self.validate_spec(document.get("spec", {}), kind, api_version)
         errors.extend(spec_errors)
         
+        # Add Kubernetes CRD validation for ResourceFunction
+        if kind == "ResourceFunction":
+            k8s_errors = self.validate_resource_function_k8s(document.get("spec", {}))
+            errors.extend(k8s_errors)
+        
         return errors
     
     def validate_metadata(self, metadata: dict) -> list[ValidationError]:
@@ -250,6 +257,29 @@ class SchemaValidator:
             return f"spec.{match.group(1)}"
         
         return "spec"
+    
+    def validate_resource_function_k8s(self, spec: dict) -> list[ValidationError]:
+        """Validate ResourceFunction with Kubernetes CRD validation"""
+        errors = []
+        
+        try:
+            k8s_validation_errors = validate_resource_function_k8s(spec)
+            
+            for error_info in k8s_validation_errors:
+                errors.append(ValidationError(
+                    message=error_info["message"],
+                    path=error_info["path"],
+                    severity=types.DiagnosticSeverity.Error if error_info["severity"] == "error" else types.DiagnosticSeverity.Warning
+                ))
+        except Exception as e:
+            logger.exception("Error during K8s CRD validation")
+            errors.append(ValidationError(
+                message=f"K8s validation failed: {e}",
+                path="spec",
+                severity=types.DiagnosticSeverity.Warning
+            ))
+        
+        return errors
 
 
 # Global validator instance
