@@ -3,8 +3,8 @@
 import pytest
 from lsprotocol import types
 
+from koreo_tooling.error_handling import ValidationError
 from koreo_tooling.schema_validation import (
-    ValidationError,
     validate_koreo_yaml,
     validate_koreo_document,
     get_diagnostics_for_file
@@ -101,7 +101,7 @@ metadata:
 """
         errors = validate_koreo_yaml(yaml_content)
         assert len(errors) >= 1
-        assert any("YAML parsing error" in e.message for e in errors)
+        assert any("YAML parsing error" in str(e.message) for e in errors)
     
     def test_workflow_validation(self):
         """Test validation of Workflow resources"""
@@ -193,7 +193,8 @@ spec:
             path="spec.field",
             line=5,
             character=10,
-            severity=types.DiagnosticSeverity.Error
+            severity=types.DiagnosticSeverity.Error,
+            source="koreo-schema"
         )
         
         diagnostic = error.to_diagnostic()

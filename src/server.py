@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import pathlib
 import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
@@ -9,7 +8,6 @@ from typing import NamedTuple
 
 logger = logging.getLogger("koreo.ls")
 
-from koreo import schema
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
 

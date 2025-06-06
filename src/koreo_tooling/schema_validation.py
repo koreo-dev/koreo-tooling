@@ -2,7 +2,6 @@
 
 import logging
 
-import yaml
 from koreo import schema
 from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
@@ -12,8 +11,9 @@ from koreo.value_function.structure import ValueFunction
 from koreo.workflow.structure import Workflow
 from lsprotocol import types
 
+from koreo_tooling.error_handling import ErrorCollector, ValidationError
 from koreo_tooling.k8s_validation import validate_resource_function_k8s
-from koreo_tooling.k8s_validation_enhanced import validate_resource_function_with_positions
+from koreo_tooling.yaml_utils import YamlProcessor
 
 logger = logging.getLogger("koreo.tooling.schema_validation")
 
@@ -25,53 +25,6 @@ KIND_TO_CLASS = {
     "Workflow": Workflow,
     "FunctionTest": FunctionTest,
 }
-
-
-class ValidationError:
-    """Enhanced validation error with position information"""
-    
-    def __init__(
-        self,
-        message: str,
-        path: str = "",
-        line: int = 0,
-        character: int = 0,
-        severity: types.DiagnosticSeverity = types.DiagnosticSeverity.Error
-    ):
-        self.message = message
-        self.path = path
-        self.line = line
-        self.character = character
-        self.severity = severity
-    
-    def to_diagnostic(self) -> types.Diagnostic:
-        """Convert to LSP Diagnostic"""
-        # Calculate end position based on error type
-        if 'must contain' in self.message or 'is required' in self.message:
-            # For missing fields, highlight more of the line
-            end_char = self.character + 40
-        elif 'Unknown field' in self.message or 'additional property' in self.message:
-            # For extra fields, try to highlight just the field name
-            import re
-            match = re.search(r"'([^']+)'", self.message)
-            if match:
-                field_name = match.group(1)
-                end_char = self.character + len(field_name) + 2  # +2 for quotes
-            else:
-                end_char = self.character + 20
-        else:
-            # Default highlighting
-            end_char = self.character + (len(self.path.split(".")[-1]) if self.path else 10)
-        
-        return types.Diagnostic(
-            range=types.Range(
-                start=types.Position(line=self.line, character=self.character),
-                end=types.Position(line=self.line, character=end_char)
-            ),
-            message=self.message,
-            severity=self.severity,
-            source="koreo-schema"
-        )
 
 
 class SchemaValidator:
@@ -89,23 +42,23 @@ class SchemaValidator:
     
     def validate_yaml_content(self, yaml_content: str) -> list[ValidationError]:
         """Validate YAML content and return detailed errors"""
-        errors = []
+        error_collector = ErrorCollector()
         
-        try:
-            # Parse YAML
-            docs = list(yaml.safe_load_all(yaml_content))
-        except yaml.YAMLError as e:
-            error_line = getattr(e, 'problem_mark', None)
-            line_num = error_line.line if error_line else 0
-            char_num = error_line.column if error_line else 0
-            
-            errors.append(ValidationError(
-                message=f"YAML parsing error: {e}",
-                line=line_num,
-                character=char_num,
-                severity=types.DiagnosticSeverity.Error
+        # Parse YAML with error collection
+        docs, yaml_errors = YamlProcessor.safe_load_all(yaml_content)
+        
+        # Convert YAML parse errors to ValidationError
+        for yaml_error in yaml_errors:
+            error_collector.add_error(ValidationError(
+                message=f"YAML parsing error: {yaml_error}",
+                line=getattr(yaml_error, 'problem_mark', None).line if hasattr(yaml_error, 'problem_mark') and yaml_error.problem_mark else 0,
+                character=getattr(yaml_error, 'problem_mark', None).column if hasattr(yaml_error, 'problem_mark') and yaml_error.problem_mark else 0,
+                source="koreo-yaml"
             ))
-            return errors
+        
+        # Return immediately if there were parsing errors
+        if error_collector.errors:
+            return error_collector.errors
         
         # Check if we have ResourceFunction documents for enhanced K8s validation
         has_resource_function = any(
@@ -119,24 +72,22 @@ class SchemaValidator:
             # Use enhanced validation for better error positioning
             try:
                 try:
-                    from koreo_tooling.k8s_validation_enhanced import validate_resource_function_with_positions
+                    from koreo_tooling.k8s_validation_enhanced import (
+                        validate_resource_function_with_positions,
+                    )
                 except ImportError:
-                    from .k8s_validation_enhanced import validate_resource_function_with_positions
+                    from .k8s_validation_enhanced import (
+                        validate_resource_function_with_positions,
+                    )
                 
                 positioned_errors = validate_resource_function_with_positions(yaml_content)
                 
-                for pos_error in positioned_errors:
-                    errors.append(ValidationError(
-                        message=pos_error.message,
-                        path=pos_error.path,
-                        line=pos_error.line,
-                        character=pos_error.column,
-                        severity=pos_error.severity
-                    ))
+                # The positioned errors are already ValidationError instances from error_handling.py
+                error_collector.errors.extend(positioned_errors)
                             
             except Exception as e:
                 logger.error(f"Enhanced K8s validation failed: {e}")
-                errors.append(ValidationError(
+                error_collector.add_error(ValidationError(
                     message=f"K8s validation error: {e}",
                     line=0,
                     character=0,
@@ -150,9 +101,9 @@ class SchemaValidator:
             
             # Skip ResourceFunction K8s validation here since we did it above
             doc_errors = self.validate_document(doc, doc_idx, skip_k8s=has_resource_function)
-            errors.extend(doc_errors)
+            error_collector.errors.extend(doc_errors)
         
-        return errors
+        return error_collector.errors
     
     def validate_document(self, document: dict, doc_index: int = 0, skip_k8s: bool = False) -> list[ValidationError]:
         """Validate a single Koreo document"""
@@ -324,7 +275,8 @@ class SchemaValidator:
                 errors.append(ValidationError(
                     message=error_info["message"],
                     path=error_info["path"],
-                    severity=types.DiagnosticSeverity.Error if error_info["severity"] == "error" else types.DiagnosticSeverity.Warning
+                    severity=types.DiagnosticSeverity.Error if error_info["severity"] == "error" else types.DiagnosticSeverity.Warning,
+                    source="koreo-k8s"
                 ))
         except Exception as e:
             logger.exception("Error during K8s CRD validation")

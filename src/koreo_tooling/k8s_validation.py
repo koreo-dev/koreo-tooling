@@ -2,166 +2,47 @@
 
 import json
 import logging
-import re
 import subprocess
 from copy import deepcopy
-from dataclasses import dataclass
-from typing import Any, Optional
 
 import fastjsonschema
+
+from .cel_utils import CelExpressionDetector, CelPlaceholderGenerator
+from .error_handling import ValidationError as BaseValidationError
 
 logger = logging.getLogger("koreo.tooling.k8s_validation")
 
 
-@dataclass
-class ValidationError:
-    path: str
-    message: str
-    severity: str = "error"
-
-
-def is_cel_expression(value: Any) -> bool:
-    """Check if a value is a CEL expression (string starting with '=' or containing CEL in multiline)"""
-    if not isinstance(value, str):
-        return False
+class ValidationError(BaseValidationError):
+    """K8s validation error - extends base ValidationError"""
     
-    # Direct CEL expression
-    if value.startswith("="):
-        return True
-    
-    # Multi-line string containing CEL expression
-    # Check if it's a multi-line string that contains CEL
-    if "\n" in value and any(line.strip().startswith("=") for line in value.split("\n")):
-        return True
-    
-    # Single line that starts with = after whitespace (YAML folded/literal blocks)
-    stripped = value.strip()
-    if stripped.startswith("="):
-        return True
-    
-    return False
+    def __init__(self, path: str, message: str, severity: str = "error"):
+        # Convert string severity to DiagnosticSeverity
+        from lsprotocol import types
+        diagnostic_severity = types.DiagnosticSeverity.Error if severity == "error" else types.DiagnosticSeverity.Warning
+        
+        super().__init__(
+            message=message,
+            path=path,
+            severity=diagnostic_severity,
+            source="koreo-k8s"
+        )
 
 
-def has_cel_expressions(obj: Any) -> bool:
-    """Recursively check if an object contains any CEL expressions"""
-    if is_cel_expression(obj):
-        return True
-    if isinstance(obj, dict):
-        return any(has_cel_expressions(v) for v in obj.values())
-    if isinstance(obj, list):
-        return any(has_cel_expressions(item) for item in obj)
-    return False
+# Re-export CEL utilities for backward compatibility
+is_cel_expression = CelExpressionDetector.is_cel_expression
+has_cel_expressions = CelExpressionDetector.has_cel_expressions
 
 
-def get_placeholder_for_type(field_schema: dict) -> any:
-    """Get appropriate placeholder value based on schema type"""
-    field_type = field_schema.get("type")
-    
-    if field_type == "string":
-        return "placeholder-string"
-    elif field_type == "integer":
-        return 1
-    elif field_type == "number":
-        return 1.0
-    elif field_type == "boolean":
-        return True
-    elif field_type == "array":
-        # For arrays, create a placeholder based on items schema
-        items_schema = field_schema.get("items", {})
-        if items_schema:
-            placeholder_item = get_placeholder_for_type(items_schema)
-            return [placeholder_item] if placeholder_item is not None else []
-        return []
-    elif field_type == "object":
-        return {}
-    else:
-        # Try to infer from common field names if type is not specified
-        return "placeholder-string"
+# Re-export CEL placeholder utilities for backward compatibility
+replace_cel_with_placeholders = CelPlaceholderGenerator.replace_cel_with_placeholders
 
 
-def replace_cel_with_placeholders(data: dict, schema: dict) -> dict:
-    """Replace CEL expressions with valid placeholder values based on schema types"""
-    result = {}
-    
-    # Get properties from schema
-    properties = schema.get("properties", {})
-    
-    for key, value in data.items():
-        if is_cel_expression(value):
-            # Replace CEL expression with placeholder based on expected type
-            field_schema = properties.get(key, {})
-            
-            # Special handling for common Kubernetes field names when schema type is missing
-            if not field_schema.get("type"):
-                if key == "env":
-                    # Kubernetes env is always an array of objects
-                    result[key] = [{"name": "PLACEHOLDER", "value": "placeholder"}]
-                elif key in ["ports", "containers", "volumes", "volumeMounts"]:
-                    # These are typically arrays
-                    result[key] = []
-                elif key in ["labels", "annotations", "selector"]:
-                    # These are typically objects
-                    result[key] = {}
-                else:
-                    result[key] = get_placeholder_for_type(field_schema)
-            else:
-                result[key] = get_placeholder_for_type(field_schema)
-        elif isinstance(value, dict):
-            # Recursively process nested objects
-            field_schema = properties.get(key, {})
-            if "properties" in field_schema:
-                result[key] = replace_cel_with_placeholders(value, field_schema)
-            else:
-                result[key] = replace_cel_with_placeholders(value, {})
-        elif isinstance(value, list):
-            # Process lists
-            cleaned_list = []
-            list_schema = properties.get(key, {})
-            items_schema = list_schema.get("items", {})
-            
-            for item in value:
-                if is_cel_expression(item):
-                    # Use appropriate placeholder for list items
-                    if items_schema:
-                        placeholder = get_placeholder_for_type(items_schema)
-                        cleaned_list.append(placeholder)
-                    else:
-                        cleaned_list.append("placeholder-string")
-                elif isinstance(item, dict):
-                    if items_schema and "properties" in items_schema:
-                        cleaned_list.append(replace_cel_with_placeholders(item, items_schema))
-                    else:
-                        cleaned_list.append(replace_cel_with_placeholders(item, {}))
-                else:
-                    cleaned_list.append(item)
-            result[key] = cleaned_list
-        else:
-            result[key] = value
-    
-    return result
+# Re-export CEL detection utility for backward compatibility
+is_cel_related_error = CelExpressionDetector.is_cel_related_error
 
 
-def is_cel_related_error(error_msg: str, original_data: dict) -> bool:
-    """Check if validation error is about a field that contains CEL expressions"""
-    # Extract field path from error like "spec.ipCidrRange must contain..."
-    match = re.match(r"spec\.([^\s]+)", error_msg)
-    if not match:
-        return False
-    
-    field_path = match.group(1)
-    current = original_data.get("spec", original_data)
-    
-    # Navigate to the field
-    for part in field_path.split("."):
-        if isinstance(current, dict) and part in current:
-            current = current[part]
-        else:
-            return False
-    
-    return is_cel_expression(current)
-
-
-def get_crd_schema(api_version: str, kind: str, plural: Optional[str] = None) -> Optional[dict]:
+def get_crd_schema(api_version: str, kind: str, plural: str | None = None) -> dict | None:
     """Fetch CRD schema from local Kubernetes cluster"""
     # Skip built-in resources
     builtin_resources = {
@@ -223,11 +104,11 @@ def clean_schema(schema: dict) -> dict:
             
             # Recursively clean children
             for value in node.values():
-                if isinstance(value, (dict, list)):
+                if isinstance(value, dict | list):
                     clean_node(value)
         elif isinstance(node, list):
             for item in node:
-                if isinstance(item, (dict, list)):
+                if isinstance(item, dict | list):
                     clean_node(item)
     
     clean_node(cleaned)
@@ -248,11 +129,11 @@ def make_partial_schema(schema: dict, relax_oneof: bool = False) -> dict:
                 node.pop("anyOf", None)
             
             for value in node.values():
-                if isinstance(value, (dict, list)):
+                if isinstance(value, dict | list):
                     remove_constraints(value)
         elif isinstance(node, list):
             for item in node:
-                if isinstance(item, (dict, list)):
+                if isinstance(item, dict | list):
                     remove_constraints(item)
     
     remove_constraints(partial)
@@ -260,7 +141,7 @@ def make_partial_schema(schema: dict, relax_oneof: bool = False) -> dict:
 
 
 def validate_spec(spec_data: dict, api_version: str, kind: str, 
-                  plural: Optional[str] = None, allow_partial: bool = False) -> list[str]:
+                  plural: str | None = None, allow_partial: bool = False) -> list[str]:
     """Validate resource spec against CRD schema"""
     schema = get_crd_schema(api_version, kind, plural)
     if not schema:

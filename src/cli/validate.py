@@ -4,7 +4,8 @@ import argparse
 import pathlib
 import sys
 
-from koreo_tooling.schema_validation import ValidationError, validate_koreo_yaml
+from koreo_tooling.error_handling import ErrorFormatter, ValidationError
+from koreo_tooling.schema_validation import validate_koreo_yaml
 
 
 def validate_file(file_path: pathlib.Path) -> list[ValidationError]:
@@ -13,9 +14,15 @@ def validate_file(file_path: pathlib.Path) -> list[ValidationError]:
         content = file_path.read_text()
         return validate_koreo_yaml(content)
     except FileNotFoundError:
-        return [ValidationError(f"File not found: {file_path}")]
+        return [ValidationError(
+            message=f"File not found: {file_path}",
+            source="koreo-validate"
+        )]
     except Exception as e:
-        return [ValidationError(f"Error reading file {file_path}: {e}")]
+        return [ValidationError(
+            message=f"Error reading file {file_path}: {e}",
+            source="koreo-validate"
+        )]
 
 
 def validate_directory(dir_path: pathlib.Path) -> list[tuple[pathlib.Path, list[ValidationError]]]:
@@ -40,23 +47,8 @@ def validate_directory(dir_path: pathlib.Path) -> list[tuple[pathlib.Path, list[
 
 def format_validation_errors(file_path: pathlib.Path, errors: list[ValidationError]) -> str:
     """Format validation errors for CLI output"""
-    output = [f"\n{file_path}"]
-    
-    for error in errors:
-        severity_label = {
-            1: "ERROR",   # Error
-            2: "WARNING", # Warning  
-            3: "INFO",    # Information
-            4: "HINT",    # Hint
-        }.get(error.severity.value, "UNKNOWN")
-        
-        location = f"line {error.line + 1}" if error.line > 0 else "document"
-        if error.path:
-            location += f", {error.path}"
-        
-        output.append(f"  [{severity_label}] {error.message} ({location})")
-    
-    return "\n".join(output)
+    formatter = ErrorFormatter()
+    return formatter.format_cli_errors(errors, file_path)
 
 
 def register_validate_subcommand(subparsers):
