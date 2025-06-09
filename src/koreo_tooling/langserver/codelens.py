@@ -1,7 +1,8 @@
 from typing import NamedTuple, Sequence
 import copy
 
-import yaml
+from ruamel.yaml import YAML
+from io import StringIO
 
 from lsprotocol import types
 
@@ -18,6 +19,14 @@ from koreo_tooling.indexing.semantics import (
     compute_abs_position,
 )
 from koreo_tooling.langserver.rangers import block_range_extract
+
+
+def _yaml_dump_to_string(data):
+    """Helper to dump YAML to string using ruamel.yaml"""
+    yaml = YAML()
+    stream = StringIO()
+    yaml.dump(data, stream)
+    return stream.getvalue()
 
 
 class LensResult(NamedTuple):
@@ -399,7 +408,7 @@ def _code_lens_inputs_action(test_name: str, test_result: TestResults):
     indent = (offset + 2) * " "
     formated_inputs = f"\n{"\n".join(
         f"{indent}{line}"
-        for line in yaml.dump(spec_inputs).splitlines()
+        for line in _yaml_dump_to_string(spec_inputs).splitlines()
     )}\n\n"
 
     return EditResult(
@@ -527,7 +536,7 @@ def _code_lens_replace_value_block_action(
     indent = (offset + 2) * " "
     formated = f"\n{"\n".join(
         f"{indent}{line}"
-        for line in yaml.dump(new_value, width=10000).splitlines()
+        for line in _yaml_dump_to_string(new_value).splitlines()
     )}\n\n"
 
     return EditResult(

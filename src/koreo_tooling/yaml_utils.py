@@ -1,11 +1,20 @@
-"""Shared YAML processing utilities with position tracking"""
+"""Enhanced YAML processing utilities using ruamel.yaml for better position tracking"""
 
 import logging
 import re
 from collections.abc import Generator
+from typing import Any
 
-import yaml
 from lsprotocol import types
+
+from .yaml_processor import (
+    EnhancedYamlProcessor, 
+    YamlPositionInfo, 
+    YamlProcessingError,
+    load_yaml_with_positions,
+    get_yaml_position,
+    validate_yaml
+)
 
 logger = logging.getLogger("koreo.tooling.yaml_utils")
 
@@ -15,120 +24,115 @@ _SIMPLE_FUNCTION_TEST_PATTERN = re.compile(r'spec\.testCases\[(\d+)\]\.(\w+)')
 
 
 class YamlPositionTracker:
-    """Tracks line and column positions for YAML paths during parsing"""
+    """Enhanced position tracker using ruamel.yaml's native capabilities"""
     
-    def __init__(self, yaml_content: str):
+    def __init__(self, yaml_content: str, document: Any = None):
         self.yaml_content = yaml_content
         self.lines = yaml_content.split('\n')
-        self.path_to_position = {}
-        self._parse_with_positions()
-    
-    def _parse_with_positions(self):
-        """Parse YAML and build path to line number mapping"""
-        try:
-            loader = yaml.SafeLoader(self.yaml_content)
-            node = loader.get_single_node()
-            if node:
-                self._traverse_node(node, [])
-        except yaml.YAMLError:
-            pass
-    
-    def _traverse_node(self, node, path):
-        """Recursively traverse YAML nodes and record positions"""
-        if hasattr(node, 'start_mark'):
-            path_str = '.'.join(path) if path else 'root'
-            self.path_to_position[path_str] = {
-                'line': node.start_mark.line,
-                'column': node.start_mark.column,
-                'end_line': node.end_mark.line if hasattr(node, 'end_mark') else None,
-                'end_column': node.end_mark.column if hasattr(node, 'end_mark') else None
-            }
-        
-        if isinstance(node, yaml.MappingNode):
-            for key_node, value_node in node.value:
-                if isinstance(key_node, yaml.ScalarNode):
-                    key = key_node.value
-                    new_path = path + [key]
-                    
-                    # Record key position
-                    key_path_str = '.'.join(new_path)
-                    self.path_to_position[key_path_str + '_key'] = {
-                        'line': key_node.start_mark.line,
-                        'column': key_node.start_mark.column
-                    }
-                    
-                    # Traverse value
-                    self._traverse_node(value_node, new_path)
-        
-        elif isinstance(node, yaml.SequenceNode):
-            for i, item in enumerate(node.value):
-                new_path = path + [f'[{i}]']
-                self._traverse_node(item, new_path)
+        self.document = document
+        self.processor = EnhancedYamlProcessor()
     
     def get_position(self, path: str) -> dict | None:
-        """Get line/column for a given path"""
-        # Try exact match first
-        if path in self.path_to_position:
-            return self.path_to_position[path]
+        """Get line/column for a given path using ruamel.yaml's position data"""
+        if not self.document:
+            return None
         
-        # Try to find parent path for missing field errors
+        # Navigate to the object at the given path
+        obj = self._navigate_to_path(self.document, path)
+        if obj is None:
+            return self._fallback_position_search(path)
+        
+        # Get position info from ruamel.yaml metadata
+        pos_info = get_yaml_position(obj)
+        if pos_info:
+            return {
+                'line': pos_info.line,
+                'column': pos_info.column,
+                'end_line': pos_info.end_line,
+                'end_column': pos_info.end_column
+            }
+        
+        # Fallback to line search
+        return self._fallback_position_search(path)
+    
+    def _navigate_to_path(self, obj: Any, path: str) -> Any:
+        """Navigate to an object using a dot-separated path"""
+        if not path or path == 'root':
+            return obj
+        
+        current = obj
         parts = path.split('.')
-        while parts:
-            parent_path = '.'.join(parts)
-            if parent_path in self.path_to_position:
-                return self.path_to_position[parent_path]
-            parts.pop()
         
+        for part in parts:
+            if part.endswith('_key'):
+                # This is asking for key position, return the container
+                return current
+            
+            # Handle array indices like [0]
+            if '[' in part and ']' in part:
+                key = part.split('[')[0]
+                index_str = part.split('[')[1].split(']')[0]
+                try:
+                    index = int(index_str)
+                    current = current.get(key, [])[index] if hasattr(current, 'get') else None
+                except (ValueError, IndexError, TypeError):
+                    return None
+            else:
+                # Regular key access
+                if hasattr(current, 'get'):
+                    current = current.get(part)
+                else:
+                    return None
+            
+            if current is None:
+                break
+        
+        return current
+    
+    def _fallback_position_search(self, path: str) -> dict | None:
+        """Fallback to line search when ruamel.yaml position data is unavailable"""
+        line_num = YamlProcessor.find_line_for_path(self.lines, path)
+        if line_num is not None:
+            return {
+                'line': line_num,
+                'column': 0,
+                'end_line': None,
+                'end_column': None
+            }
         return None
 
 
 class YamlProcessor:
-    """Centralized YAML processing with error handling and position tracking"""
+    """Enhanced YAML processor using ruamel.yaml with better error handling"""
     
     @staticmethod
-    def safe_load_all(yaml_content: str) -> tuple[list[dict], list[yaml.YAMLError]]:
+    def safe_load_all(yaml_content: str) -> tuple[list[dict], list[YamlProcessingError]]:
         """Load all YAML documents with error collection"""
         documents = []
         errors = []
         
-        try:
-            docs = list(yaml.safe_load_all(yaml_content))
-            documents = [doc for doc in docs if doc is not None]
-        except yaml.YAMLError as e:
-            errors.append(e)
+        for doc, doc_errors in load_yaml_with_positions(yaml_content):
+            if doc is not None:
+                documents.append(doc)
+            errors.extend(doc_errors)
         
         return documents, errors
     
     @staticmethod
     def safe_load_all_with_positions(yaml_content: str) -> Generator[tuple[dict, YamlPositionTracker]]:
-        """Load YAML documents with position tracking"""
-        try:
-            # Split multi-document YAML by document separators
-            doc_parts = yaml_content.split('\n---\n')
-            
-            for doc_content in doc_parts:
-                if doc_content.strip():
-                    try:
-                        doc = yaml.safe_load(doc_content)
-                        if doc:
-                            tracker = YamlPositionTracker(doc_content)
-                            yield doc, tracker
-                    except yaml.YAMLError:
-                        continue
-        except Exception:
-            # Fallback to simple loading
-            docs, _ = YamlProcessor.safe_load_all(yaml_content)
-            for doc in docs:
-                tracker = YamlPositionTracker(yaml_content)
+        """Load YAML documents with enhanced position tracking"""
+        for doc, doc_errors in load_yaml_with_positions(yaml_content):
+            if doc is not None:
+                tracker = YamlPositionTracker(yaml_content, doc)
                 yield doc, tracker
     
     @staticmethod
-    def get_yaml_parse_error_position(error: yaml.YAMLError) -> types.Position | None:
-        """Extract position from YAML parsing error"""
-        if hasattr(error, 'problem_mark') and error.problem_mark:
+    def get_yaml_parse_error_position(error: YamlProcessingError) -> types.Position | None:
+        """Extract position from YAML processing error"""
+        if error.position:
             return types.Position(
-                line=error.problem_mark.line,
-                character=error.problem_mark.column
+                line=error.position.line,
+                character=error.position.column
             )
         return None
     
