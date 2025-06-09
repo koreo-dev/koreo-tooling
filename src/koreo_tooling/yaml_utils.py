@@ -1,7 +1,6 @@
 """Enhanced YAML processing utilities using ruamel.yaml for better position tracking"""
 
 import logging
-import re
 from collections.abc import Generator
 from typing import Any
 
@@ -15,45 +14,56 @@ from .yaml_processor import (
     get_yaml_position,
     validate_yaml
 )
+from .path_resolver import SemanticPathResolver
 
 logger = logging.getLogger("koreo.tooling.yaml_utils")
 
-# Compiled regex patterns for performance
-_FUNCTION_TEST_PATH_PATTERN = re.compile(r'spec\.testCases\[(\d+)\]\.(\w+)\.spec\.(\w+)')
-_SIMPLE_FUNCTION_TEST_PATTERN = re.compile(r'spec\.testCases\[(\d+)\]\.(\w+)')
 
 
 class YamlPositionTracker:
-    """Enhanced position tracker using ruamel.yaml's native capabilities"""
+    """Enhanced position tracker using semantic indexing and ruamel.yaml"""
     
-    def __init__(self, yaml_content: str, document: Any = None):
+    def __init__(self, yaml_content: str, document: Any = None, semantic_anchor=None):
         self.yaml_content = yaml_content
         self.lines = yaml_content.split('\n')
         self.document = document
+        self.semantic_anchor = semantic_anchor
         self.processor = EnhancedYamlProcessor()
+        
+        # Create path resolver if we have semantic data
+        self.path_resolver = None
+        if semantic_anchor:
+            self.path_resolver = SemanticPathResolver(semantic_anchor)
     
     def get_position(self, path: str) -> dict | None:
-        """Get line/column for a given path using ruamel.yaml's position data"""
-        if not self.document:
-            return None
+        """Get line/column for a given path using semantic indexing first"""
         
-        # Navigate to the object at the given path
-        obj = self._navigate_to_path(self.document, path)
-        if obj is None:
-            return self._fallback_position_search(path)
+        # Try semantic indexing first (much simpler and more reliable)
+        if self.path_resolver:
+            position = self.path_resolver.get_position_for_path(path)
+            if position:
+                return {
+                    'line': position.line,
+                    'column': position.character,
+                    'end_line': None,
+                    'end_column': None
+                }
         
-        # Get position info from ruamel.yaml metadata
-        pos_info = get_yaml_position(obj)
-        if pos_info:
-            return {
-                'line': pos_info.line,
-                'column': pos_info.column,
-                'end_line': pos_info.end_line,
-                'end_column': pos_info.end_column
-            }
+        # Try ruamel.yaml's position data
+        if self.document:
+            obj = self._navigate_to_path(self.document, path)
+            if obj is not None:
+                pos_info = get_yaml_position(obj)
+                if pos_info:
+                    return {
+                        'line': pos_info.line,
+                        'column': pos_info.column,
+                        'end_line': pos_info.end_line,
+                        'end_column': pos_info.end_column
+                    }
         
-        # Fallback to line search
-        return self._fallback_position_search(path)
+        # Last resort: simple fallback
+        return self._simple_fallback_search(path)
     
     def _navigate_to_path(self, obj: Any, path: str) -> Any:
         """Navigate to an object using a dot-separated path"""
@@ -89,16 +99,30 @@ class YamlPositionTracker:
         
         return current
     
-    def _fallback_position_search(self, path: str) -> dict | None:
-        """Fallback to line search when ruamel.yaml position data is unavailable"""
-        line_num = YamlProcessor.find_line_for_path(self.lines, path)
-        if line_num is not None:
-            return {
-                'line': line_num,
-                'column': 0,
-                'end_line': None,
-                'end_column': None
-            }
+    def _simple_fallback_search(self, path: str) -> dict | None:
+        """Simple fallback for basic field lookups"""
+        # Just look for the last component of the path
+        if '.' in path:
+            field_name = path.split('.')[-1]
+        else:
+            field_name = path
+        
+        # Remove array indices and key suffixes
+        if '[' in field_name:
+            field_name = field_name.split('[')[0]
+        if field_name.endswith('_key'):
+            field_name = field_name[:-4]
+        
+        # Simple line search for the field
+        for i, line in enumerate(self.lines):
+            if f'{field_name}:' in line:
+                return {
+                    'line': i,
+                    'column': line.find(f'{field_name}:'),
+                    'end_line': None,
+                    'end_column': None
+                }
+        
         return None
 
 
@@ -136,113 +160,3 @@ class YamlProcessor:
             )
         return None
     
-    @staticmethod
-    def find_line_for_path(yaml_lines: list[str], path: str) -> int | None:
-        """Simple line search for specific paths (fallback method)"""
-        if path == "spec.resource":
-            # Look for the resource: section and then the spec: line under it
-            resource_line = None
-            spec_line = None
-            
-            for i, line in enumerate(yaml_lines):
-                # Find "resource:" line (with proper indentation)
-                if 'resource:' in line:
-                    resource_line = i
-                # Find "spec:" line after resource line
-                elif resource_line is not None and 'spec:' in line and i > resource_line:
-                    spec_line = i
-                    break
-            
-            return spec_line
-        
-        # Handle FunctionTest paths like spec.testCases[0].currentResource or spec.testCases[0].expectResource.spec.cidrBlock
-        if "testCases[" in path:
-            # Handle deeper paths like spec.testCases[0].expectResource.spec.cidrBlock
-            deep_match = _FUNCTION_TEST_PATH_PATTERN.match(path)
-            if deep_match:
-                test_index = int(deep_match.group(1))
-                resource_type = deep_match.group(2)  # currentResource or expectResource
-                field_name = deep_match.group(3)     # cidrBlock, etc.
-                
-                # Find testCases array and the specific resource, then the field
-                in_test_cases = False
-                test_case_count = -1
-                
-                # Optimize: limit search range for large files
-                max_search_lines = min(len(yaml_lines), 500)  # Don't search beyond 500 lines
-                
-                for i, line in enumerate(yaml_lines[:max_search_lines]):
-                    if 'testCases:' in line:
-                        in_test_cases = True
-                        continue
-                    
-                    if in_test_cases:
-                        # Look for test case entries
-                        if line.strip().startswith('- ') and ('label:' in line or 'expectResource:' in line):
-                            test_case_count += 1
-                            if test_case_count == test_index:
-                                # Now look for the specific resource type (limited range)
-                                search_end = min(i + 80, len(yaml_lines))
-                                for j in range(i, search_end):
-                                    if f'{resource_type}:' in yaml_lines[j]:
-                                        # Found the resource, now look for spec: and then the field
-                                        spec_search_end = min(j + 40, len(yaml_lines))
-                                        for k in range(j, spec_search_end):
-                                            if 'spec:' in yaml_lines[k]:
-                                                # Found spec, now look for the specific field
-                                                field_search_end = min(k + 25, len(yaml_lines))
-                                                for l in range(k, field_search_end):
-                                                    if f'{field_name}:' in yaml_lines[l]:
-                                                        return l
-                                                break
-                                        break
-                                break
-                        # Early exit if we've found too many test cases
-                        elif test_case_count > test_index + 5:
-                            break
-            
-            # Handle simpler paths like spec.testCases[0].currentResource
-            match = _SIMPLE_FUNCTION_TEST_PATTERN.match(path)
-            if match:
-                test_index = int(match.group(1))
-                field_name = match.group(2)
-                
-                # Find testCases array
-                in_test_cases = False
-                test_case_count = -1
-                
-                for i, line in enumerate(yaml_lines):
-                    if 'testCases:' in line:
-                        in_test_cases = True
-                        continue
-                    
-                    if in_test_cases:
-                        # Look for test case entries (starts with - label:)
-                        if line.strip().startswith('- ') and ('label:' in line or 'expectResource:' in line):
-                            test_case_count += 1
-                            if test_case_count == test_index:
-                                # Now look for the specific field
-                                for j in range(i, min(i + 50, len(yaml_lines))):
-                                    if f'{field_name}:' in yaml_lines[j]:
-                                        return j
-                                break
-        
-        # Handle simple paths like spec.currentResource
-        path_parts = path.split('.')
-        if len(path_parts) >= 2:
-            field_name = path_parts[-1]
-            parent_path = '.'.join(path_parts[:-1])
-            
-            # Look for the field name in the YAML
-            for i, line in enumerate(yaml_lines):
-                if f'{field_name}:' in line:
-                    # Check if we're in the right context (e.g., under spec)
-                    if parent_path == 'spec':
-                        # Make sure we're after a spec: line
-                        for j in range(max(0, i - 20), i):
-                            if 'spec:' in yaml_lines[j]:
-                                return i
-                    else:
-                        return i
-        
-        return None

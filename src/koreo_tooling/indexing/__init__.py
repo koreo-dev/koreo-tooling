@@ -1,8 +1,8 @@
 from __future__ import annotations
 import hashlib
 
-from ruamel.yaml.loader import SafeLoader
-from ruamel.yaml.nodes import Node
+from ruyaml.loader import SafeLoader
+from ruyaml.nodes import Node
 
 
 from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE

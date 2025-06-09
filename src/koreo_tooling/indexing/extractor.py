@@ -1,7 +1,7 @@
 from typing import Sequence
 import copy
 
-from ruamel.yaml.nodes import Node, MappingNode, SequenceNode
+from ruyaml.nodes import Node, MappingNode, SequenceNode
 
 
 from .koreo_semantics import ALL
