@@ -16,6 +16,8 @@ from .semantics import (
     SemanticStructure,
     Severity,
     compute_abs_position,
+    compute_rel_position,
+    create_diagnostic,
 )
 
 from . import cel_semantics
@@ -93,9 +95,7 @@ def _extract_map_structure_info(
     for key, value in yaml_node.value:
         node_diagnostic = None
         if f"{key.value}" in seen_keys:
-            node_diagnostic = NodeDiagnostic(
-                message="Duplicate key", severity=Severity.error
-            )
+            node_diagnostic = create_diagnostic("Duplicate key")
         else:
             seen_keys.add(f"{key.value}")
 
@@ -104,9 +104,7 @@ def _extract_map_structure_info(
             and not node_diagnostic
             and f"{key.value}" not in semantic_type_map
         ):
-            node_diagnostic = NodeDiagnostic(
-                message="Unknown key", severity=Severity.error
-            )
+            node_diagnostic = create_diagnostic("Unknown key")
 
         key_semantic_type = semantic_type_map.get(key.value)
         if not key_semantic_type:
@@ -233,7 +231,7 @@ def _extract_cel_semantic_info(
         nodes.extend(
             cel_semantics.parse(
                 cel_expression=[yaml_node.value],
-                anchor_base_pos=_compute_rel_position(
+                anchor_base_pos=compute_rel_position(
                     line=node_line - seed_line,
                     character=node_column,
                     relative_to=anchor_abs_start,
@@ -251,12 +249,12 @@ def _extract_cel_semantic_info(
         line_len = len(line_data)
         nodes.append(
             SemanticNode(
-                position=_compute_rel_position(
+                position=compute_rel_position(
                     line=node_line,
                     character=node_column,
                     relative_to=last_token_abs_start,
                 ),
-                anchor_rel=_compute_rel_position(
+                anchor_rel=compute_rel_position(
                     line=node_line, character=node_column, relative_to=anchor_abs_start
                 ),
                 length=line_len - node_column,
@@ -291,12 +289,12 @@ def _extract_cel_semantic_info(
             local_key=None,
             index_key=None,
             anchor_rel=Range(
-                start=_compute_rel_position(
+                start=compute_rel_position(
                     line=yaml_node.start_mark.line,
                     character=yaml_node.start_mark.column,
                     relative_to=anchor_abs_start,
                 ),
-                end=_compute_rel_position(
+                end=compute_rel_position(
                     line=yaml_node.end_mark.line,
                     character=yaml_node.end_mark.column,
                     relative_to=anchor_abs_start,
@@ -493,13 +491,3 @@ def _extract_value_semantic_info(
         diagnostic=diagnostic,
     )
 
-
-def _compute_rel_position(line: int, character: int, relative_to: Position) -> Position:
-    rel_to_line = relative_to.line
-    rel_to_offset = relative_to.character
-
-    rel_line = line - rel_to_line
-    return Position(
-        line=rel_line,
-        character=character if rel_line > 0 else (character - rel_to_offset),
-    )

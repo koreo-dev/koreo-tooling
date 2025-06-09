@@ -70,6 +70,30 @@ class NodeDiagnostic(NamedTuple):
     severity: Severity
 
 
+def create_diagnostic(message: str, severity: Severity = Severity.error) -> NodeDiagnostic:
+    """Create a NodeDiagnostic with consistent formatting"""
+    return NodeDiagnostic(message=message, severity=severity)
+
+
+def convert_diagnostic_to_lsp(diagnostic: NodeDiagnostic, range: Range) -> "types.Diagnostic":
+    """Convert NodeDiagnostic to LSP Diagnostic format"""
+    from lsprotocol import types
+    
+    severity_map = {
+        Severity.debug: types.DiagnosticSeverity.Hint,
+        Severity.info: types.DiagnosticSeverity.Information,
+        Severity.warning: types.DiagnosticSeverity.Warning,
+        Severity.error: types.DiagnosticSeverity.Error,
+    }
+    
+    return types.Diagnostic(
+        range=range,
+        severity=severity_map.get(diagnostic.severity, types.DiagnosticSeverity.Error),
+        message=diagnostic.message,
+        source="koreo-indexing"
+    )
+
+
 class SemanticAnchor(NamedTuple):
     key: str | None
     abs_position: Position
@@ -292,6 +316,18 @@ def compute_abs_position(
     return Position(
         line=abs_position.line + rel_position.line,
         character=rel_position.character + length,
+    )
+
+
+def compute_rel_position(line: int, character: int, relative_to: Position) -> Position:
+    """Compute relative position from absolute line/character to another position"""
+    rel_to_line = relative_to.line
+    rel_to_offset = relative_to.character
+
+    rel_line = line - rel_to_line
+    return Position(
+        line=rel_line,
+        character=character if rel_line > 0 else (character - rel_to_offset),
     )
 
 
