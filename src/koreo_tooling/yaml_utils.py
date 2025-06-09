@@ -1,12 +1,17 @@
 """Shared YAML processing utilities with position tracking"""
 
 import logging
+import re
 from collections.abc import Generator
 
 import yaml
 from lsprotocol import types
 
 logger = logging.getLogger("koreo.tooling.yaml_utils")
+
+# Compiled regex patterns for performance
+_FUNCTION_TEST_PATH_PATTERN = re.compile(r'spec\.testCases\[(\d+)\]\.(\w+)\.spec\.(\w+)')
+_SIMPLE_FUNCTION_TEST_PATTERN = re.compile(r'spec\.testCases\[(\d+)\]\.(\w+)')
 
 
 class YamlPositionTracker:
@@ -145,5 +150,95 @@ class YamlProcessor:
                     break
             
             return spec_line
+        
+        # Handle FunctionTest paths like spec.testCases[0].currentResource or spec.testCases[0].expectResource.spec.cidrBlock
+        if "testCases[" in path:
+            # Handle deeper paths like spec.testCases[0].expectResource.spec.cidrBlock
+            deep_match = _FUNCTION_TEST_PATH_PATTERN.match(path)
+            if deep_match:
+                test_index = int(deep_match.group(1))
+                resource_type = deep_match.group(2)  # currentResource or expectResource
+                field_name = deep_match.group(3)     # cidrBlock, etc.
+                
+                # Find testCases array and the specific resource, then the field
+                in_test_cases = False
+                test_case_count = -1
+                
+                # Optimize: limit search range for large files
+                max_search_lines = min(len(yaml_lines), 500)  # Don't search beyond 500 lines
+                
+                for i, line in enumerate(yaml_lines[:max_search_lines]):
+                    if 'testCases:' in line:
+                        in_test_cases = True
+                        continue
+                    
+                    if in_test_cases:
+                        # Look for test case entries
+                        if line.strip().startswith('- ') and ('label:' in line or 'expectResource:' in line):
+                            test_case_count += 1
+                            if test_case_count == test_index:
+                                # Now look for the specific resource type (limited range)
+                                search_end = min(i + 80, len(yaml_lines))
+                                for j in range(i, search_end):
+                                    if f'{resource_type}:' in yaml_lines[j]:
+                                        # Found the resource, now look for spec: and then the field
+                                        spec_search_end = min(j + 40, len(yaml_lines))
+                                        for k in range(j, spec_search_end):
+                                            if 'spec:' in yaml_lines[k]:
+                                                # Found spec, now look for the specific field
+                                                field_search_end = min(k + 25, len(yaml_lines))
+                                                for l in range(k, field_search_end):
+                                                    if f'{field_name}:' in yaml_lines[l]:
+                                                        return l
+                                                break
+                                        break
+                                break
+                        # Early exit if we've found too many test cases
+                        elif test_case_count > test_index + 5:
+                            break
+            
+            # Handle simpler paths like spec.testCases[0].currentResource
+            match = _SIMPLE_FUNCTION_TEST_PATTERN.match(path)
+            if match:
+                test_index = int(match.group(1))
+                field_name = match.group(2)
+                
+                # Find testCases array
+                in_test_cases = False
+                test_case_count = -1
+                
+                for i, line in enumerate(yaml_lines):
+                    if 'testCases:' in line:
+                        in_test_cases = True
+                        continue
+                    
+                    if in_test_cases:
+                        # Look for test case entries (starts with - label:)
+                        if line.strip().startswith('- ') and ('label:' in line or 'expectResource:' in line):
+                            test_case_count += 1
+                            if test_case_count == test_index:
+                                # Now look for the specific field
+                                for j in range(i, min(i + 50, len(yaml_lines))):
+                                    if f'{field_name}:' in yaml_lines[j]:
+                                        return j
+                                break
+        
+        # Handle simple paths like spec.currentResource
+        path_parts = path.split('.')
+        if len(path_parts) >= 2:
+            field_name = path_parts[-1]
+            parent_path = '.'.join(path_parts[:-1])
+            
+            # Look for the field name in the YAML
+            for i, line in enumerate(yaml_lines):
+                if f'{field_name}:' in line:
+                    # Check if we're in the right context (e.g., under spec)
+                    if parent_path == 'spec':
+                        # Make sure we're after a spec: line
+                        for j in range(max(0, i - 20), i):
+                            if 'spec:' in yaml_lines[j]:
+                                return i
+                    else:
+                        return i
         
         return None

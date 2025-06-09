@@ -21,8 +21,10 @@ class ValidationError:
     def to_diagnostic(self) -> types.Diagnostic:
         """Convert to LSP Diagnostic with smart range calculation"""
         # Calculate end position based on error type
-        if self.end_line is not None and self.end_character is not None:
-            end_pos = types.Position(line=self.end_line, character=self.end_character)
+        if self.end_character is not None:
+            # Use end_line if specified, otherwise same line
+            end_line = self.end_line if self.end_line is not None else self.line
+            end_pos = types.Position(line=end_line, character=self.end_character)
         else:
             # Smart end position calculation
             if 'must contain' in self.message or 'is required' in self.message:
@@ -78,6 +80,30 @@ class ErrorFormatter:
     def format_for_lsp(errors: list[ValidationError]) -> list[types.Diagnostic]:
         """Convert validation errors to LSP diagnostics"""
         return [error.to_diagnostic() for error in errors]
+    
+    @staticmethod
+    def format_cli_errors(errors: list[ValidationError], file_path) -> str:
+        """Format validation errors for CLI output with file path"""
+        if not errors:
+            return f"\n{file_path}: No validation errors found."
+        
+        output = [f"\n{file_path}"]
+        
+        for error in errors:
+            severity_label = {
+                1: "ERROR",   # Error
+                2: "WARNING", # Warning  
+                3: "INFO",    # Information
+                4: "HINT",    # Hint
+            }.get(error.severity.value, "UNKNOWN")
+            
+            location = f"line {error.line + 1}" if error.line > 0 else "document"
+            if error.path:
+                location += f", {error.path}"
+            
+            output.append(f"  [{severity_label}] {error.message} ({location})")
+        
+        return "\n".join(output)
     
     @staticmethod
     def extract_path_from_error_message(error_message: str) -> str:

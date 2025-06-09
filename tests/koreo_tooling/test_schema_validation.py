@@ -212,3 +212,39 @@ kind: ValueFunction
         diagnostics = get_diagnostics_for_file(yaml_content)
         assert len(diagnostics) >= 1
         assert all(isinstance(d, types.Diagnostic) for d in diagnostics)
+    
+    def test_function_test_embedded_resource_validation(self):
+        """Test that FunctionTest embedded resources are validated"""
+        yaml_content = """
+apiVersion: koreo.dev/v1beta1
+kind: FunctionTest
+metadata:
+  name: test-embedded-validation
+spec:
+  functionRef:
+    kind: ResourceFunction
+    name: test-function
+  currentResource:
+    apiVersion: custom.example.com/v1
+    kind: CustomResource
+    metadata:
+      name: test-resource
+    spec:
+      someField: value
+  testCases:
+    - label: test-case
+      inputs:
+        value: test
+      expectResource:
+        apiVersion: custom.example.com/v1
+        kind: CustomResource
+        metadata:
+          name: expected-resource
+        spec:
+          someField: modified
+"""
+        errors = validate_koreo_yaml(yaml_content)
+        
+        # Should pass basic schema validation
+        # K8s CRD validation will be skipped if CRDs don't exist (expected)
+        assert len(errors) == 0

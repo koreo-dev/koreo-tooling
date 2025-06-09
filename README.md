@@ -65,6 +65,9 @@ koreo validate . --summary
 
 # Validate and fail on warnings
 koreo validate workflow.k.yaml --fail-on-warning
+
+# Skip Kubernetes CRD validation (useful when cluster is not accessible)
+koreo validate ./workflows/ --skip-k8s
 ```
 
 ### Inspector Tool
@@ -84,6 +87,7 @@ The validator ensures your Koreo resources comply with their schemas:
 - **Summary mode (`--summary`)**: Shows only validation statistics
 - **Quiet mode (`--quiet`)**: Suppresses informational messages
 - **CI/CD mode (`--fail-on-warning`)**: Exit with error code on warnings
+- **Skip K8s mode (`--skip-k8s`)**: Disables Kubernetes CRD validation
 
 Features:
 - Validates YAML syntax
@@ -91,6 +95,40 @@ Features:
 - Validates against OpenAPI schemas from CRDs
 - Supports all Koreo resource types
 - Provides detailed error messages with line numbers
+- Optional Kubernetes CRD validation (can be disabled for environments without cluster access)
+
+### Kubernetes CRD Validation
+
+The validator includes Kubernetes CRD validation for:
+- **ResourceFunction specs** - Validates the managed Kubernetes resources
+- **FunctionTest embedded resources** - Validates `currentResource` and `expectResource` fields
+
+This requires cluster access. If you don't have access to a Kubernetes cluster or `kubectl` is not available, you can disable this validation:
+
+#### CLI Flag
+```bash
+# Disable K8s validation for a single command
+koreo validate workflow.yaml --skip-k8s
+```
+
+#### Environment Variable
+```bash
+# Disable K8s validation globally
+export KOREO_SKIP_K8S_VALIDATION=1
+koreo validate ./workflows/
+```
+
+#### Common Use Cases:
+- **Development environments** without cluster access
+- **CI/CD pipelines** that only need basic YAML validation
+- **Offline development** scenarios
+- **Testing environments** where CRDs are not installed
+
+#### Debug Information:
+When cluster access issues occur, the validator provides helpful debug messages:
+- kubectl not found: Install kubectl or use `--skip-k8s`
+- Cluster timeout: Check cluster connectivity or use `--skip-k8s`
+- CRD not found: Ensure CRDs are installed or use `--skip-k8s`
 
 ## Language Server
 
@@ -315,23 +353,46 @@ spec:
 ```
 
 #### **FunctionTest**
-Tests for validating function behavior:
+Tests for validating function behavior, including embedded Kubernetes resources:
 ```yaml
 apiVersion: koreo.dev/v1beta1
 kind: FunctionTest
 metadata:
-  name: test-calculate-metrics
+  name: test-resource-function
 spec:
   functionRef:
-    kind: ValueFunction
-    name: calculate-metrics
+    kind: ResourceFunction
+    name: deploy-app
+  currentResource:
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: test-app
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: test
+      template:
+        metadata:
+          labels:
+            app: test
+        spec:
+          containers:
+          - name: app
+            image: nginx
   testCases:
-    - label: basic-calculation
+    - label: scale-up
       inputs:
-        values: [{"amount": 10}, {"amount": 20}]
-      expectReturn:
-        total: 30
-        average: 15
+        replicas: 3
+      expectResource:
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: test-app
+        spec:
+          replicas: 3
+          # ... other fields validated against Deployment CRD
 ```
 
 ## Development

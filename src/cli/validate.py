@@ -36,11 +36,16 @@ def validate_directory(dir_path: pathlib.Path) -> list[tuple[pathlib.Path, list[
     for pattern in patterns:
         yaml_files.update(dir_path.glob(pattern))
     
-    for file_path in sorted(yaml_files):
+    for i, file_path in enumerate(sorted(yaml_files)):
         if file_path.is_file():
+            if len(yaml_files) > 20:  # Show progress for large directories
+                print(f"\rValidating files... {i+1}/{len(yaml_files)}", end="", flush=True)
             errors = validate_file(file_path)
             if errors:  # Only include files with errors
                 results.append((file_path, errors))
+    
+    if len(yaml_files) > 20:
+        print()  # New line after progress indicator
     
     return results
 
@@ -91,10 +96,33 @@ Examples:
         help="Exit with error code if warnings are found"
     )
     
+    validate_parser.add_argument(
+        "--skip-k8s",
+        action="store_true",
+        help="Skip Kubernetes CRD validation (useful when cluster is not accessible)"
+    )
+    
+    validate_parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose logging for debugging"
+    )
+    
     validate_parser.set_defaults(func=validate_command)
 
 
 def validate_command(args):
+    # Configure logging level
+    if args.verbose:
+        import logging
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Configure K8s validation based on CLI flag
+    if args.skip_k8s:
+        from koreo_tooling.k8s_validation import set_k8s_validation_enabled
+        set_k8s_validation_enabled(False)
+        if not args.quiet:
+            print("K8s CRD validation disabled")
     
     if not args.path.exists():
         print(f"Error: Path '{args.path}' does not exist", file=sys.stderr)

@@ -12,7 +12,7 @@ from koreo.workflow.structure import Workflow
 from lsprotocol import types
 
 from koreo_tooling.error_handling import ErrorCollector, ValidationError
-from koreo_tooling.k8s_validation import validate_resource_function_k8s
+from koreo_tooling.k8s_validation import validate_resource_function_k8s, validate_embedded_resource
 from koreo_tooling.yaml_utils import YamlProcessor
 
 logger = logging.getLogger("koreo.tooling.schema_validation")
@@ -60,52 +60,19 @@ class SchemaValidator:
         if error_collector.errors:
             return error_collector.errors
         
-        # Check if we have ResourceFunction documents for enhanced K8s validation
-        has_resource_function = any(
-            doc and doc.get('kind') == 'ResourceFunction' 
-            for doc in docs
-        )
-        
-        logger.info(f"Found ResourceFunction documents: {has_resource_function}")
-        
-        if has_resource_function:
-            # Use enhanced validation for better error positioning
-            try:
-                try:
-                    from koreo_tooling.k8s_validation_enhanced import (
-                        validate_resource_function_with_positions,
-                    )
-                except ImportError:
-                    from .k8s_validation_enhanced import (
-                        validate_resource_function_with_positions,
-                    )
-                
-                positioned_errors = validate_resource_function_with_positions(yaml_content)
-                
-                # The positioned errors are already ValidationError instances from error_handling.py
-                error_collector.errors.extend(positioned_errors)
-                            
-            except Exception as e:
-                logger.error(f"Enhanced K8s validation failed: {e}")
-                error_collector.add_error(ValidationError(
-                    message=f"K8s validation error: {e}",
-                    line=0,
-                    character=0,
-                    severity=types.DiagnosticSeverity.Warning
-                ))
-        
-        # Validate each document with standard validation
+        # Validate each document independently - no assumptions about co-location
+        yaml_lines = yaml_content.split('\n')
         for doc_idx, doc in enumerate(docs):
             if not doc:
                 continue
             
-            # Skip ResourceFunction K8s validation here since we did it above
-            doc_errors = self.validate_document(doc, doc_idx, skip_k8s=has_resource_function)
+            # Each document type handles its own K8s validation independently
+            doc_errors = self.validate_document(doc, doc_idx, yaml_lines=yaml_lines)
             error_collector.errors.extend(doc_errors)
         
         return error_collector.errors
     
-    def validate_document(self, document: dict, doc_index: int = 0, skip_k8s: bool = False) -> list[ValidationError]:
+    def validate_document(self, document: dict, doc_index: int = 0, yaml_lines: list[str] = None) -> list[ValidationError]:
         """Validate a single Koreo document"""
         errors = []
         
@@ -162,9 +129,24 @@ class SchemaValidator:
         errors.extend(spec_errors)
         
         # Add Kubernetes CRD validation for ResourceFunction
-        if kind == "ResourceFunction" and not skip_k8s:
-            k8s_errors = self.validate_resource_function_k8s(document.get("spec", {}))
-            errors.extend(k8s_errors)
+        if kind == "ResourceFunction":
+            from koreo_tooling.k8s_validation import is_k8s_validation_enabled
+            
+            if is_k8s_validation_enabled():
+                k8s_errors = self.validate_resource_function_k8s(document.get("spec", {}))
+                errors.extend(k8s_errors)
+            else:
+                logger.debug("K8s validation disabled - skipping ResourceFunction CRD validation")
+        
+        # Add Kubernetes CRD validation for FunctionTest embedded resources
+        if kind == "FunctionTest":
+            from koreo_tooling.k8s_validation import is_k8s_validation_enabled
+            
+            if is_k8s_validation_enabled():
+                function_test_k8s_errors = self.validate_function_test_k8s(document.get("spec", {}), yaml_lines=yaml_lines)
+                errors.extend(function_test_k8s_errors)
+            else:
+                logger.debug("K8s validation disabled - skipping FunctionTest CRD validation")
         
         return errors
     
@@ -282,6 +264,60 @@ class SchemaValidator:
             logger.exception("Error during K8s CRD validation")
             errors.append(ValidationError(
                 message=f"K8s validation failed: {e}",
+                path="spec",
+                severity=types.DiagnosticSeverity.Warning
+            ))
+        
+        return errors
+    
+    def validate_function_test_k8s(self, spec: dict, yaml_lines: list[str] = None) -> list[ValidationError]:
+        """Validate FunctionTest embedded resources with Kubernetes CRD validation"""
+        errors = []
+        
+        try:
+            
+            # Check currentResource in base inputs
+            current_resource = spec.get("currentResource")
+            if current_resource and isinstance(current_resource, dict):
+                resource_errors = validate_embedded_resource(
+                    resource=current_resource,
+                    path_prefix="spec.currentResource",
+                    yaml_lines=yaml_lines
+                )
+                errors.extend(resource_errors)
+            
+            # Check test cases for embedded resources
+            test_cases = spec.get("testCases", [])
+            for i, test_case in enumerate(test_cases):
+                if not isinstance(test_case, dict):
+                    continue
+                
+                test_path_prefix = f"spec.testCases[{i}]"
+                
+                # Check currentResource in test case
+                current_resource = test_case.get("currentResource")
+                if current_resource and isinstance(current_resource, dict):
+                    resource_errors = validate_embedded_resource(
+                        resource=current_resource,
+                        path_prefix=f"{test_path_prefix}.currentResource",
+                        yaml_lines=yaml_lines
+                    )
+                    errors.extend(resource_errors)
+                
+                # Check expectResource in test case
+                expect_resource = test_case.get("expectResource")
+                if expect_resource and isinstance(expect_resource, dict):
+                    resource_errors = validate_embedded_resource(
+                        resource=expect_resource,
+                        path_prefix=f"{test_path_prefix}.expectResource",
+                        yaml_lines=yaml_lines
+                    )
+                    errors.extend(resource_errors)
+        
+        except Exception as e:
+            logger.exception("Error during FunctionTest K8s CRD validation")
+            errors.append(ValidationError(
+                message=f"FunctionTest K8s validation failed: {e}",
                 path="spec",
                 severity=types.DiagnosticSeverity.Warning
             ))
