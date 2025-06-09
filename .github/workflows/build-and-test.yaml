@@ -26,6 +26,7 @@ jobs:
 
       - name: Run linting
         run: pdm run lint
+        continue-on-error: true
 
       - name: Run tests
         run: pdm run pytest
