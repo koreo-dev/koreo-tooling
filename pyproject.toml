@@ -11,7 +11,7 @@ dependencies = [
     "cel-python==0.2.0",
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
-    "koreo-core==0.1.11",
+    "koreo-core==0.1.13",
     "colorist>=1.8.3",
     "kr8s>=0.20.6",
 ]
@@ -36,7 +36,7 @@ distribution = true
 
 [tool.pdm.build]
 package-dir = "src"
-includes = ["src/koreo_tooling", "src/cli", "src/server.py", "crd"]
+includes = ["src/koreo_tooling", "src/cli", "src/server.py"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
