@@ -27,6 +27,13 @@ Homepage = "https://koreo.dev"
 koreo-ls = "server:main"
 koreo = "cli.__main__:main"
 
+[tool.pdm.scripts]
+lint = "ruff check src/"
+lint-fix = "ruff check src/ --fix"
+format = "ruff format src/"
+test = "pytest"
+test-cov = "pytest --cov=src --cov-report=term-missing"
+
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
@@ -36,7 +43,7 @@ distribution = true
 
 [tool.pdm.build]
 package-dir = "src"
-includes = ["src/koreo_tooling", "src/cli", "src/server.py", "crd"]
+includes = ["src/koreo_tooling/**/*", "src/cli", "src/server.py"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
@@ -56,4 +63,44 @@ dev = [
     "pytest==8.3.4",
     "pytest-cov==6.0.0",
     "colorist>=1.8.3",
+    "ruff>=0.8.0",
 ]
+
+[tool.ruff]
+# Python version target
+target-version = "py313"
+
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default
+# Also enable isort (`I`), pyupgrade (`UP`), and flake8-bugbear (`B`)
+lint.select = ["E", "F", "I", "UP", "B"]
+
+# Never enforce line length violations  
+lint.ignore = ["E501"]
+
+# Exclude common directories
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    ".pytest_cache",
+]
+
+# Same as Black
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint.isort]
+# Configure import sorting to be compatible with Black
+known-first-party = ["koreo_tooling", "cli", "server"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/server.py" = ["E402"]  # Allow imports not at top of file for server initialization
+
+[tool.ruff.format]
+# Use Black-compatible formatting
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
