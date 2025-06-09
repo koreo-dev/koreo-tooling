@@ -861,7 +861,14 @@ def _check_for_duplicate_resources(uri: str):
 
 
 def main():
-    schema.load_validators_from_files(path=CRD_ROOT)
+    # Use the centralized CRD loading from koreo_tooling
+    try:
+        from koreo_tooling import load_schema_validators
+        load_schema_validators()
+    except ImportError:
+        # Fallback to direct loading if koreo_tooling not available
+        schema.load_validators_from_files(path=CRD_ROOT)
+    
     server.start_io()
 
 
