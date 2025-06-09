@@ -4,12 +4,12 @@ import logging
 from io import StringIO
 from typing import Any, Iterator, NamedTuple
 
-from ruyaml import YAML
-from ruyaml.nodes import Node
-from ruyaml.composer import ComposerError
-from ruyaml.constructor import ConstructorError  
-from ruyaml.parser import ParserError
-from ruyaml.scanner import ScannerError
+from ruamel.yaml import YAML
+from ruamel.yaml.nodes import Node
+from ruamel.yaml.composer import ComposerError
+from ruamel.yaml.constructor import ConstructorError  
+from ruamel.yaml.parser import ParserError
+from ruamel.yaml.scanner import ScannerError
 from lsprotocol import types
 
 logger = logging.getLogger("koreo.tooling.yaml_processor")

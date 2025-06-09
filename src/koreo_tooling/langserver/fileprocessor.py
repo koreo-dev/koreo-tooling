@@ -2,8 +2,8 @@ from functools import reduce
 from typing import Any, Generator, NamedTuple, Sequence
 import operator
 
-import ruyaml
-from ruyaml import YAML
+import ruamel.yaml
+from ruamel.yaml import YAML
 
 from pygls.workspace import TextDocument
 from lsprotocol import types
@@ -328,7 +328,7 @@ def _load_all_yamls(
         while loader.check_data():
             try:
                 yield loader.get_data()
-            except (ruyaml.scanner.ScannerError, ruyaml.parser.ParserError) as err:
+            except (ruamel.yaml.scanner.ScannerError, ruamel.yaml.parser.ParserError) as err:
                 problem_pos = None
                 if err.problem_mark:
                     problem_pos = types.Position(

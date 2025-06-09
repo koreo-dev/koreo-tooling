@@ -10,7 +10,7 @@ authors = [
 dependencies = [
     "cel-python==0.2.0",
     "pygls==2.0.0a2",
-    "ruyaml>=0.91.0",
+    "ruamel.yaml>=0.17.0",
     "koreo-core==0.1.11",
     "colorist>=1.8.3",
     "kr8s>=0.20.6",

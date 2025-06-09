@@ -1,7 +1,7 @@
 from typing import NamedTuple, Sequence
 import copy
 
-from ruyaml import YAML
+from ruamel.yaml import YAML
 from io import StringIO
 
 from lsprotocol import types
