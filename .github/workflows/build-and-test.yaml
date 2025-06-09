@@ -24,5 +24,8 @@ jobs:
       - name: Install dependencies
         run: pdm install
 
+      - name: Run linting
+        run: pdm run lint
+
       - name: Run tests
         run: pdm run pytest
