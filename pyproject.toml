@@ -58,7 +58,6 @@ addopts = [
 
 [dependency-groups]
 dev = [
-    "black==24.10.0",
     "pyright==1.1.391",
     "pytest==8.3.4",
     "pytest-cov==6.0.0",
@@ -74,9 +73,6 @@ target-version = "py313"
 # Also enable isort (`I`), pyupgrade (`UP`), and flake8-bugbear (`B`)
 lint.select = ["E", "F", "I", "UP", "B"]
 
-# Never enforce line length violations  
-lint.ignore = ["E501"]
-
 # Exclude common directories
 exclude = [
     ".git",
@@ -87,19 +83,19 @@ exclude = [
     ".pytest_cache",
 ]
 
-# Same as Black
-line-length = 88
+# Set line length to 80 characters
+line-length = 80
 indent-width = 4
 
 [tool.ruff.lint.isort]
-# Configure import sorting to be compatible with Black
+# Configure import sorting
 known-first-party = ["koreo_tooling", "cli", "server"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/server.py" = ["E402"]  # Allow imports not at top of file for server initialization
 
 [tool.ruff.format]
-# Use Black-compatible formatting
+# Formatting configuration
 quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
