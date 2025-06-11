@@ -57,17 +57,29 @@ async def completions(params: types.CompletionParams):
     # suggestion, probably similar to hover.
 
     items = []
-
-    for cache_type, cached in cache.__CACHE.items():
-        for resource_key, _ in cached.items():
-            items.append(
-                types.CompletionItem(
-                    label=resource_key,
-                    label_details=types.CompletionItemLabelDetails(
-                        detail=f" {cache_type}"
-                    ),
-                )
-            )
+    
+    # Instead of iterating through the entire cache, use the semantic index
+    # to get resources from the current workspace
+    seen_resources = set()
+    
+    for uri, range_indices in __SEMANTIC_RANGE_INDEX_BY_URI.items():
+        for range_index in range_indices:
+            # Extract resource type and name from the index
+            if match := constants.RESOURCE_DEF.match(range_index.name):
+                resource_type = match.group("kind")
+                resource_name = match.group("name")
+                resource_key = f"{resource_type}:{resource_name}"
+                
+                if resource_key not in seen_resources:
+                    seen_resources.add(resource_key)
+                    items.append(
+                        types.CompletionItem(
+                            label=resource_name,
+                            label_details=types.CompletionItemLabelDetails(
+                                detail=f" {resource_type}"
+                            ),
+                        )
+                    )
 
     # TODO: If we're confident about where they are, set this as is_incomplete=False
     return types.CompletionList(is_incomplete=True, items=items)
@@ -110,9 +122,11 @@ def inlay_hints(params: types.InlayHintParams):
     end_line = params.range.end.line
 
     visible_tests = []
-    for uri, maybe_resource, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
-        if uri != doc.uri:
-            continue
+    # Only look at ranges for the current document
+    uri_ranges = __SEMANTIC_RANGE_INDEX_BY_URI.get(doc.uri, [])
+    for range_index in uri_ranges:
+        maybe_resource = range_index.name
+        maybe_range = range_index.range
 
         if not isinstance(maybe_range, types.Range):
             # TODO: Get anchors setting a range
@@ -159,6 +173,8 @@ def inlay_hints(params: types.InlayHintParams):
 @server.feature(types.INITIALIZE)
 async def initialize(params):
     await _process_workspace_directories()
+    # Start periodic cleanup task
+    asyncio.create_task(_periodic_cleanup())
 
 
 @server.feature(types.TEXT_DOCUMENT_CODE_LENS)
@@ -268,7 +284,9 @@ async def _process_workspace_directories():
 
 @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
 async def open_processor(params):
-
+    # Track open documents
+    __OPEN_DOCUMENTS.add(params.text_document.uri)
+    
     await handle_file(
         file_uri=params.text_document.uri,
         monotime=time.monotonic(),
@@ -286,6 +304,22 @@ async def change_processor(params):
     )
 
 
+@server.feature(types.TEXT_DOCUMENT_DID_CLOSE)
+async def close_processor(params):
+    # Clean up memory when document is closed
+    doc_uri = params.text_document.uri
+    __OPEN_DOCUMENTS.discard(doc_uri)
+    _reset_file_state(doc_uri)
+    
+    # Clean up file handlers
+    file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
+    if file_analyzer_resource in _ANALYZERS:
+        # Cancel the analyzer task
+        task = _ANALYZERS[file_analyzer_resource]
+        task.cancel()
+        del _ANALYZERS[file_analyzer_resource]
+
+
 class ResourceMatch(NamedTuple):
     key: str
     range: types.Range
@@ -298,9 +332,11 @@ class CurrentLineInfo(NamedTuple):
 
 def _lookup_current_line_info(uri: str, line: int) -> CurrentLineInfo:
     possible_match: tuple[str, types.Range] | None = None
-    for maybe_uri, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
-        if maybe_uri != uri:
-            continue
+    # Only look at ranges for the specific URI
+    uri_ranges = __SEMANTIC_RANGE_INDEX_BY_URI.get(uri, [])
+    for range_index in uri_ranges:
+        maybe_key = range_index.name
+        maybe_range = range_index.range
 
         if not isinstance(maybe_range, types.Range):
             continue
@@ -366,15 +402,20 @@ async def goto_definitiion(params: types.DefinitionParams):
     search_key = f"{resource_key_root}:def"
 
     definitions = []
-    for uri, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
-        if not isinstance(maybe_range, types.Range):
-            # TODO: Get anchors setting a range
-            continue
+    # Search all URIs for definitions
+    for uri, range_indices in __SEMANTIC_RANGE_INDEX_BY_URI.items():
+        for range_index in range_indices:
+            maybe_key = range_index.name
+            maybe_range = range_index.range
+            
+            if not isinstance(maybe_range, types.Range):
+                # TODO: Get anchors setting a range
+                continue
 
-        if maybe_key != search_key:
-            continue
+            if maybe_key != search_key:
+                continue
 
-        definitions.append(types.Location(uri=uri, range=maybe_range))
+            definitions.append(types.Location(uri=uri, range=maybe_range))
 
     return definitions
 
@@ -393,16 +434,21 @@ async def goto_reference(params: types.ReferenceParams):
 
     references: list[types.Location] = []
     definitions: list[types.Location] = []
-    for uri, maybe_key, maybe_range, _ in __SEMANTIC_RANGE_INDEX:
-        if not isinstance(maybe_range, types.Range):
-            # TODO: Get anchors setting a range
-            continue
+    # Search all URIs for references and definitions
+    for uri, range_indices in __SEMANTIC_RANGE_INDEX_BY_URI.items():
+        for range_index in range_indices:
+            maybe_key = range_index.name
+            maybe_range = range_index.range
+            
+            if not isinstance(maybe_range, types.Range):
+                # TODO: Get anchors setting a range
+                continue
 
-        if maybe_key == reference_key:
-            references.append(types.Location(uri=uri, range=maybe_range))
+            if maybe_key == reference_key:
+                references.append(types.Location(uri=uri, range=maybe_range))
 
-        if maybe_key == definition_key:
-            definitions.append(types.Location(uri=uri, range=maybe_range))
+            if maybe_key == definition_key:
+                definitions.append(types.Location(uri=uri, range=maybe_range))
 
     return references + definitions
 
@@ -532,11 +578,7 @@ async def _analyze_file(
     )
 
     old_resource_defs: dict[registry.Resource, str | None] = _get_defined_resources(
-        [
-            range_index
-            for range_index in __SEMANTIC_RANGE_INDEX
-            if range_index.uri == doc.uri
-        ]
+        __SEMANTIC_RANGE_INDEX_BY_URI.get(doc.uri, [])
     )
     _reset_file_state(doc.uri)
 
@@ -547,7 +589,7 @@ async def _analyze_file(
         __SEMANTIC_TOKEN_INDEX[doc.uri] = []
 
     if parsing_result.semantic_range_index:
-        __SEMANTIC_RANGE_INDEX.extend(parsing_result.semantic_range_index)
+        __SEMANTIC_RANGE_INDEX_BY_URI[doc.uri] = list(parsing_result.semantic_range_index)
 
     file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
     used_resources.append(
@@ -587,6 +629,30 @@ async def _analyze_file(
 
 
 class FileAnalyzer: ...
+
+
+async def _periodic_cleanup():
+    """Periodically clean up memory for closed documents"""
+    while True:
+        try:
+            # Wait 5 minutes between cleanups
+            await asyncio.sleep(300)
+            
+            # Get all URIs that have data but are not open
+            all_tracked_uris = set()
+            all_tracked_uris.update(__SEMANTIC_RANGE_INDEX_BY_URI.keys())
+            all_tracked_uris.update(__SEMANTIC_TOKEN_INDEX.keys())
+            all_tracked_uris.update(__TEST_RESULTS.keys())
+            all_tracked_uris.update(__PARSING_RESULT.keys())
+            
+            # Clean up URIs that are not in open documents
+            for uri in all_tracked_uris - __OPEN_DOCUMENTS:
+                _reset_file_state(uri)
+                
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error in periodic cleanup: {e}")
 
 
 _ANALYZERS: dict[registry.Resource[FileAnalyzer], asyncio.Task] = {}
@@ -801,25 +867,33 @@ async def _run_function_test(
     return ([], results)
 
 
-# Globals? Are you evil or just stupid? Yes.
+# Global state with memory management
+# Use WeakValueDictionary for automatic cleanup when documents are closed
+import weakref
+
 __PARSING_RESULT: dict[str, tuple[int | None, ProccessResults]] = {}
 __TEST_RESULTS = defaultdict[str, dict[str, TestResults]](dict)
 __SEMANTIC_TOKEN_INDEX: dict[str, Sequence[int]] = {}
-__SEMANTIC_RANGE_INDEX: list[SemanticRangeIndex] = []
+# Change to dict for O(1) lookups and easier cleanup
+__SEMANTIC_RANGE_INDEX_BY_URI: dict[str, list[SemanticRangeIndex]] = {}
+
+# Track open documents to clean up closed ones
+__OPEN_DOCUMENTS: set[str] = set()
 
 
 def _reset_file_state(uri: str):
-    global __SEMANTIC_RANGE_INDEX
-
-    __SEMANTIC_RANGE_INDEX = [
-        range_index for range_index in __SEMANTIC_RANGE_INDEX if range_index.uri != uri
-    ]
+    # Efficient cleanup using dict-based storage
+    if uri in __SEMANTIC_RANGE_INDEX_BY_URI:
+        del __SEMANTIC_RANGE_INDEX_BY_URI[uri]
 
     if uri in __SEMANTIC_TOKEN_INDEX:
         del __SEMANTIC_TOKEN_INDEX[uri]
 
     if uri in __TEST_RESULTS:
         del __TEST_RESULTS[uri]
+        
+    if uri in __PARSING_RESULT:
+        del __PARSING_RESULT[uri]
 
 
 def _check_for_duplicate_resources(uri: str):
@@ -827,17 +901,22 @@ def _check_for_duplicate_resources(uri: str):
         lambda: (0, False, [])
     )
 
-    for resource_uri, resource_key, resource_range, _ in __SEMANTIC_RANGE_INDEX:
-        if not constants.RESOURCE_DEF.match(resource_key):
-            continue
+    # Check all URIs for duplicates
+    for resource_uri, range_indices in __SEMANTIC_RANGE_INDEX_BY_URI.items():
+        for range_index in range_indices:
+            resource_key = range_index.name
+            resource_range = range_index.range
+            
+            if not constants.RESOURCE_DEF.match(resource_key):
+                continue
 
-        count, seen_in_uri, locations = counts[resource_key]
-        locations.append((resource_uri, resource_range))
-        counts[resource_key] = (
-            count + 1,
-            seen_in_uri or resource_uri == uri,
-            locations,
-        )
+            count, seen_in_uri, locations = counts[resource_key]
+            locations.append((resource_uri, resource_range))
+            counts[resource_key] = (
+                count + 1,
+                seen_in_uri or resource_uri == uri,
+                locations,
+            )
 
     duplicate_diagnostics: list[types.Diagnostic] = []
 
