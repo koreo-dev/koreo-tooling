@@ -1,12 +1,12 @@
-from typing import NamedTuple, Sequence
 import copy
-
-import yaml
-
-from lsprotocol import types
+import io
+from collections.abc import Sequence
+from typing import NamedTuple
 
 from koreo import cache
 from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
+from ruamel.yaml import YAML
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import FieldMismatchResult, TestResults
@@ -14,8 +14,8 @@ from koreo_tooling.indexing.semantics import (
     SemanticAnchor,
     SemanticBlock,
     SemanticNode,
-    compute_abs_range,
     compute_abs_position,
+    compute_abs_range,
 )
 from koreo_tooling.langserver.rangers import block_range_extract
 
@@ -397,9 +397,14 @@ def _code_lens_inputs_action(test_name: str, test_result: TestResults):
     )
 
     indent = (offset + 2) * " "
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    yaml.width = 4096
+    stream = io.StringIO()
+    yaml.dump(spec_inputs, stream)
     formated_inputs = f"\n{"\n".join(
         f"{indent}{line}"
-        for line in yaml.dump(spec_inputs).splitlines()
+        for line in stream.getvalue().splitlines()
     )}\n\n"
 
     return EditResult(
@@ -525,9 +530,14 @@ def _code_lens_replace_value_block_action(
     )
 
     indent = (offset + 2) * " "
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    yaml.width = 10000
+    stream = io.StringIO()
+    yaml.dump(new_value, stream)
     formated = f"\n{"\n".join(
         f"{indent}{line}"
-        for line in yaml.dump(new_value, width=10000).splitlines()
+        for line in stream.getvalue().splitlines()
     )}\n\n"
 
     return EditResult(

@@ -1,9 +1,9 @@
-from typing import Sequence
 import copy
+from collections.abc import Sequence
 
-from yaml.nodes import Node, MappingNode, SequenceNode
+from ruamel.yaml.nodes import MappingNode, Node, SequenceNode
 
-
+from . import cel_semantics
 from .koreo_semantics import ALL
 from .semantics import (
     FieldIndexFn,
@@ -17,8 +17,6 @@ from .semantics import (
     Severity,
     compute_abs_position,
 )
-
-from . import cel_semantics
 
 
 def extract_semantic_structure_info(

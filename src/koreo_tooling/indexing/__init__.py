@@ -1,31 +1,43 @@
 from __future__ import annotations
+
 import hashlib
+import io
 
-from yaml.loader import SafeLoader
-from yaml.nodes import Node
+from ruamel.yaml.composer import Composer
+from ruamel.yaml.constructor import RoundTripConstructor
+from ruamel.yaml.nodes import Node
+from ruamel.yaml.parser import RoundTripParser
+from ruamel.yaml.reader import Reader
+from ruamel.yaml.resolver import VersionedResolver
+from ruamel.yaml.scanner import RoundTripScanner
 
-
+from .extractor import extract_semantic_structure_info
 from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE
 from .semantics import (
     Position,
     SemanticAnchor,
-    SemanticBlock,
-    SemanticNode,
     SemanticStructure,
     TokenModifiers,
     TokenTypes,
-    compute_abs_position,
     compute_abs_range,
 )
 
-from .extractor import extract_semantic_structure_info
-
 STRUCTURE_KEY = "..structure.."
 
+__all__ = [
+    "IndexingLoader",
+    "IndexingConstructor",
+    "STRUCTURE_KEY",
+    "SemanticAnchor",
+    "TokenModifiers",
+    "TokenTypes",
+    "compute_abs_range",
+]
 
-class IndexingLoader(SafeLoader):
-    def __init__(self, *args, doc, **kwargs):
-        super().__init__(*args, **kwargs)
+
+class IndexingConstructor(RoundTripConstructor):
+    def __init__(self, doc, preserve_quotes=True, loader=None):
+        super().__init__(preserve_quotes=preserve_quotes, loader=loader)
         self.last_node_abs_start = Position(line=0, character=0)
         self.last_node_abs_end = Position(line=0, character=0)
         self.doc = doc
@@ -45,7 +57,9 @@ class IndexingLoader(SafeLoader):
         doc_kind = yaml_doc.get("kind")
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
         if not doc_semantics:
-            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(ALL, SemanticStructure())
+            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(
+                ALL, SemanticStructure()
+            )
 
         doc_metadata = yaml_doc.get("metadata", {})
         doc_name = doc_metadata.get("name")
@@ -86,3 +100,69 @@ class IndexingLoader(SafeLoader):
         self.doc_count = self.doc_count + 1
 
         return block_hash, yaml_doc
+
+
+class IndexingLoader:
+    """Custom YAML loader preserving node info and semantic structure."""
+
+    def __init__(self, stream, doc):
+        self.stream = stream
+        self.doc = doc
+        # Set default YAML attributes
+        self.processing_version = (1, 2)
+        self.allow_duplicate_keys = False
+        self.preserve_quotes = True
+        self.width = 4096
+        self.comment_handling = None
+        self.yaml_version = None
+        self._setup_components()
+
+    def check_data(self):
+        """Check if more data is available in the stream."""
+        return self.composer.check_node()
+
+    def get_data(self):
+        """Get the next constructed document."""
+        if self.composer.check_node():
+            # Get the node
+            node = self.composer.get_node()
+            if node is not None:
+                # Construct document using our custom constructor
+                return self.constructor.construct_document(node)
+        return None
+
+    def dispose(self):
+        """Clean up the loader."""
+        try:
+            self.reader.reset_reader()
+        except Exception:
+            pass
+
+    def _setup_components(self):
+        """Set up the internal components."""
+        if isinstance(self.stream, str):
+            stream = io.StringIO(self.stream)
+        else:
+            stream = self.stream
+
+        # Create reader first
+        self.reader = Reader(stream)
+        self._reader = self.reader
+
+        # Create other components
+        self.scanner = RoundTripScanner(loader=self)
+        self._scanner = self.scanner
+
+        self.parser = RoundTripParser(loader=self)
+        self._parser = self.parser
+
+        self.composer = Composer(loader=self)
+        self._composer = self.composer
+
+        self.constructor = IndexingConstructor(
+            doc=self.doc, preserve_quotes=True, loader=self
+        )
+        self._constructor = self.constructor
+
+        self.resolver = VersionedResolver(loader=self)
+        self._resolver = self.resolver
