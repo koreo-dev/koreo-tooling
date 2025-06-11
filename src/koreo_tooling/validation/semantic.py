@@ -5,17 +5,13 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-try:
-    from ..indexing import IndexingLoader, STRUCTURE_KEY
-    from ..indexing.semantics import (
-        SemanticAnchor,
-        Severity as SemanticSeverity,
-        extract_diagnostics,
-        flatten,
-    )
-    SEMANTIC_VALIDATION_AVAILABLE = True
-except ImportError:
-    SEMANTIC_VALIDATION_AVAILABLE = False
+from koreo_tooling.indexing import IndexingLoader, STRUCTURE_KEY
+from koreo_tooling.indexing.semantics import (
+    SemanticAnchor,
+    Severity as SemanticSeverity,
+    extract_diagnostics,
+    flatten,
+)
 
 
 class Severity(Enum):
@@ -44,9 +40,6 @@ class MockTextDocument:
 
 def validate_with_semantics(content: str) -> list[ValidationError]:
     """Validate using the existing semantic validation system"""
-    if not SEMANTIC_VALIDATION_AVAILABLE:
-        raise ImportError("Semantic validation components not available")
-    
     errors = []
     
     try:
