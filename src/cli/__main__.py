@@ -1,9 +1,10 @@
 import argparse
 
-from .prune import register_prune_subcommand
 from .apply import register_apply_subcommand
 from .inspect import register_inspector_subcommand
+from .prune import register_prune_subcommand
 from .reconcile import register_reconcile_subcommand
+from .validate import register_validate_subcommand
 
 
 def main():
@@ -14,6 +15,7 @@ def main():
     register_inspector_subcommand(subparsers)
     register_prune_subcommand(subparsers)
     register_reconcile_subcommand(subparsers)
+    register_validate_subcommand(subparsers)
 
     args = parser.parse_args()
     args.func(args)
