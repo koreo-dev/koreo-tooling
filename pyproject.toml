@@ -8,10 +8,10 @@ authors = [
     {name = "Tyler Treat", email = "tyler.treat@realkinetic.com"},
 ]
 dependencies = [
-    "cel-python==0.2.0",
+    "cel-python==0.3.0",
     "pygls==2.0.0a2",
-    "pyyaml==6.0.2",
-    "koreo-core==0.1.11",
+    "ruamel.yaml>=0.18.6",
+    "koreo-core @ file:///${PROJECT_ROOT}/../core",
     "colorist>=1.8.3",
     "kr8s>=0.20.6",
 ]

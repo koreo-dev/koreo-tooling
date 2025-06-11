@@ -1,20 +1,20 @@
-from typing import NamedTuple, Sequence
 import os
+from collections.abc import Sequence
+from typing import NamedTuple
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
 
-from lsprotocol import types
-
 from koreo import cache
-from koreo.workflow.structure import ErrorStep, LogicSwitch, Step, Workflow
 from koreo.resource_function.structure import ResourceFunction
-from koreo.value_function.structure import ValueFunction
 from koreo.result import is_unwrapped_ok
+from koreo.value_function.structure import ValueFunction
+from koreo.workflow.structure import ErrorStep, LogicSwitch, Step, Workflow
+from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
-from koreo_tooling.indexing import compute_abs_range
+from koreo_tooling.indexing.semantics import compute_abs_range
 from koreo_tooling.langserver.rangers import block_range_extract
 
 
@@ -138,7 +138,7 @@ def _process_workflow(
     if not step_specs and workflow.steps:
         diagnostics.append(
             types.Diagnostic(
-                message=f"Workflow steps are malformed.",
+                message="Workflow steps are malformed.",
                 severity=types.DiagnosticSeverity.Warning,
                 range=resource_range,
             )
@@ -173,7 +173,7 @@ def _process_workflow(
     if has_step_error:
         diagnostics.append(
             types.Diagnostic(
-                message=f"Workflow steps are not ready.",
+                message="Workflow steps are not ready.",
                 severity=types.DiagnosticSeverity.Error,
                 range=resource_range,
             )

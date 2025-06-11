@@ -1,17 +1,20 @@
-from typing import NamedTuple, Sequence
 import os
+from collections.abc import Sequence
+from typing import NamedTuple
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
-from lsprotocol import types
-
 from koreo import cache
 from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
 
 from koreo_tooling import function_test
-from koreo_tooling.indexing import compute_abs_range
-from koreo_tooling.indexing.semantics import SemanticAnchor, SemanticBlock, SemanticNode
-
+from koreo_tooling.indexing.semantics import (
+    SemanticAnchor,
+    SemanticBlock,
+    SemanticNode,
+    compute_abs_range,
+)
 from koreo_tooling.langserver.rangers import block_range_extract
 
 
