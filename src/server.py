@@ -15,8 +15,6 @@ from koreo import schema
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
-CRD_ROOT = pathlib.Path(__file__).parent.joinpath("crd")
-
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
 from koreo import cache
@@ -861,7 +859,7 @@ def _check_for_duplicate_resources(uri: str):
 
 
 def main():
-    schema.load_validators_from_files(path=CRD_ROOT)
+    schema.load_validators_from_files()
     server.start_io()
 
 
