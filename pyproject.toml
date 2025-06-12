@@ -1,6 +1,6 @@
 [project]
 name = "koreo"
-version = "0.3.2"
+version = "0.3.3"
 description = "Tooling package for Koreo"
 authors = [
     {name = "Robert Kluin", email = "robert.kluin@realkinetic.com"},
@@ -8,10 +8,10 @@ authors = [
     {name = "Tyler Treat", email = "tyler.treat@realkinetic.com"},
 ]
 dependencies = [
-    "cel-python==0.2.0",
+    "cel-python==0.3.0",
     "pygls==2.0.0a2",
     "pyyaml==6.0.2",
-    "koreo-core==0.1.11",
+    "koreo-core==0.1.14",
     "colorist>=1.8.3",
     "kr8s>=0.20.6",
 ]
@@ -24,7 +24,7 @@ license = {text = "Apache-2.0"}
 Homepage = "https://koreo.dev"
 
 [project.scripts]
-koreo-ls = "server:main"
+koreo-ls = "koreo_tooling.server:main"
 koreo = "cli.__main__:main"
 
 [tool.pdm.scripts]
@@ -43,7 +43,6 @@ distribution = true
 
 [tool.pdm.build]
 package-dir = "src"
-includes = ["src/koreo_tooling/**/*", "src/cli", "src/server.py"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"

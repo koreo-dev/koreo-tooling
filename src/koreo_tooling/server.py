@@ -11,12 +11,10 @@ logger = logging.getLogger("koreo.ls")
 
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
-from koreo import schema
+from koreo.schema import load_bundled_schemas
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
-CRD_ROOT = pathlib.Path(__file__).parent.joinpath("crd")
-
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
 from koreo import cache
@@ -861,7 +859,7 @@ def _check_for_duplicate_resources(uri: str):
 
 
 def main():
-    schema.load_validators_from_files(path=CRD_ROOT)
+    load_bundled_schemas()
     server.start_io()
 
 
