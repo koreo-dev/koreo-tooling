@@ -24,7 +24,7 @@ license = {text = "Apache-2.0"}
 Homepage = "https://koreo.dev"
 
 [project.scripts]
-koreo-ls = "server:main"
+koreo-ls = "koreo_tooling.server:main"
 koreo = "cli.__main__:main"
 
 [tool.pdm.scripts]
@@ -43,7 +43,6 @@ distribution = true
 
 [tool.pdm.build]
 package-dir = "src"
-includes = ["src/koreo_tooling/**/*", "src/cli", "src/server.py"]
 
 [tool.pytest.ini_options]
 pythonpath = "src"
