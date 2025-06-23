@@ -1,10 +1,9 @@
-from typing import TypedDict
 import json
+from typing import TypedDict
 
 import kr8s
-from kr8s._objects import APIObject
-
 from colorist import BrightColor, Color
+from kr8s._objects import APIObject
 
 BAD_RESPONSE = 10
 
@@ -38,22 +37,22 @@ def _step_name(name: str):
 
 
 RESOURCE_PRINTER = f"""
-{_label('apiVersion')}: {_api_version('{apiVersion}')}
-{_label('kind')}: {_kind('{kind}')}
-{_label('metadata')}:
-    {_label('name')}: {_name('{metadata.name}')}
-    {_label('namespace')}: {_namespace('{metadata.namespace}')}
-    {_label('uid')}: {{metadata.uid}}
+{_label("apiVersion")}: {_api_version("{apiVersion}")}
+{_label("kind")}: {_kind("{kind}")}
+{_label("metadata")}:
+    {_label("name")}: {_name("{metadata.name}")}
+    {_label("namespace")}: {_namespace("{metadata.namespace}")}
+    {_label("uid")}: {{metadata.uid}}
 """
 
 CONDITION_PRINTER = f"""
-              {_label('type')}: {_api_version('{type}')}
-            {_label('reason')}: {_kind('{reason}')}
-           {_label('message')}: {{message}}
-          {_label('location')}: {{location}}
-            {_label('status')}: {{status}}
-{_label('lastTransitionTime')}: {{lastTransitionTime}}
-    {_label('lastUpdateTime')}: {{lastUpdateTime}}
+              {_label("type")}: {_api_version("{type}")}
+            {_label("reason")}: {_kind("{reason}")}
+           {_label("message")}: {{message}}
+          {_label("location")}: {{location}}
+            {_label("status")}: {{status}}
+{_label("lastTransitionTime")}: {{lastTransitionTime}}
+    {_label("lastUpdateTime")}: {{lastUpdateTime}}
 """
 
 default_condition = {
@@ -74,7 +73,9 @@ def inspect_resource(api: kr8s.Api, resource: APIObject):
         if conditions:
             print("Conditions:")
             for condition in conditions:
-                print(CONDITION_PRINTER.format_map(default_condition | condition))
+                print(
+                    CONDITION_PRINTER.format_map(default_condition | condition)
+                )
 
     if VERBOSE > 2:
         print(json.dumps(resource.raw, indent="  "))
@@ -82,7 +83,9 @@ def inspect_resource(api: kr8s.Api, resource: APIObject):
         if "spec" in resource.raw:
             print(json.dumps(resource.spec, indent="  "))
 
-    managed_resources_raw = resource.annotations.get(MANAGED_RESOURCES_ANNOTATION)
+    managed_resources_raw = resource.annotations.get(
+        MANAGED_RESOURCES_ANNOTATION
+    )
     if not managed_resources_raw:
         return
 
@@ -121,7 +124,10 @@ def _process_managed_resources(
                 load_resource(api, resource_ref)
 
             case {}:
-                print(f"Step '{_step_name(step)}' managed resources (sub-workflow):")
+                print(
+                    f"Step '{_step_name(step)}' managed resources "
+                    "(sub-workflow):"
+                )
                 _process_managed_resources(api, resource_ref)
 
 

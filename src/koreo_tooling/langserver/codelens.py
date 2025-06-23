@@ -1,12 +1,11 @@
-from typing import NamedTuple, Sequence
 import copy
+from collections.abc import Sequence
+from typing import NamedTuple
 
 import yaml
-
-from lsprotocol import types
-
 from koreo import cache
 from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import FieldMismatchResult, TestResults
@@ -14,8 +13,8 @@ from koreo_tooling.indexing.semantics import (
     SemanticAnchor,
     SemanticBlock,
     SemanticNode,
-    compute_abs_range,
     compute_abs_position,
+    compute_abs_range,
 )
 from koreo_tooling.langserver.rangers import block_range_extract
 
@@ -31,7 +30,10 @@ class EditResult(NamedTuple):
 
 
 def handle_lens(
-    uri: str, doc_uri: str, doc_version: int, test_results: dict[str, TestResults]
+    uri: str,
+    doc_uri: str,
+    doc_version: int,
+    test_results: dict[str, TestResults],
 ):
     if not test_results:
         return LensResult()
@@ -84,7 +86,10 @@ def handle_lens(
             if lens_result.logs:
                 logs.extend(lens_result.logs)
 
-        if test_result.resource_field_errors or test_result.missing_test_assertion:
+        if (
+            test_result.resource_field_errors
+            or test_result.missing_test_assertion
+        ):
             lens_result = _generate_resource_lens(
                 doc_uri=doc_uri,
                 doc_version=doc_version,
@@ -97,7 +102,10 @@ def handle_lens(
             if lens_result.logs:
                 logs.extend(lens_result.logs)
 
-        if test_result.outcome_fields_errors or test_result.missing_test_assertion:
+        if (
+            test_result.outcome_fields_errors
+            or test_result.missing_test_assertion
+        ):
             lens_result = _generate_return_value_lens(
                 doc_uri=doc_uri,
                 doc_version=doc_version,
@@ -120,7 +128,9 @@ def _generate_inputs_lens(
     input_mismatches: list[FieldMismatchResult],
     test_anchor: SemanticAnchor,
 ) -> LensResult:
-    if not any(mismatch.field.startswith("inputs.") for mismatch in input_mismatches):
+    if not any(
+        mismatch.field.startswith("inputs.") for mismatch in input_mismatches
+    ):
         return LensResult()
 
     inputs_block = block_range_extract(
@@ -143,7 +153,7 @@ def _generate_inputs_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"Test ({test_name}) has duplicate inputs blocks",
+                        message=f"Test ({test_name}) has duplicate inputs blocks",  # noqa: E501
                     )
                 ]
             )
@@ -187,7 +197,7 @@ def _generate_resource_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) has multiple expectResource blocks",
+                        message=f"FunctionTest ({test_name}) has multiple expectResource blocks",  # noqa: E501
                     )
                 ]
             )
@@ -231,7 +241,7 @@ def _generate_current_resource_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) has multiple currentResource blocks",
+                        message=f"FunctionTest ({test_name}) has multiple currentResource blocks",  # noqa: E501
                     )
                 ]
             )
@@ -275,7 +285,7 @@ def _generate_return_value_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"Test ({test_name}) has multiple expectReturn blocks",
+                        message=f"Test ({test_name}) has multiple expectReturn blocks",  # noqa: E501
                     )
                 ]
             )
@@ -397,18 +407,21 @@ def _code_lens_inputs_action(test_name: str, test_result: TestResults):
     )
 
     indent = (offset + 2) * " "
-    formated_inputs = f"\n{"\n".join(
-        f"{indent}{line}"
-        for line in yaml.dump(spec_inputs).splitlines()
-    )}\n\n"
+    formatted_inputs = f"\n{
+        '\n'.join(
+            f'{indent}{line}' for line in yaml.dump(spec_inputs).splitlines()
+        )
+    }\n\n"
 
     return EditResult(
-        edits=(types.TextEdit(new_text=formated_inputs, range=edit_range),),
+        edits=(types.TextEdit(new_text=formatted_inputs, range=edit_range),),
         logs=logs,
     )
 
 
-def _code_lens_current_resource_action(test_name: str, test_result: TestResults):
+def _code_lens_current_resource_action(
+    test_name: str, test_result: TestResults
+):
     if not (test_result.actual_resource and test_result.missing_test_assertion):
         return EditResult()
 
@@ -421,7 +434,9 @@ def _code_lens_current_resource_action(test_name: str, test_result: TestResults)
 
 
 def _code_lens_resource_action(test_name: str, test_result: TestResults):
-    if not (test_result.resource_field_errors or test_result.missing_test_assertion):
+    if not (
+        test_result.resource_field_errors or test_result.missing_test_assertion
+    ):
         return EditResult()
 
     return _code_lens_replace_value_block_action(
@@ -433,7 +448,9 @@ def _code_lens_resource_action(test_name: str, test_result: TestResults):
 
 
 def _code_lens_return_value_action(test_name: str, test_result: TestResults):
-    if not (test_result.outcome_fields_errors or test_result.missing_test_assertion):
+    if not (
+        test_result.outcome_fields_errors or test_result.missing_test_assertion
+    ):
         return EditResult()
 
     return _code_lens_replace_value_block_action(
@@ -455,7 +472,10 @@ def _code_lens_replace_value_block_action(
             logs=[
                 types.LogMessageParams(
                     type=types.MessageType.Debug,
-                    message=f"FunctionTest ({test_name}) can not auto-complete {label_block_key}",
+                    message=(
+                        f"FunctionTest ({test_name}) can not auto-complete "
+                        f"{label_block_key}"
+                    ),
                 )
             ]
         )
@@ -468,7 +488,10 @@ def _code_lens_replace_value_block_action(
             logs=[
                 types.LogMessageParams(
                     type=types.MessageType.Debug,
-                    message=f"FunctionTest ({test_name}) isn't cached, or cache is corrupt",
+                    message=(
+                        f"FunctionTest ({test_name}) isn't cached, "
+                        "or cache is corrupt"
+                    ),
                 )
             ]
         )
@@ -479,7 +502,10 @@ def _code_lens_replace_value_block_action(
             logs=[
                 types.LogMessageParams(
                     type=types.MessageType.Debug,
-                    message=f"FunctionTest ({test_name}) cache corrupt, missing anchor",
+                    message=(
+                        f"FunctionTest ({test_name}) cache corrupt, "
+                        "missing anchor"
+                    ),
                 )
             ]
         )
@@ -495,7 +521,10 @@ def _code_lens_replace_value_block_action(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) missing {label_block_key} block",
+                        message=(
+                            f"FunctionTest ({test_name}) missing "
+                            f"{label_block_key} block"
+                        ),
                     )
                 ]
             )
@@ -504,7 +533,10 @@ def _code_lens_replace_value_block_action(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) duplicate {label_block_key} block",
+                        message=(
+                            f"FunctionTest ({test_name}) duplicate "
+                            f"{label_block_key} block"
+                        ),
                     )
                 ]
             )
@@ -525,13 +557,14 @@ def _code_lens_replace_value_block_action(
     )
 
     indent = (offset + 2) * " "
-    formated = f"\n{"\n".join(
-        f"{indent}{line}"
-        for line in yaml.dump(new_value, width=10000).splitlines()
-    )}\n\n"
-
+    formatted = f"\n{
+        '\n'.join(
+            f'{indent}{line}'
+            for line in yaml.dump(new_value, width=10000).splitlines()
+        )
+    }\n\n"
     return EditResult(
-        edits=(types.TextEdit(new_text=formated, range=edit_range),),
+        edits=(types.TextEdit(new_text=formatted, range=edit_range),),
         logs=logs,
     )
 

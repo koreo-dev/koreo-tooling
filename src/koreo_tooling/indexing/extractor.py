@@ -1,9 +1,9 @@
-from typing import Sequence
 import copy
+from collections.abc import Sequence
 
-from yaml.nodes import Node, MappingNode, SequenceNode
+from yaml.nodes import MappingNode, Node, SequenceNode
 
-
+from . import cel_semantics
 from .koreo_semantics import ALL
 from .semantics import (
     FieldIndexFn,
@@ -17,8 +17,6 @@ from .semantics import (
     Severity,
     compute_abs_position,
 )
-
-from . import cel_semantics
 
 
 def extract_semantic_structure_info(
@@ -84,7 +82,9 @@ def _extract_map_structure_info(
     elif semantic_type:
         semantic_type_map = {ALL: semantic_type}
 
-    if field_index_key_fn and (index := field_index_key_fn(value=yaml_node.value)):
+    if field_index_key_fn and (
+        index := field_index_key_fn(value=yaml_node.value)
+    ):
         sub_index_field, sub_index_value = index
     else:
         sub_index_field = None
@@ -159,7 +159,9 @@ def _extract_map_structure_info(
         )
 
         key_semantic_node = key_semantic_nodes[-1]
-        semantic_nodes.append(key_semantic_node._replace(children=value_semantic_nodes))
+        semantic_nodes.append(
+            key_semantic_node._replace(children=value_semantic_nodes)
+        )
 
     return semantic_nodes, new_last_start
 
@@ -228,7 +230,9 @@ def _extract_cel_semantic_info(
             eq_char_offset += 1
 
         seed_line = node_line - last_line
-        char_offset = eq_char_offset - (0 if node_line > last_line else last_column)
+        char_offset = eq_char_offset - (
+            0 if node_line > last_line else last_column
+        )
 
         nodes.extend(
             cel_semantics.parse(
@@ -257,7 +261,9 @@ def _extract_cel_semantic_info(
                     relative_to=last_token_abs_start,
                 ),
                 anchor_rel=_compute_rel_position(
-                    line=node_line, character=node_column, relative_to=anchor_abs_start
+                    line=node_line,
+                    character=node_column,
+                    relative_to=anchor_abs_start,
                 ),
                 length=line_len - node_column,
                 node_type="operator",
@@ -268,9 +274,13 @@ def _extract_cel_semantic_info(
 
         nodes.extend(
             cel_semantics.parse(
-                cel_expression=doc.lines[node_line + 1 : yaml_node.end_mark.line],
+                cel_expression=doc.lines[
+                    node_line + 1 : yaml_node.end_mark.line
+                ],
                 anchor_base_pos=_compute_rel_position(
-                    line=node_line, character=node_column, relative_to=anchor_abs_start
+                    line=node_line,
+                    character=node_column,
+                    relative_to=anchor_abs_start,
                 ),
                 seed_line=1,
                 seed_offset=0,
@@ -420,7 +430,7 @@ def _extract_value_semantic_info(
         case _:
             clean_semantic_type = SemanticStructure()
 
-    if isinstance(yaml_node, (MappingNode, SequenceNode)):
+    if isinstance(yaml_node, MappingNode | SequenceNode):
         nodes, last_token_pos = extract_semantic_structure_info(
             anchor_abs_start=anchor_abs_start,
             last_token_abs_start=last_token_abs_start,
@@ -429,7 +439,9 @@ def _extract_value_semantic_info(
             semantic_type=semantic_type,
         )
 
-        if not (clean_semantic_type.local_key_fn or clean_semantic_type.index_key_fn):
+        if not (
+            clean_semantic_type.local_key_fn or clean_semantic_type.index_key_fn
+        ):
             return nodes, last_token_pos
 
         if clean_semantic_type.local_key_fn:
@@ -494,7 +506,9 @@ def _extract_value_semantic_info(
     )
 
 
-def _compute_rel_position(line: int, character: int, relative_to: Position) -> Position:
+def _compute_rel_position(
+    line: int, character: int, relative_to: Position
+) -> Position:
     rel_to_line = relative_to.line
     rel_to_offset = relative_to.character
 

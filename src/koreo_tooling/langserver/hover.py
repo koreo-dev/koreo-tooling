@@ -1,18 +1,13 @@
 from typing import NamedTuple
 
-from lsprotocol import types
-
-from koreo import cache
-from koreo import registry
-from koreo.result import UnwrappedOutcome, is_not_ok, is_unwrapped_ok
-
-
+from koreo import cache, registry
+from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
+from koreo.result import UnwrappedOutcome, is_not_ok, is_unwrapped_ok
 from koreo.value_function.structure import ValueFunction
-
-from koreo.function_test.structure import FunctionTest
-from koreo.workflow.structure import Workflow, ErrorStep
+from koreo.workflow.structure import ErrorStep, Workflow
+from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
@@ -128,7 +123,11 @@ def _workflow_step_hover(
     cached = cache.get_resource_system_data_from_cache(
         resource_class=Workflow, cache_key=workflow_name
     )
-    if not cached or not cached.system_data or "anchor" not in cached.system_data:
+    if (
+        not cached
+        or not cached.system_data
+        or "anchor" not in cached.system_data
+    ):
         return HoverResult()
 
     step_key, _ = local_resource
@@ -268,7 +267,7 @@ def _common_function_hover(
         hover_content.append("|:-|-:|:-:|")
         for test_name, test_result in tests.items():
             hover_content.append(
-                f"| `{test_name}` | {'Pass' if test_result.success else 'Fail'} | {'warnings' if test_result.input_mismatches or test_result.messages else ''} |"
+                f"| `{test_name}` | {'Pass' if test_result.success else 'Fail'} | {'warnings' if test_result.input_mismatches or test_result.messages else ''} |"  # noqa: E501
             )
 
     return HoverResult(
@@ -302,7 +301,7 @@ def _function_test_hover(
     hover_content = []
 
     if result.success:
-        hover_content.append(f"# *Success*")
+        hover_content.append("# *Success*")
 
         if result.messages:
             hover_content.append("## Test Notes")
@@ -314,7 +313,9 @@ def _function_test_hover(
             hover_content.append("|:-|-:|:-:|")
             for mismatch in result.input_mismatches:
                 hover_content.append(
-                    f"| `{mismatch.field}` | {_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | {mismatch.severity} |"
+                    f"| `{mismatch.field}` | "
+                    f"{_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | "  # noqa: E501
+                    f"{mismatch.severity} |"
                 )
             hover_content.append("\n")
 
@@ -330,7 +331,9 @@ def _function_test_hover(
             hover_content.append("|:-|-:|:-:|")
             for mismatch in result.input_mismatches:
                 hover_content.append(
-                    f"| `{mismatch.field}` | {_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | {mismatch.severity} |"
+                    f"| `{mismatch.field}` | "
+                    f"{_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | "  # noqa: E501
+                    f"{mismatch.severity} |"
                 )
             hover_content.append("\n")
 
@@ -340,7 +343,8 @@ def _function_test_hover(
             hover_content.append("|:-|-:|-:|")
             for compare in result.resource_field_errors:
                 hover_content.append(
-                    f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
+                    f"| `{compare.field}` | {compare.actual} | "
+                    f"{compare.expected} |"
                 )
             hover_content.append("\n")
 
@@ -350,7 +354,8 @@ def _function_test_hover(
             hover_content.append("|:-|-:|-:|")
             for compare in result.outcome_fields_errors:
                 hover_content.append(
-                    f"| `{compare.field}` | {compare.actual} | {compare.expected} |"
+                    f"| `{compare.field}` | {compare.actual} | "
+                    f"{compare.expected} |"
                 )
             hover_content.append("\n")
 
@@ -376,7 +381,9 @@ def _resource_template_hover(
     )
 
     if not resource_template:
-        hover_content.append(f"ResourceTemplate {template_name} not in Koreo Cache")
+        hover_content.append(
+            f"ResourceTemplate {template_name} not in Koreo Cache"
+        )
 
     elif not is_unwrapped_ok(resource_template):
         hover_content.append("Resource template not ready")

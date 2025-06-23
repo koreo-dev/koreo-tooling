@@ -11,7 +11,6 @@ from koreo.value_function.structure import ValueFunction
 from koreo.workflow.prepare import prepare_workflow
 from koreo.workflow.structure import Workflow
 
-
 API_VERSION = "koreo.dev/v1beta1"
 
 PREPARE_MAP = {
@@ -28,7 +27,9 @@ CRD_KIND = "CustomResourceDefinition"
 
 RESOURCE_DEF = re.compile("(?P<kind>[A-Z][a-zA-Z0-9.]*):(?P<name>.*):def")
 
-TOP_LEVEL_RESOURCE = re.compile("(?P<kind>[A-Z][a-zA-Z0-9.]*):(?P<name>.*)?:[dr]ef")
+TOP_LEVEL_RESOURCE = re.compile(
+    "(?P<kind>[A-Z][a-zA-Z0-9.]*):(?P<name>.*)?:[dr]ef"
+)
 
 FUNCTION_TEST_NAME = re.compile("FunctionTest:(?P<name>.*)?:def")
 RESOURCE_FUNCTION_NAME = re.compile("ResourceFunction:(?P<name>.*)?:def")

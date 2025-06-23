@@ -1,14 +1,15 @@
 from __future__ import annotations
+
+import enum
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import (
     Any,
     Literal,
     NamedTuple,
     Protocol,
-    Sequence,
     get_args,
 )
-import enum
 
 from lsprotocol.types import Position, Range
 
@@ -126,7 +127,7 @@ def flatten(
         | Sequence[SemanticAnchor | SemanticNode]
     ),
 ) -> Sequence[SemanticNode]:
-    if isinstance(nodes, (SemanticAnchor, SemanticBlock, SemanticNode)):
+    if isinstance(nodes, SemanticAnchor | SemanticBlock | SemanticNode):
         return flatten_node(nodes)
 
     flattened = []
@@ -153,7 +154,9 @@ def flatten_node(
     return flattened
 
 
-def extract_diagnostics(nodes: Sequence[SemanticNode]) -> Sequence[SemanticNode]:
+def extract_diagnostics(
+    nodes: Sequence[SemanticNode],
+) -> Sequence[SemanticNode]:
     return [node for node in nodes if node.diagnostic]
 
 
@@ -174,25 +177,35 @@ def generate_key_range_index(
                 index.append((key, compute_abs_range(nodes, anchor=nodes)))
 
             if children:
-                index.extend(generate_key_range_index(nodes=children, anchor=nodes))
+                index.extend(
+                    generate_key_range_index(nodes=children, anchor=nodes)
+                )
 
             return index
 
         case SemanticBlock(index_key=index_key, children=children):
             if index_key and anchor:
-                index.append((index_key, compute_abs_range(nodes, anchor=anchor)))
+                index.append(
+                    (index_key, compute_abs_range(nodes, anchor=anchor))
+                )
 
             if children:
-                index.extend(generate_key_range_index(nodes=children, anchor=anchor))
+                index.extend(
+                    generate_key_range_index(nodes=children, anchor=anchor)
+                )
 
             return index
 
         case SemanticNode(index_key=index_key, children=children):
             if index_key and anchor:
-                index.append((index_key, compute_abs_range(nodes, anchor=anchor)))
+                index.append(
+                    (index_key, compute_abs_range(nodes, anchor=anchor))
+                )
 
             if children:
-                index.extend(generate_key_range_index(nodes=children, anchor=anchor))
+                index.extend(
+                    generate_key_range_index(nodes=children, anchor=anchor)
+                )
 
             return index
 
@@ -223,25 +236,35 @@ def generate_local_range_index(
                 index.append((key, compute_abs_range(nodes, anchor=nodes)))
 
             if children:
-                index.extend(generate_local_range_index(nodes=children, anchor=nodes))
+                index.extend(
+                    generate_local_range_index(nodes=children, anchor=nodes)
+                )
 
             return index
 
         case SemanticBlock(local_key=local_key, children=children):
             if local_key and anchor:
-                index.append((local_key, compute_abs_range(nodes, anchor=anchor)))
+                index.append(
+                    (local_key, compute_abs_range(nodes, anchor=anchor))
+                )
 
             if children:
-                index.extend(generate_local_range_index(nodes=children, anchor=anchor))
+                index.extend(
+                    generate_local_range_index(nodes=children, anchor=anchor)
+                )
 
             return index
 
         case SemanticNode(local_key=local_key, children=children):
             if local_key and anchor:
-                index.append((local_key, compute_abs_range(nodes, anchor=anchor)))
+                index.append(
+                    (local_key, compute_abs_range(nodes, anchor=anchor))
+                )
 
             if children:
-                index.extend(generate_local_range_index(nodes=children, anchor=anchor))
+                index.extend(
+                    generate_local_range_index(nodes=children, anchor=anchor)
+                )
 
             return index
 
@@ -253,7 +276,8 @@ def generate_local_range_index(
 
 def anchor_local_key_search(
     search_key: str,
-    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None = None,
+    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode]
+    | None = None,
 ) -> Sequence[SemanticAnchor | SemanticBlock | SemanticNode]:
     if not search_nodes or not search_key:
         return []

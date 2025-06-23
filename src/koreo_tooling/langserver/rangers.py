@@ -1,4 +1,4 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from lsprotocol import types
 
@@ -10,7 +10,6 @@ from koreo_tooling.indexing.semantics import (
     compute_abs_range,
 )
 
-
 type SemanticReturn = SemanticAnchor | SemanticBlock | SemanticNode
 type RangerError = list[types.Diagnostic]
 type RangerReturns = SemanticReturn | RangerError | None
@@ -18,7 +17,8 @@ type RangerReturns = SemanticReturn | RangerError | None
 
 def block_range_extract(
     search_key: str,
-    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None,
+    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode]
+    | None,
     anchor: SemanticAnchor,
 ) -> RangerReturns:
     matches = anchor_local_key_search(search_key, search_nodes=search_nodes)
@@ -43,7 +43,8 @@ def block_range_extract(
 
 def key_value_range_extract(
     search_key: str,
-    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode] | None,
+    search_nodes: Sequence[SemanticAnchor | SemanticBlock | SemanticNode]
+    | None,
     anchor: SemanticAnchor,
 ) -> RangerReturns:
     key = block_range_extract(

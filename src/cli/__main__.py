@@ -1,8 +1,8 @@
 import argparse
 
-from .prune import register_prune_subcommand
 from .apply import register_apply_subcommand
 from .inspect import register_inspector_subcommand
+from .prune import register_prune_subcommand
 from .reconcile import register_reconcile_subcommand
 
 

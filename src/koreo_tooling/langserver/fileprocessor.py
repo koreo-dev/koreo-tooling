@@ -1,17 +1,16 @@
-from functools import reduce
-from typing import Any, Generator, NamedTuple, Sequence
 import operator
+from collections.abc import Generator, Sequence
+from functools import reduce
+from typing import Any, NamedTuple
 
 import yaml.parser
 import yaml.scanner
-import yaml.loader
-
-from pygls.workspace import TextDocument
-from lsprotocol import types
-
 from koreo import cache
+from lsprotocol import types
+from pygls.workspace import TextDocument
 
-from koreo_tooling.indexing import IndexingLoader, STRUCTURE_KEY
+from koreo_tooling import constants
+from koreo_tooling.indexing import STRUCTURE_KEY, IndexingLoader
 from koreo_tooling.indexing.semantics import (
     SemanticAnchor,
     SemanticNode,
@@ -21,8 +20,6 @@ from koreo_tooling.indexing.semantics import (
     flatten,
     generate_key_range_index,
 )
-
-from koreo_tooling import constants
 from koreo_tooling.langserver.rangers import block_range_extract
 
 TypeIndex = {key: idx for idx, key in enumerate(TokenTypes)}
@@ -59,7 +56,7 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                 logs.append(
                     types.LogMessageParams(
                         type=types.MessageType.Error,
-                        message=f"Failed to parse YAML around {problem_pos} / {context_pos}",
+                        message=f"Failed to parse YAML around {problem_pos} / {context_pos}",  # noqa: E501
                     )
                 )
 
@@ -77,7 +74,9 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                                 end=types.Position(
                                     line=problem_pos.line,
                                     character=len(
-                                        doc.lines[min(problem_pos.line, last_line)]
+                                        doc.lines[
+                                            min(problem_pos.line, last_line)
+                                        ]
                                     ),
                                 ),
                             ),
@@ -96,7 +95,9 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                                 end=types.Position(
                                     line=context_pos.line,
                                     character=len(
-                                        doc.lines[min(context_pos.line, last_line)]
+                                        doc.lines[
+                                            min(context_pos.line, last_line)
+                                        ]
                                     ),
                                 ),
                             ),
@@ -124,7 +125,9 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                     )
 
                 if block_result.semantic_range_index:
-                    semantic_range_index.extend(block_result.semantic_range_index)
+                    semantic_range_index.extend(
+                        block_result.semantic_range_index
+                    )
 
                     # TODO: Extract def and tag version in index?
 
@@ -140,8 +143,8 @@ async def process_file(doc: TextDocument) -> ProccessResults:
 
 
 class BlockResults(NamedTuple):
-    semantic_tokens: Generator[tuple[int], None, None] | None = None
-    semantic_range_index: Generator[SemanticRangeIndex, None, None] | None = None
+    semantic_tokens: Generator[tuple[int]] | None = None
+    semantic_range_index: Generator[SemanticRangeIndex] | None = None
     logs: Sequence[types.LogMessageParams] | None = None
     diagnostics: Sequence[types.Diagnostic] | None = None
 
@@ -152,7 +155,7 @@ async def _process_block(
     try:
         api_version = yaml_block.get("apiVersion")
         kind = yaml_block.get("kind")
-    except:
+    except Exception:
         return BlockResults(
             logs=[
                 types.LogMessageParams(
@@ -175,7 +178,9 @@ async def _process_block(
         return block_result
 
     semantic_range_index = (
-        SemanticRangeIndex(uri=uri, name=node_key, range=node_range, version=block_hash)
+        SemanticRangeIndex(
+            uri=uri, name=node_key, range=node_range, version=block_hash
+        )
         for node_key, node_range in generate_key_range_index(semantic_anchor)
     )
 
@@ -189,7 +194,8 @@ async def _process_block(
         diagnostics.append(
             types.Diagnostic(
                 message=node.diagnostic.message,
-                severity=types.DiagnosticSeverity.Error,  # TODO: Map internal to LSP
+                # TODO: Map internal to LSP
+                severity=types.DiagnosticSeverity.Error,
                 range=compute_abs_range(node, semantic_anchor),
             )
         )
@@ -206,11 +212,17 @@ async def _process_block(
         match api_version_block:
             case list(block_diagnostics):
                 diagnostics.extend(block_diagnostics)
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case None:
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case _:
-                resource_range = compute_abs_range(api_version_block, semantic_anchor)
+                resource_range = compute_abs_range(
+                    api_version_block, semantic_anchor
+                )
 
         diagnostics.append(
             types.Diagnostic(
@@ -236,11 +248,17 @@ async def _process_block(
         match kind_version_block:
             case list(block_diagnostics):
                 diagnostics.extend(block_diagnostics)
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case None:
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case _:
-                resource_range = compute_abs_range(kind_version_block, semantic_anchor)
+                resource_range = compute_abs_range(
+                    kind_version_block, semantic_anchor
+                )
 
         diagnostics.append(
             types.Diagnostic(
@@ -288,15 +306,21 @@ async def _process_block(
         match resource_name_label:
             case list(block_diagnostics):
                 diagnostics.extend(block_diagnostics)
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case None:
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case _:
-                resource_range = compute_abs_range(resource_name_label, semantic_anchor)
+                resource_range = compute_abs_range(
+                    resource_name_label, semantic_anchor
+                )
 
         diagnostics.append(
             types.Diagnostic(
-                message=f"FAILED TO Extract ('{kind}.{api_version}') from {name} ({err}).",
+                message=f"FAILED TO Extract ('{kind}.{api_version}') from {name} ({err}).",  # noqa: E501
                 severity=types.DiagnosticSeverity.Error,
                 range=resource_range,
             )
@@ -319,7 +343,7 @@ class YamlParseError(NamedTuple):
 
 def _load_all_yamls(
     stream, Loader, doc
-) -> Generator[tuple[str, dict] | YamlParseError, Any, None]:
+) -> Generator[tuple[str, dict] | YamlParseError, Any]:
     """
     Parse all YAML documents in a stream
     and produce corresponding Python objects.
@@ -333,24 +357,28 @@ def _load_all_yamls(
                 problem_pos = None
                 if err.problem_mark:
                     problem_pos = types.Position(
-                        line=err.problem_mark.line, character=err.problem_mark.column
+                        line=err.problem_mark.line,
+                        character=err.problem_mark.column,
                     )
 
                 context_pos = None
                 if err.context_mark:
                     context_pos = types.Position(
-                        line=err.context_mark.line, character=err.context_mark.column
+                        line=err.context_mark.line,
+                        character=err.context_mark.column,
                     )
 
                 yield YamlParseError(
-                    err=f"{err}", problem_pos=problem_pos, context_pos=context_pos
+                    err=f"{err}",
+                    problem_pos=problem_pos,
+                    context_pos=context_pos,
                 )
 
     finally:
         loader.dispose()
 
 
-def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple, None, None]:
+def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple]:
     for node in nodes:
         yield (
             node.position.line,
@@ -361,7 +389,9 @@ def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple, None, N
         )
 
 
-def _block_range(semantic_anchor: SemanticAnchor, doc: TextDocument) -> types.Range:
+def _block_range(
+    semantic_anchor: SemanticAnchor, doc: TextDocument
+) -> types.Range:
     return types.Range(
         start=types.Position(
             line=semantic_anchor.abs_position.line,

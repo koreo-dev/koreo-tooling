@@ -1,4 +1,3 @@
-import argparse
 import os
 import subprocess
 import time
@@ -43,7 +42,8 @@ def apply_command(source_dir: str, namespace: str, force: bool):
                 yaml_files.append(yaml_file)
                 should_apply = True
 
-        # If there are .k.yaml or .k.yml files in the directory, we assume they should be applied as-is
+        # If there are .k.yaml or .k.yml files in the directory,
+        # we assume they should be applied as-is
         if any(dir_path.glob("*.k.yaml")) or any(dir_path.glob("*.k.yml")):
             should_apply = True
 
@@ -75,7 +75,9 @@ def register_apply_subcommand(subparsers):
     apply_parser = subparsers.add_parser(
         "apply", help="Apply updated .koreo/.k files as YAML via kubectl."
     )
-    apply_parser.add_argument("source_dir", help="Directory containing .koreo files.")
+    apply_parser.add_argument(
+        "source_dir", help="Directory containing .koreo files."
+    )
     apply_parser.add_argument(
         "--namespace", "-n", default="default", help="Kubernetes namespace."
     )
@@ -86,5 +88,7 @@ def register_apply_subcommand(subparsers):
         help="Force apply all files regardless of last modified.",
     )
     apply_parser.set_defaults(
-        func=lambda args: apply_command(args.source_dir, args.namespace, args.force)
+        func=lambda args: apply_command(
+            args.source_dir, args.namespace, args.force
+        )
     )

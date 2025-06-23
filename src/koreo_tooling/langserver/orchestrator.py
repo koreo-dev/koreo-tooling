@@ -1,5 +1,6 @@
-from typing import Any, Awaitable, Callable, NamedTuple, Protocol
 import asyncio
+from collections.abc import Awaitable, Callable
+from typing import Any, NamedTuple, Protocol
 
 
 class KillRequest:
@@ -19,12 +20,18 @@ class HandlerFailure(Exception):
     pass
 
 
-async def handle_file(file_uri: str, monotime: float, file_processor: FileProcessor):
-    worker_queue = _setup_worker(file_uri=file_uri, file_processor=file_processor)
+async def handle_file(
+    file_uri: str, monotime: float, file_processor: FileProcessor
+):
+    worker_queue = _setup_worker(
+        file_uri=file_uri, file_processor=file_processor
+    )
 
     response_queue = asyncio.Queue(10)
 
-    await worker_queue.put(ProccessRequest(monotime=monotime, response=response_queue))
+    await worker_queue.put(
+        ProccessRequest(monotime=monotime, response=response_queue)
+    )
 
     result = await response_queue.get()
     response_queue.task_done()
@@ -54,7 +61,9 @@ def _setup_worker(
 
     handler_task = asyncio.create_task(
         _file_processor_handler(
-            handler_key=handler_key, file_uri=file_uri, file_processor=file_processor
+            handler_key=handler_key,
+            file_uri=file_uri,
+            file_processor=file_processor,
         ),
         name=handler_key,
     )
@@ -65,7 +74,9 @@ def _setup_worker(
     return file_handler_queue
 
 
-_FILE_HANDLER_QUEUES: dict[str, asyncio.LifoQueue[ProccessRequest | KillRequest]] = {}
+_FILE_HANDLER_QUEUES: dict[
+    str, asyncio.LifoQueue[ProccessRequest | KillRequest]
+] = {}
 _FILE_HANDLERS: dict[str, asyncio.Task] = {}
 
 
@@ -95,7 +106,9 @@ def _cleanup_file_handler(file_handler: asyncio.Task):
 
 
 async def _file_processor_handler(
-    handler_key: str, file_uri: str, file_processor: Callable[[str, float], Awaitable]
+    handler_key: str,
+    file_uri: str,
+    file_processor: Callable[[str, float], Awaitable],
 ):
     if handler_key not in _FILE_HANDLER_QUEUES:
         raise RuntimeError(
@@ -118,7 +131,9 @@ async def _file_processor_handler(
                     await response_queue.put(last_result)
                     continue
 
-                case ProccessRequest(monotime=monotime, response=response_queue):
+                case ProccessRequest(
+                    monotime=monotime, response=response_queue
+                ):
                     try:
                         result = await file_processor(file_uri)
                         await response_queue.put(result)

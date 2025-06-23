@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import hashlib
 
 from yaml.loader import SafeLoader
 from yaml.nodes import Node
 
-
+from .extractor import extract_semantic_structure_info
 from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE
 from .semantics import (
     Position,
@@ -18,7 +19,19 @@ from .semantics import (
     compute_abs_range,
 )
 
-from .extractor import extract_semantic_structure_info
+__all__ = [
+    "Position",
+    "SemanticAnchor",
+    "SemanticBlock",
+    "SemanticNode",
+    "SemanticStructure",
+    "TokenModifiers",
+    "TokenTypes",
+    "compute_abs_position",
+    "compute_abs_range",
+    "IndexingLoader",
+    "STRUCTURE_KEY",
+]
 
 STRUCTURE_KEY = "..structure.."
 
@@ -45,7 +58,9 @@ class IndexingLoader(SafeLoader):
         doc_kind = yaml_doc.get("kind")
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
         if not doc_semantics:
-            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(ALL, SemanticStructure())
+            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(
+                ALL, SemanticStructure()
+            )
 
         doc_metadata = yaml_doc.get("metadata", {})
         doc_name = doc_metadata.get("name")

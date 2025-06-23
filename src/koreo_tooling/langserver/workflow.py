@@ -1,16 +1,16 @@
-from typing import NamedTuple, Sequence
 import os
+from collections.abc import Sequence
+from typing import NamedTuple
 
 os.environ["KOREO_DEV_TOOLING"] = "true"
 
 
-from lsprotocol import types
-
 from koreo import cache
-from koreo.workflow.structure import ErrorStep, LogicSwitch, Step, Workflow
 from koreo.resource_function.structure import ResourceFunction
-from koreo.value_function.structure import ValueFunction
 from koreo.result import is_unwrapped_ok
+from koreo.value_function.structure import ValueFunction
+from koreo.workflow.structure import ErrorStep, LogicSwitch, Step, Workflow
+from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
@@ -31,7 +31,10 @@ def process_workflows(
         if not cached_resource or not cached_resource.resource:
             diagnostics.append(
                 types.Diagnostic(
-                    message=f"Workflow not yet prepared ({koreo_cache_key}) or not in Koreo cache.",
+                    message=(
+                        f"Workflow not yet prepared ({koreo_cache_key}) "
+                        "or not in Koreo cache."
+                    ),
                     severity=types.DiagnosticSeverity.Error,
                     range=resource_range,
                 )
@@ -41,7 +44,10 @@ def process_workflows(
         if not is_unwrapped_ok(cached_resource.resource):
             diagnostics.append(
                 types.Diagnostic(
-                    message=f"Workflow ({koreo_cache_key}) is not ready ({cached_resource.resource.message}).",
+                    message=(
+                        f"Workflow ({koreo_cache_key}) is not ready "
+                        f"({cached_resource.resource.message})."
+                    ),
                     severity=types.DiagnosticSeverity.Error,
                     range=resource_range,
                 )
@@ -80,7 +86,10 @@ def _process_workflow(
             error=True,
             diagnostics=[
                 types.Diagnostic(
-                    message=f"Workflow ('{workflow_name}') missing in Koreo Cache (this _should_ be impossible).",
+                    message=(
+                        f"Workflow ('{workflow_name}') missing in Koreo Cache "
+                        "(this _should_ be impossible)."
+                    ),
                     severity=types.DiagnosticSeverity.Error,
                     range=resource_range,
                 )
@@ -109,7 +118,10 @@ def _process_workflow(
             error=True,
             diagnostics=[
                 types.Diagnostic(
-                    message=f"Unknown error processing Workflow ('{workflow_name}'), semantic analysis data missing from Koreo cache.",
+                    message=(
+                        f"Unknown error processing Workflow ('{workflow_name}'), "  # noqa: E501
+                        "semantic analysis data missing from Koreo cache."
+                    ),
                     severity=types.DiagnosticSeverity.Error,
                     range=resource_range,
                 )
@@ -120,7 +132,9 @@ def _process_workflow(
     if not is_unwrapped_ok(workflow.steps_ready):
         diagnostics.append(
             types.Diagnostic(
-                message=f"Workflow is not ready ({workflow.steps_ready.message}).",
+                message=(
+                    f"Workflow is not ready ({workflow.steps_ready.message})."
+                ),  # noqa: E501
                 severity=types.DiagnosticSeverity.Warning,
                 range=resource_range,
             )
@@ -133,12 +147,14 @@ def _process_workflow(
     if not raw_steps_spec:
         step_specs = {}
     else:
-        step_specs = {step_spec.get("label"): step_spec for step_spec in raw_steps_spec}
+        step_specs = {
+            step_spec.get("label"): step_spec for step_spec in raw_steps_spec
+        }
 
     if not step_specs and workflow.steps:
         diagnostics.append(
             types.Diagnostic(
-                message=f"Workflow steps are malformed.",
+                message="Workflow steps are malformed.",
                 severity=types.DiagnosticSeverity.Warning,
                 range=resource_range,
             )
@@ -173,7 +189,7 @@ def _process_workflow(
     if has_step_error:
         diagnostics.append(
             types.Diagnostic(
-                message=f"Workflow steps are not ready.",
+                message="Workflow steps are not ready.",
                 severity=types.DiagnosticSeverity.Error,
                 range=resource_range,
             )
@@ -231,7 +247,7 @@ def _process_workflow_step(
     inputs = call_arg_compare(provided_input_keys, first_tier_inputs)
     for argument, (provided, expected) in inputs.items():
         if not expected and provided:
-            if argument.startswith('_'):
+            if argument.startswith("_"):
                 continue
 
             has_error = True
@@ -333,7 +349,9 @@ def _step_label_error_diagnostic(
         case list(label_diagnostics):
             return label_diagnostics
         case None:
-            diagnostic_range = compute_abs_range(step_semantic_block, semantic_anchor)
+            diagnostic_range = compute_abs_range(
+                step_semantic_block, semantic_anchor
+            )
         case _:
             diagnostic_range = compute_abs_range(label_block, semantic_anchor)
 

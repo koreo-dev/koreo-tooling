@@ -1,25 +1,16 @@
-from typing import Any, Literal, NamedTuple, Sequence
 import asyncio
-
-from lsprotocol import types
+from collections.abc import Sequence
+from typing import Any, Literal, NamedTuple
 
 from celpy import celtypes
-
-from koreo import cache
-from koreo import registry
+from koreo import DepSkip, Ok, PermFail, Retry, Skip, cache, registry
+from koreo.function_test.run import run_function_test
+from koreo.function_test.structure import FunctionTest
 from koreo.result import (
-    DepSkip,
-    Ok,
-    PermFail,
-    Retry,
-    Skip,
     UnwrappedOutcome,
     is_unwrapped_ok,
 )
-
-
-from koreo.function_test.run import run_function_test
-from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
 
 from . import constants
 
@@ -83,7 +74,10 @@ async def run_function_tests(
                     logs.append(
                         types.LogMessageParams(
                             type=types.MessageType.Error,
-                            message=f"Failed to find FunctionTest ('{test_key}') in Koreo cache.",
+                            message=(
+                                f"Failed to find FunctionTest ('{test_key}') "
+                                "in Koreo cache."
+                            ),
                         )
                     )
                     continue
@@ -93,7 +87,7 @@ async def run_function_tests(
                         _run_function_test(test_key, test), name=test_key
                     )
                 )
-    except:
+    except Exception:
         # exceptions handled for each task
         pass
 
@@ -137,7 +131,9 @@ async def _run_function_test(
         )
 
     try:
-        test_outcome = await run_function_test(location=test_name, function_test=test)
+        test_outcome = await run_function_test(
+            location=test_name, function_test=test
+        )
     except Exception as err:
         return TestResults(
             success=False,
@@ -170,7 +166,9 @@ async def _run_function_test(
             messages.append(f"### Test Failures\n{'\n'.join(error_messages)}")
             success = False
         else:
-            messages.append(f"### {len(test_outcome.test_results)} Tests passed")
+            messages.append(
+                f"### {len(test_outcome.test_results)} Tests passed"
+            )
 
         return TestResults(
             success=success,
@@ -190,6 +188,186 @@ async def _run_function_test(
         actual_resource=None,
     )
 
+
+def _check_inputs(
+    inputs: celtypes.MapType | None,
+    dynamic_input_keys: set[str],
+) -> list[FieldMismatchResult]:
+    provided_keys = set[str]()
+    if inputs:
+        provided_keys.update(
+            f"inputs.{input_key}" for input_key in inputs.keys()
+        )
+
+    first_tier_inputs = set(
+        f"inputs.{match.group('name')}"
+        for match in (
+            constants.INPUT_NAME_PATTERN.match(key)
+            for key in dynamic_input_keys
+        )
+        if match
+    )
+
+    mismatches = []
+    for missing in first_tier_inputs.difference(provided_keys):
+        mismatches.append(
+            FieldMismatchResult(
+                field=missing,
+                severity="ERROR",
+                actual=False,
+                expected=True,
+            )
+        )
+
+    for extra in provided_keys.difference(first_tier_inputs):
+        mismatches.append(
+            FieldMismatchResult(
+                field=extra,
+                severity="WARNING",
+                actual=True,
+                expected=False,
+            )
+        )
+
+    return mismatches
+
+
+def _check_value(
+    actual: dict | None, expected: dict | None
+) -> list[CompareResult]:
+    if expected is None:
+        return []
+
+    mismatches: list[CompareResult] = []
+
+    if actual is None:
+        mismatches.append(
+            CompareResult(field="", actual="missing", expected="...")
+        )
+        return mismatches
+
+    mismatches.extend(
+        _dict_compare(base_field="", actual=actual, expected=expected)
+    )
+
+    return mismatches
+
+
+def _dict_compare(
+    base_field: str, actual: dict, expected: dict
+) -> list[CompareResult]:
+    differences: list[CompareResult] = []
+
+    if base_field:
+        base_prefix = f"{base_field}."
+    else:
+        base_prefix = ""
+
+    actual_keys = set(actual.keys())
+    expected_keys = set(expected.keys())
+
+    for key in actual_keys.difference(expected_keys):
+        differences.append(
+            CompareResult(
+                field=f"{base_prefix}{key}",
+                actual="...",
+                expected="missing",
+            )
+        )
+
+    for key in expected_keys.difference(actual_keys):
+        differences.append(
+            CompareResult(
+                field=f"{base_prefix}{key}",
+                actual="missing",
+                expected="...",
+            )
+        )
+
+    for mutual_key in actual_keys.intersection(expected_keys):
+        actual_value = actual[mutual_key]
+        expected_value = expected[mutual_key]
+
+        key = f"{base_prefix}{mutual_key}"
+
+        if type(actual_value) != type(expected_value):  # noqa F821
+            differences.append(
+                CompareResult(
+                    field=key,
+                    actual=f"{type(actual_value)}",
+                    expected=f"{type(expected_value)}",
+                )
+            )
+            continue
+
+        if isinstance(actual_value, dict):
+            differences.extend(
+                _dict_compare(
+                    base_field=key, actual=actual_value, expected=expected_value
+                )
+            )
+            continue
+
+        differences.extend(
+            _values_match(
+                field=key, actual=actual_value, expected=expected_value
+            )
+        )
+
+    return differences
+
+
+def _values_match(field: str, actual, expected) -> list[CompareResult]:
+    if type(actual_value) != type(expected_value):  # noqa F821
+        return [
+            CompareResult(
+                field=field,
+                actual=f"{type(actual)}",
+                expected=f"{type(expected)}",
+            )
+        ]
+
+    if isinstance(actual, dict):
+        return _dict_compare(base_field=field, actual=actual, expected=expected)
+
+    if isinstance(actual, list):
+        if len(actual) != len(expected):
+            return [
+                CompareResult(
+                    field=field,
+                    actual=f"{len(actual)} items",
+                    expected=f"{len(expected)} items",
+                )
+            ]
+
+        mismatches = []
+        for idx, (actual_value, expected_value) in enumerate(
+            zip(actual, expected, strict=False)
+        ):
+            mismatches.extend(
+                _values_match(
+                    field=f"{field}[{idx}]",
+                    actual=actual_value,
+                    expected=expected_value,
+                )
+            )
+
+        return mismatches
+
+    if actual == expected:
+        return []
+
+    return [
+        CompareResult(
+            field=field,
+            actual=f"{actual}",
+            expected=f"{expected}",
+        )
+    ]
+
+
+# TODO reimplement this
+def _validate_test_outcome(test_outcome: UnwrappedOutcome, messages: list):
     resource_field_errors = []
     outcome_fields_errors = []
     actual_return = None
@@ -199,19 +377,19 @@ async def _run_function_test(
             if not isinstance(test_outcome.expected_outcome, DepSkip):
                 success = False
                 messages.append(
-                    f"Unexpected DepSkip(message='{message}', location='{location}'."
+                    f"Unexpected DepSkip(message='{message}', location='{location}'."  # noqa: E501
                 )
         case Skip(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, Skip):
                 success = False
                 messages.append(
-                    f"Unexpected Skip(message='{message}', location='{location}')."
+                    f"Unexpected Skip(message='{message}', location='{location}')."  # noqa: E501
                 )
         case PermFail(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, PermFail):
                 success = False
                 messages.append(
-                    f"Unexpected PermFail(message='{message}', location='{location}')."
+                    f"Unexpected PermFail(message='{message}', location='{location}')."  # noqa: E501
                 )
         case Retry(message=message, delay=delay, location=location):
             if test_outcome.expected_outcome is not None and not isinstance(
@@ -220,7 +398,7 @@ async def _run_function_test(
                 messages.append(f"{test_outcome.expected_outcome}")
                 success = False
                 messages.append(
-                    f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."
+                    f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."  # noqa: E501
                 )
             elif test_outcome.expected_return:
                 success = False
@@ -267,177 +445,17 @@ async def _run_function_test(
     ):
         success = False
         missing_test_assertion = True
-        messages.append("Must define expectResource, expectOutcome, or expectReturn.")
+        messages.append(
+            "Must define expectResource, expectOutcome, or expectReturn."
+        )
 
     return TestResults(
         success=success,
         messages=messages,
         resource_field_errors=resource_field_errors,
         outcome_fields_errors=outcome_fields_errors,
-        input_mismatches=field_mismatches,
+        input_mismatches=None,
         actual_resource=test_outcome.actual_resource,
         actual_return=actual_return,
         missing_test_assertion=missing_test_assertion,
     )
-
-
-def _check_inputs(
-    inputs: celtypes.MapType | None,
-    dynamic_input_keys: set[str],
-) -> list[FieldMismatchResult]:
-    provided_keys = set[str]()
-    if inputs:
-        provided_keys.update(f"inputs.{input_key}" for input_key in inputs.keys())
-
-    first_tier_inputs = set(
-        f"inputs.{match.group('name')}"
-        for match in (
-            constants.INPUT_NAME_PATTERN.match(key) for key in dynamic_input_keys
-        )
-        if match
-    )
-
-    mismatches = []
-    for missing in first_tier_inputs.difference(provided_keys):
-        mismatches.append(
-            FieldMismatchResult(
-                field=missing,
-                severity="ERROR",
-                actual=False,
-                expected=True,
-            )
-        )
-
-    for extra in provided_keys.difference(first_tier_inputs):
-        mismatches.append(
-            FieldMismatchResult(
-                field=extra,
-                severity="WARNING",
-                actual=True,
-                expected=False,
-            )
-        )
-
-    return mismatches
-
-
-def _check_value(actual: dict | None, expected: dict | None) -> list[CompareResult]:
-    if expected is None:
-        return []
-
-    mismatches: list[CompareResult] = []
-
-    if actual is None:
-        mismatches.append(CompareResult(field="", actual="missing", expected="..."))
-        return mismatches
-
-    mismatches.extend(_dict_compare(base_field="", actual=actual, expected=expected))
-
-    return mismatches
-
-
-def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[CompareResult]:
-    differences: list[CompareResult] = []
-
-    if base_field:
-        base_prefix = f"{base_field}."
-    else:
-        base_prefix = ""
-
-    actual_keys = set(actual.keys())
-    expected_keys = set(expected.keys())
-
-    for key in actual_keys.difference(expected_keys):
-        differences.append(
-            CompareResult(
-                field=f"{base_prefix}{key}",
-                actual="...",
-                expected="missing",
-            )
-        )
-
-    for key in expected_keys.difference(actual_keys):
-        differences.append(
-            CompareResult(
-                field=f"{base_prefix}{key}",
-                actual="missing",
-                expected="...",
-            )
-        )
-
-    for mutual_key in actual_keys.intersection(expected_keys):
-        actual_value = actual[mutual_key]
-        expected_value = expected[mutual_key]
-
-        key = f"{base_prefix}{mutual_key}"
-
-        if type(actual_value) != type(expected_value):
-            differences.append(
-                CompareResult(
-                    field=key,
-                    actual=f"{type(actual_value)}",
-                    expected=f"{type(expected_value)}",
-                )
-            )
-            continue
-
-        if isinstance(actual_value, dict):
-            differences.extend(
-                _dict_compare(
-                    base_field=key, actual=actual_value, expected=expected_value
-                )
-            )
-            continue
-
-        differences.extend(
-            _values_match(field=key, actual=actual_value, expected=expected_value)
-        )
-
-    return differences
-
-
-def _values_match(field: str, actual, expected) -> list[CompareResult]:
-    if type(actual) != type(expected):
-        return [
-            CompareResult(
-                field=field,
-                actual=f"{type(actual)}",
-                expected=f"{type(expected)}",
-            )
-        ]
-
-    if isinstance(actual, dict):
-        return _dict_compare(base_field=field, actual=actual, expected=expected)
-
-    if isinstance(actual, list):
-        if len(actual) != len(expected):
-            return [
-                CompareResult(
-                    field=field,
-                    actual=f"{len(actual)} items",
-                    expected=f"{len(expected)} items",
-                )
-            ]
-
-        mismatches = []
-        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected)):
-            mismatches.extend(
-                _values_match(
-                    field=f"{field}[{idx}]",
-                    actual=actual_value,
-                    expected=expected_value,
-                )
-            )
-
-        return mismatches
-
-    if actual == expected:
-        return []
-
-    return [
-        CompareResult(
-            field=field,
-            actual=f"{actual}",
-            expected=f"{expected}",
-        )
-    ]
