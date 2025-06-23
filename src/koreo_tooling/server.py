@@ -1,30 +1,21 @@
 import asyncio
 import logging
-import logging
 import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NamedTuple
 
-logger = logging.getLogger("koreo.ls")
-
-from koreo import schema
-from koreo.schema import load_bundled_schemas
-from lsprotocol import types
-from pygls.lsp.server import LanguageServer
-
-KOREO_LSP_NAME = "koreo-ls"
-KOREO_LSP_VERSION = "v1beta1"
-server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
-
 from koreo import cache, registry
 from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
 from koreo.result import is_unwrapped_ok
+from koreo.schema import load_bundled_schemas
 from koreo.value_function.structure import ValueFunction
 from koreo.workflow.structure import Workflow
+from lsprotocol import types
+from pygls.lsp.server import LanguageServer
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
@@ -44,6 +35,11 @@ from koreo_tooling.langserver.function_test import run_function_tests
 from koreo_tooling.langserver.hover import handle_hover
 from koreo_tooling.langserver.orchestrator import handle_file, shutdown_handlers
 from koreo_tooling.langserver.workflow import process_workflows
+
+logger = logging.getLogger("koreo.ls")
+KOREO_LSP_NAME = "koreo-ls"
+KOREO_LSP_VERSION = "v1beta1"
+server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
 
 @server.feature(types.TEXT_DOCUMENT_COMPLETION)
@@ -80,7 +76,9 @@ async def completions(params: types.CompletionParams):
 def hover(params: types.HoverParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_info = _lookup_current_line_info(uri=doc.uri, line=params.position.line)
+    resource_info = _lookup_current_line_info(
+        uri=doc.uri, line=params.position.line
+    )
     if not resource_info.index_match:
         return None
 
@@ -152,7 +150,9 @@ def inlay_hints(params: types.InlayHintParams):
                 kind=types.InlayHintKind.Type,
                 padding_left=True,
                 padding_right=True,
-                position=types.Position(line=name_range.end.line, character=char),
+                position=types.Position(
+                    line=name_range.end.line, character=char
+                ),
             )
         )
 
@@ -240,7 +240,9 @@ def _lens_action_wrapper(fn: Callable[[str, TestResults], EditResult]):
 # Register Code Lens Commands
 def _register_lens_commands(lens_commands):
     for command_name, command_fn in lens_commands:
-        server.command(command_name=command_name)(_lens_action_wrapper(command_fn))
+        server.command(command_name=command_name)(
+            _lens_action_wrapper(command_fn)
+        )
 
 
 _register_lens_commands(LENS_COMMANDS)
@@ -336,11 +338,17 @@ def _lookup_current_line_info(uri: str, line: int) -> CurrentLineInfo:
     else:
         return CurrentLineInfo()
 
-    if not cached or not cached.system_data or "anchor" not in cached.system_data:
+    if (
+        not cached
+        or not cached.system_data
+        or "anchor" not in cached.system_data
+    ):
         return CurrentLineInfo()
 
     anchor: SemanticAnchor = cached.system_data.get("anchor")
-    anchor_index = generate_local_range_index(nodes=anchor.children, anchor=anchor)
+    anchor_index = generate_local_range_index(
+        nodes=anchor.children, anchor=anchor
+    )
 
     for maybe_key, maybe_range in anchor_index:
         if not isinstance(maybe_range, types.Range):
@@ -359,7 +367,9 @@ def _lookup_current_line_info(uri: str, line: int) -> CurrentLineInfo:
 async def goto_definitiion(params: types.DefinitionParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_info = _lookup_current_line_info(uri=doc.uri, line=params.position.line)
+    resource_info = _lookup_current_line_info(
+        uri=doc.uri, line=params.position.line
+    )
     if not resource_info.index_match:
         return []
 
@@ -384,7 +394,9 @@ async def goto_definitiion(params: types.DefinitionParams):
 async def goto_reference(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
 
-    resource_info = _lookup_current_line_info(uri=doc.uri, line=params.position.line)
+    resource_info = _lookup_current_line_info(
+        uri=doc.uri, line=params.position.line
+    )
     if not resource_info.index_match:
         return []
 
@@ -410,7 +422,9 @@ async def goto_reference(params: types.ReferenceParams):
 
 @server.feature(
     types.TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
-    types.SemanticTokensLegend(token_types=TokenTypes, token_modifiers=TokenModifiers),
+    types.SemanticTokensLegend(
+        token_types=TokenTypes, token_modifiers=TokenModifiers
+    ),
 )
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
@@ -442,7 +456,9 @@ class ParseNotification:
 async def _parse_file(doc_uri: str):
     doc = server.workspace.get_text_document(doc_uri)
 
-    file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
+    file_analyzer_resource = registry.Resource(
+        resource_type=FileAnalyzer, name=doc_uri
+    )
     parse_notification_resource = registry.Resource(
         resource_type=ParseNotification, name=doc_uri
     )
@@ -520,7 +536,9 @@ async def _analyze_file(
     diagnostics.extend(test_diagnostics)
 
     if parsing_result.semantic_range_index:
-        used_resources = _get_used_resources(parsing_result.semantic_range_index)
+        used_resources = _get_used_resources(
+            parsing_result.semantic_range_index
+        )
         current_resource_defs: dict[registry.Resource, str | None] = (
             _get_defined_resources(parsing_result.semantic_range_index)
         )
@@ -534,12 +552,14 @@ async def _analyze_file(
         )
     )
 
-    old_resource_defs: dict[registry.Resource, str | None] = _get_defined_resources(
-        [
-            range_index
-            for range_index in __SEMANTIC_RANGE_INDEX
-            if range_index.uri == doc.uri
-        ]
+    old_resource_defs: dict[registry.Resource, str | None] = (
+        _get_defined_resources(
+            [
+                range_index
+                for range_index in __SEMANTIC_RANGE_INDEX
+                if range_index.uri == doc.uri
+            ]
+        )
     )
     _reset_file_state(doc.uri)
 
@@ -552,7 +572,9 @@ async def _analyze_file(
     if parsing_result.semantic_range_index:
         __SEMANTIC_RANGE_INDEX.extend(parsing_result.semantic_range_index)
 
-    file_analyzer_resource = registry.Resource(resource_type=FileAnalyzer, name=doc_uri)
+    file_analyzer_resource = registry.Resource(
+        resource_type=FileAnalyzer, name=doc_uri
+    )
     used_resources.append(
         registry.Resource(resource_type=ParseNotification, name=doc_uri)
     )
@@ -602,7 +624,9 @@ async def _analyzer_manager(file_analyzer_resource: registry.Resource):
         try:
             match event:
                 case registry.Kill():
-                    logger.info(f"Killing Analysis Manager ({file_analyzer_resource})")
+                    logger.info(
+                        f"Killing Analysis Manager ({file_analyzer_resource})"
+                    )
                     break
                 case registry.ResourceEvent(_, _):
                     await _run_doc_analysis(
@@ -632,15 +656,21 @@ def _get_defined_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
     for definition in definitions:
         match definition:
             case ("ValueFunction", name, version):
-                resource_key = registry.Resource(resource_type=ValueFunction, name=name)
+                resource_key = registry.Resource(
+                    resource_type=ValueFunction, name=name
+                )
             case ("ResourceFunction", name, version):
                 resource_key = registry.Resource(
                     resource_type=ResourceFunction, name=name
                 )
             case ("FunctionTest", name, version):
-                resource_key = registry.Resource(resource_type=FunctionTest, name=name)
+                resource_key = registry.Resource(
+                    resource_type=FunctionTest, name=name
+                )
             case ("Workflow", name, version):
-                resource_key = registry.Resource(resource_type=Workflow, name=name)
+                resource_key = registry.Resource(
+                    resource_type=Workflow, name=name
+                )
             case ("ResourceTemplate", name, version):
                 resource_key = registry.Resource(
                     resource_type=ResourceTemplate, name=name
@@ -678,7 +708,9 @@ def _get_used_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
                     registry.Resource(resource_type=FunctionTest, name=name)
                 )
             case ("Workflow", name):
-                resources.append(registry.Resource(resource_type=Workflow, name=name))
+                resources.append(
+                    registry.Resource(resource_type=Workflow, name=name)
+                )
             case ("ResourceTemplate", name):
                 resources.append(
                     registry.Resource(resource_type=ResourceTemplate, name=name)
@@ -777,7 +809,9 @@ async def _run_function_test(
         elif match := constants.VALUE_FUNCTION_NAME.match(resource_key):
             value_functions_to_test.add(match.group("name"))
 
-    if not (tests_to_run or value_functions_to_test or resource_functions_to_test):
+    if not (
+        tests_to_run or value_functions_to_test or resource_functions_to_test
+    ):
         return ([], {})
 
     functions_to_test: dict[type, Sequence[str]] = {
@@ -816,7 +850,9 @@ def _reset_file_state(uri: str):
     global __SEMANTIC_RANGE_INDEX
 
     __SEMANTIC_RANGE_INDEX = [
-        range_index for range_index in __SEMANTIC_RANGE_INDEX if range_index.uri != uri
+        range_index
+        for range_index in __SEMANTIC_RANGE_INDEX
+        if range_index.uri != uri
     ]
 
     if uri in __SEMANTIC_TOKEN_INDEX:

@@ -13,7 +13,7 @@ class TestFlatten(unittest.TestCase):
             node_type = random.choice(semantics.TokenTypes)
             node_modifier = random.choices(
                 [modifier for modifier in semantics.Modifier],
-                k=random.randint(0, 3)
+                k=random.randint(0, 3),
             )
 
             node = semantics.SemanticNode(
@@ -36,13 +36,12 @@ class TestFlatten(unittest.TestCase):
         self.assertListEqual(expected_nodes, flattened)
 
     def test_children(self):
-
         def _node_factory(depth: int = 0):
             node_length = random.randint(5, 50)
             node_type = random.choice(semantics.TokenTypes)
             node_modifier = random.choices(
                 [modifier for modifier in semantics.Modifier],
-                k=random.randint(0, 3)
+                k=random.randint(0, 3),
             )
 
             child_nodes = []
@@ -100,7 +99,7 @@ class TestFlattenNode(unittest.TestCase):
         node_type = random.choice(semantics.TokenTypes)
         node_modifier = random.choices(
             [modifier for modifier in semantics.Modifier],
-            k=random.randint(0, 3)
+            k=random.randint(0, 3),
         )
 
         node = semantics.SemanticNode(
@@ -129,13 +128,12 @@ class TestFlattenNode(unittest.TestCase):
         )
 
     def test_children(self):
-
         def _node_factory(depth: int = 0):
             node_length = random.randint(5, 50)
             node_type = random.choice(semantics.TokenTypes)
             node_modifier = random.choices(
                 [modifier for modifier in semantics.Modifier],
-                k=random.randint(0, 3)
+                k=random.randint(0, 3),
             )
 
             child_nodes = []

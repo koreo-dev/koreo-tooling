@@ -267,7 +267,7 @@ def _common_function_hover(
         hover_content.append("|:-|-:|:-:|")
         for test_name, test_result in tests.items():
             hover_content.append(
-                f"| `{test_name}` | {'Pass' if test_result.success else 'Fail'} | {'warnings' if test_result.input_mismatches or test_result.messages else ''} |"
+                f"| `{test_name}` | {'Pass' if test_result.success else 'Fail'} | {'warnings' if test_result.input_mismatches or test_result.messages else ''} |"  # noqa: E501
             )
 
     return HoverResult(
@@ -314,7 +314,7 @@ def _function_test_hover(
             for mismatch in result.input_mismatches:
                 hover_content.append(
                     f"| `{mismatch.field}` | "
-                    f"{_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | "
+                    f"{_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | "  # noqa: E501
                     f"{mismatch.severity} |"
                 )
             hover_content.append("\n")
@@ -332,7 +332,7 @@ def _function_test_hover(
             for mismatch in result.input_mismatches:
                 hover_content.append(
                     f"| `{mismatch.field}` | "
-                    f"{_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | "
+                    f"{_input_error_formatter(actual=mismatch.actual, expected=mismatch.expected)} | "  # noqa: E501
                     f"{mismatch.severity} |"
                 )
             hover_content.append("\n")

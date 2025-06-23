@@ -119,7 +119,7 @@ def _process_workflow(
             diagnostics=[
                 types.Diagnostic(
                     message=(
-                        f"Unknown error processing Workflow ('{workflow_name}'), "
+                        f"Unknown error processing Workflow ('{workflow_name}'), "  # noqa: E501
                         "semantic analysis data missing from Koreo cache."
                     ),
                     severity=types.DiagnosticSeverity.Error,
@@ -134,7 +134,7 @@ def _process_workflow(
             types.Diagnostic(
                 message=(
                     f"Workflow is not ready ({workflow.steps_ready.message})."
-                ),
+                ),  # noqa: E501
                 severity=types.DiagnosticSeverity.Warning,
                 range=resource_range,
             )

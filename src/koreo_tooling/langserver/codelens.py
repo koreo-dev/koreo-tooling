@@ -153,7 +153,7 @@ def _generate_inputs_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"Test ({test_name}) has duplicate inputs blocks",
+                        message=f"Test ({test_name}) has duplicate inputs blocks",  # noqa: E501
                     )
                 ]
             )
@@ -197,7 +197,7 @@ def _generate_resource_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) has multiple expectResource blocks",
+                        message=f"FunctionTest ({test_name}) has multiple expectResource blocks",  # noqa: E501
                     )
                 ]
             )
@@ -241,7 +241,7 @@ def _generate_current_resource_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"FunctionTest ({test_name}) has multiple currentResource blocks",
+                        message=f"FunctionTest ({test_name}) has multiple currentResource blocks",  # noqa: E501
                     )
                 ]
             )
@@ -285,7 +285,7 @@ def _generate_return_value_lens(
                 logs=[
                     types.LogMessageParams(
                         type=types.MessageType.Debug,
-                        message=f"Test ({test_name}) has multiple expectReturn blocks",
+                        message=f"Test ({test_name}) has multiple expectReturn blocks",  # noqa: E501
                     )
                 ]
             )
@@ -409,7 +409,7 @@ def _code_lens_inputs_action(test_name: str, test_result: TestResults):
     indent = (offset + 2) * " "
     formated_inputs = (
         f"\n"
-        f"{chr(10).join(f'{indent}{line}' for line in yaml.dump(spec_inputs).splitlines())}"
+        f"{chr(10).join(f'{indent}{line}' for line in yaml.dump(spec_inputs).splitlines())}"  # noqa: E501
         f"\n\n"
     )
 
@@ -559,7 +559,7 @@ def _code_lens_replace_value_block_action(
     indent = (offset + 2) * " "
     formated = (
         f"\n"
-        f"{chr(10).join(f'{indent}{line}' for line in yaml.dump(new_value, width=10000).splitlines())}"
+        f"{chr(10).join(f'{indent}{line}' for line in yaml.dump(new_value, width=10000).splitlines())}"  # noqa: E501
         f"\n\n"
     )
 

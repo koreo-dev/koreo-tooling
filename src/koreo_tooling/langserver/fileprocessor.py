@@ -3,7 +3,6 @@ from collections.abc import Generator, Sequence
 from functools import reduce
 from typing import Any, NamedTuple
 
-import yaml.loader
 import yaml.parser
 import yaml.scanner
 from koreo import cache
@@ -57,7 +56,7 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                 logs.append(
                     types.LogMessageParams(
                         type=types.MessageType.Error,
-                        message=f"Failed to parse YAML around {problem_pos} / {context_pos}",
+                        message=f"Failed to parse YAML around {problem_pos} / {context_pos}",  # noqa: E501
                     )
                 )
 
@@ -156,7 +155,7 @@ async def _process_block(
     try:
         api_version = yaml_block.get("apiVersion")
         kind = yaml_block.get("kind")
-    except:
+    except Exception:
         return BlockResults(
             logs=[
                 types.LogMessageParams(
@@ -195,7 +194,8 @@ async def _process_block(
         diagnostics.append(
             types.Diagnostic(
                 message=node.diagnostic.message,
-                severity=types.DiagnosticSeverity.Error,  # TODO: Map internal to LSP
+                # TODO: Map internal to LSP
+                severity=types.DiagnosticSeverity.Error,
                 range=compute_abs_range(node, semantic_anchor),
             )
         )
@@ -320,7 +320,7 @@ async def _process_block(
 
         diagnostics.append(
             types.Diagnostic(
-                message=f"FAILED TO Extract ('{kind}.{api_version}') from {name} ({err}).",
+                message=f"FAILED TO Extract ('{kind}.{api_version}') from {name} ({err}).",  # noqa: E501
                 severity=types.DiagnosticSeverity.Error,
                 range=resource_range,
             )

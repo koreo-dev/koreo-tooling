@@ -136,7 +136,9 @@ async def _run_function_test(
         )
 
     try:
-        test_outcome = await run_function_test(location=test_name, function_test=test)
+        test_outcome = await run_function_test(
+            location=test_name, function_test=test
+        )
     except Exception as err:
         return TestResults(
             success=False,
@@ -169,7 +171,9 @@ async def _run_function_test(
             messages.append(f"### Test Failures\n{'\n'.join(error_messages)}")
             success = False
         else:
-            messages.append(f"### {len(test_outcome.test_results)} Tests passed")
+            messages.append(
+                f"### {len(test_outcome.test_results)} Tests passed"
+            )
 
         return TestResults(
             success=success,
@@ -205,7 +209,8 @@ async def _run_function_test(
             if not isinstance(test_outcome.expected_outcome, Skip):
                 success = False
                 messages.append(
-                    f"Unexpected Skip(message='{message}', " f"location='{location}')."
+                    f"Unexpected Skip(message='{message}', "
+                    f"location='{location}')."
                 )
         case PermFail(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, PermFail):
@@ -269,7 +274,9 @@ async def _run_function_test(
     ):
         success = False
         missing_test_assertion = True
-        messages.append("Must define expectResource, expectOutcome, or expectReturn.")
+        messages.append(
+            "Must define expectResource, expectOutcome, or expectReturn."
+        )
 
     return TestResults(
         success=success,
@@ -289,12 +296,15 @@ def _check_inputs(
 ) -> list[FieldMismatchResult]:
     provided_keys = set[str]()
     if inputs:
-        provided_keys.update(f"inputs.{input_key}" for input_key in inputs.keys())
+        provided_keys.update(
+            f"inputs.{input_key}" for input_key in inputs.keys()
+        )
 
     first_tier_inputs = set(
         f"inputs.{match.group('name')}"
         for match in (
-            constants.INPUT_NAME_PATTERN.match(key) for key in dynamic_input_keys
+            constants.INPUT_NAME_PATTERN.match(key)
+            for key in dynamic_input_keys
         )
         if match
     )
@@ -323,22 +333,30 @@ def _check_inputs(
     return mismatches
 
 
-def _check_value(actual: dict | None, expected: dict | None) -> list[CompareResult]:
+def _check_value(
+    actual: dict | None, expected: dict | None
+) -> list[CompareResult]:
     if expected is None:
         return []
 
     mismatches: list[CompareResult] = []
 
     if actual is None:
-        mismatches.append(CompareResult(field="", actual="missing", expected="..."))
+        mismatches.append(
+            CompareResult(field="", actual="missing", expected="...")
+        )
         return mismatches
 
-    mismatches.extend(_dict_compare(base_field="", actual=actual, expected=expected))
+    mismatches.extend(
+        _dict_compare(base_field="", actual=actual, expected=expected)
+    )
 
     return mismatches
 
 
-def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[CompareResult]:
+def _dict_compare(
+    base_field: str, actual: dict, expected: dict
+) -> list[CompareResult]:
     differences: list[CompareResult] = []
 
     if base_field:
@@ -392,7 +410,9 @@ def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[Compare
             continue
 
         differences.extend(
-            _values_match(field=key, actual=actual_value, expected=expected_value)
+            _values_match(
+                field=key, actual=actual_value, expected=expected_value
+            )
         )
 
     return differences
@@ -422,7 +442,9 @@ def _values_match(field: str, actual, expected) -> list[CompareResult]:
             ]
 
         mismatches = []
-        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected)):
+        for idx, (actual_value, expected_value) in enumerate(
+            zip(actual, expected, strict=False)
+        ):
             mismatches.extend(
                 _values_match(
                     field=f"{field}[{idx}]",

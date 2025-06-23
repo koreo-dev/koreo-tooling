@@ -112,8 +112,7 @@ async def _file_processor_handler(
 ):
     if handler_key not in _FILE_HANDLER_QUEUES:
         raise RuntimeError(
-            f"{file_processor.__qualname__} for ('{file_uri}') "
-            "not initialized."
+            f"{file_processor.__qualname__} for ('{file_uri}') not initialized."
         )
 
     handler_queue = _FILE_HANDLER_QUEUES[handler_key]

@@ -7,8 +7,8 @@ ALL = "*"
 
 def step_path_indexer(value) -> str:
     try:
-        label = ''.join(
-            name.value for key, name in value if key.value == 'label'
+        label = "".join(
+            name.value for key, name in value if key.value == "label"
         )
         return f"Step:{label}"
     except Exception as err:
@@ -460,25 +460,25 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                                             strict_sub_structure_keys=True,
                                                             field_index_key_fn=function_ref_indexer,
                                                             sub_structure={
-                                                                "case": SemanticStructure(
+                                                                "case": SemanticStructure(  # noqa: E501
                                                                     type="property",
                                                                     sub_structure=SemanticStructure(
                                                                         type="string"
                                                                     ),
                                                                 ),
-                                                                "default": SemanticStructure(
+                                                                "default": SemanticStructure(  # noqa: E501
                                                                     type="property",
                                                                     sub_structure=SemanticStructure(
                                                                         type="number"
                                                                     ),
                                                                 ),
-                                                                "kind": SemanticStructure(
+                                                                "kind": SemanticStructure(  # noqa: E501
                                                                     type="property",
                                                                     sub_structure=SemanticStructure(
                                                                         type="type"
                                                                     ),
                                                                 ),
-                                                                "name": SemanticStructure(
+                                                                "name": SemanticStructure(  # noqa: E501
                                                                     type="property",
                                                                     sub_structure=SemanticStructure(
                                                                         type="function",
@@ -510,7 +510,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                                 sub_structure=SemanticStructure(
                                                     type="parameter",
                                                     local_key_fn=(
-                                                        lambda value: f"input:{value}"
+                                                        lambda value: f"input:{value}"  # noqa: E501
                                                     ),
                                                 ),
                                             ),
@@ -647,32 +647,32 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     ),
                                     "currentResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "current-resource",
+                                        local_key_fn=lambda value: "current-resource",  # noqa: E501
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "current-resource-value",
+                                            local_key_fn=lambda value: "current-resource-value",  # noqa: E501
                                         ),
                                     ),
                                     "overlayResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "overlay-resource",
+                                        local_key_fn=lambda value: "overlay-resource",  # noqa: E501
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "overlay-resource-value",
+                                            local_key_fn=lambda value: "overlay-resource-value",  # noqa: E501
                                         ),
                                     ),
                                     "inputOverrides": _function_input_overrides,
                                     "expectResource": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "expected-resource",
+                                        local_key_fn=lambda value: "expected-resource",  # noqa: E501
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "expected-value",
+                                            local_key_fn=lambda value: "expected-value",  # noqa: E501
                                         ),
                                     ),
                                     "expectOutcome": _validators,
                                     "expectReturn": SemanticStructure(
                                         type="property",
-                                        local_key_fn=lambda value: "expected-return",
+                                        local_key_fn=lambda value: "expected-return",  # noqa: E501
                                         sub_structure=SemanticStructure(
-                                            local_key_fn=lambda value: "expected-value",
+                                            local_key_fn=lambda value: "expected-value",  # noqa: E501
                                         ),
                                     ),
                                     "expectDelete": SemanticStructure(
@@ -714,8 +714,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                         "name": SemanticStructure(
                             sub_structure=SemanticStructure(
                                 index_key_fn=(
-                                    lambda value:
-                                    f"ResourceTemplate:{value}:def"
+                                    lambda value: f"ResourceTemplate:{value}:def"  # noqa: E501
                                 ),
                                 type="function",
                                 modifier=[Modifier.definition],

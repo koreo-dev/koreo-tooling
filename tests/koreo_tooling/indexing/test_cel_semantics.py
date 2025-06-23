@@ -305,7 +305,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
                 diagnostic=NodeDiagnostic(
                     message="Trailing commas are unsupported.",
-                    severity=Severity.error
+                    severity=Severity.error,
                 ),
             ),
             SemanticNode(
@@ -377,7 +377,7 @@ class TestParse(unittest.TestCase):
                 modifier=[],
                 diagnostic=NodeDiagnostic(
                     message="Trailing commas are unsupported.",
-                    severity=Severity.error
+                    severity=Severity.error,
                 ),
             ),
             SemanticNode(
@@ -396,7 +396,7 @@ class TestParse(unittest.TestCase):
         anchor_base_pos = Position(line=0, character=0)
         nodes = parse(
             ["    int('1717' )            +    9"],
-            anchor_base_pos=anchor_base_pos
+            anchor_base_pos=anchor_base_pos,
         )
 
         expected = [
