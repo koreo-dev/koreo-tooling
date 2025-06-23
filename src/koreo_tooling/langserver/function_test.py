@@ -70,7 +70,9 @@ def _process_results(
             resource_class=FunctionTest, cache_key=test_key
         )
         if not (
-            cached_resource and cached_resource.resource and cached_resource.system_data
+            cached_resource
+            and cached_resource.resource
+            and cached_resource.system_data
         ):
             continue
 
@@ -173,7 +175,7 @@ def _process_input_errors(
     for mismatch in input_mismatches:
         if not mismatch.expected and mismatch.actual:
             input_block = block_range_extract(
-                search_key=f"input:{mismatch.field.split(".", 1)[-1]}",
+                search_key=f"input:{mismatch.field.split('.', 1)[-1]}",
                 search_nodes=input_values_block.children,
                 anchor=anchor,
             )

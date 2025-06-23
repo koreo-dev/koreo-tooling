@@ -10,13 +10,13 @@ from .koreo_semantics import ALL, SEMANTIC_TYPE_STRUCTURE
 from .semantics import (
     Position,
     SemanticAnchor,
-    SemanticBlock,
-    SemanticNode,
+    SemanticBlock as SemanticBlock,
+    SemanticNode as SemanticNode,
     SemanticStructure,
-    TokenModifiers,
-    TokenTypes,
-    compute_abs_position,
-    compute_abs_range,
+    TokenModifiers as TokenModifiers,
+    TokenTypes as TokenTypes,
+    compute_abs_position as compute_abs_position,
+    compute_abs_range as compute_abs_range,
 )
 
 STRUCTURE_KEY = "..structure.."
@@ -44,7 +44,9 @@ class IndexingLoader(SafeLoader):
         doc_kind = yaml_doc.get("kind")
         doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(doc_kind)
         if not doc_semantics:
-            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(ALL, SemanticStructure())
+            doc_semantics = SEMANTIC_TYPE_STRUCTURE.get(
+                ALL, SemanticStructure()
+            )
 
         doc_metadata = yaml_doc.get("metadata", {})
         doc_name = doc_metadata.get("name")

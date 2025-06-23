@@ -2,8 +2,8 @@ import unittest
 
 from koreo_tooling.indexing.cel_semantics import (
     NodeDiagnostic,
-    SemanticNode,
     Position,
+    SemanticNode,
     Severity,
     parse,
 )
@@ -304,7 +304,8 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
                 diagnostic=NodeDiagnostic(
-                    message="Trailing commas are unsupported.", severity=Severity.error
+                    message="Trailing commas are unsupported.",
+                    severity=Severity.error
                 ),
             ),
             SemanticNode(
@@ -375,7 +376,8 @@ class TestParse(unittest.TestCase):
                 node_type="operator",
                 modifier=[],
                 diagnostic=NodeDiagnostic(
-                    message="Trailing commas are unsupported.", severity=Severity.error
+                    message="Trailing commas are unsupported.",
+                    severity=Severity.error
                 ),
             ),
             SemanticNode(
@@ -393,7 +395,8 @@ class TestParse(unittest.TestCase):
     def test_complex_white_space(self):
         anchor_base_pos = Position(line=0, character=0)
         nodes = parse(
-            ["    int('1717' )            +    9"], anchor_base_pos=anchor_base_pos
+            ["    int('1717' )            +    9"],
+            anchor_base_pos=anchor_base_pos
         )
 
         expected = [

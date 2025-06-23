@@ -131,7 +131,8 @@ def _extract_semantic_structure(
 
             elif is_comma(token) and is_rbrace(next(idx)):
                 node_diagnostic = NodeDiagnostic(
-                    message="Trailing commas are unsupported.", severity=Severity.error
+                    message="Trailing commas are unsupported.",
+                    severity=Severity.error,
                 )
 
             nodes.append(
@@ -234,10 +235,14 @@ def lex(
                 if string_len:
                     tokens.append(
                         Token(
-                            position=Position(line=0, character=quote_group_len),
+                            position=Position(
+                                line=0, character=quote_group_len
+                            ),
                             start_rel=Position(
                                 line=current_line,
-                                character=abs_offset + current_offset + quote_group_len,
+                                character=abs_offset
+                                + current_offset
+                                + quote_group_len,
                             ),
                             text=match.group("string"),
                             token_type="string",
@@ -249,7 +254,9 @@ def lex(
                     Token(
                         position=Position(
                             line=0,
-                            character=string_len if string_len else quote_group_len,
+                            character=string_len
+                            if string_len
+                            else quote_group_len,
                         ),
                         start_rel=Position(
                             line=current_line,

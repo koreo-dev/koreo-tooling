@@ -75,7 +75,9 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                                 end=types.Position(
                                     line=problem_pos.line,
                                     character=len(
-                                        doc.lines[min(problem_pos.line, last_line)]
+                                        doc.lines[
+                                            min(problem_pos.line, last_line)
+                                        ]
                                     ),
                                 ),
                             ),
@@ -94,7 +96,9 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                                 end=types.Position(
                                     line=context_pos.line,
                                     character=len(
-                                        doc.lines[min(context_pos.line, last_line)]
+                                        doc.lines[
+                                            min(context_pos.line, last_line)
+                                        ]
                                     ),
                                 ),
                             ),
@@ -122,7 +126,9 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                     )
 
                 if block_result.semantic_range_index:
-                    semantic_range_index.extend(block_result.semantic_range_index)
+                    semantic_range_index.extend(
+                        block_result.semantic_range_index
+                    )
 
                     # TODO: Extract def and tag version in index?
 
@@ -173,7 +179,9 @@ async def _process_block(
         return block_result
 
     semantic_range_index = (
-        SemanticRangeIndex(uri=uri, name=node_key, range=node_range, version=block_hash)
+        SemanticRangeIndex(
+            uri=uri, name=node_key, range=node_range, version=block_hash
+        )
         for node_key, node_range in generate_key_range_index(semantic_anchor)
     )
 
@@ -204,11 +212,17 @@ async def _process_block(
         match api_version_block:
             case list(block_diagnostics):
                 diagnostics.extend(block_diagnostics)
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case None:
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case _:
-                resource_range = compute_abs_range(api_version_block, semantic_anchor)
+                resource_range = compute_abs_range(
+                    api_version_block, semantic_anchor
+                )
 
         diagnostics.append(
             types.Diagnostic(
@@ -234,11 +248,17 @@ async def _process_block(
         match kind_version_block:
             case list(block_diagnostics):
                 diagnostics.extend(block_diagnostics)
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case None:
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case _:
-                resource_range = compute_abs_range(kind_version_block, semantic_anchor)
+                resource_range = compute_abs_range(
+                    kind_version_block, semantic_anchor
+                )
 
         diagnostics.append(
             types.Diagnostic(
@@ -286,11 +306,17 @@ async def _process_block(
         match resource_name_label:
             case list(block_diagnostics):
                 diagnostics.extend(block_diagnostics)
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case None:
-                resource_range = _block_range(semantic_anchor=semantic_anchor, doc=doc)
+                resource_range = _block_range(
+                    semantic_anchor=semantic_anchor, doc=doc
+                )
             case _:
-                resource_range = compute_abs_range(resource_name_label, semantic_anchor)
+                resource_range = compute_abs_range(
+                    resource_name_label, semantic_anchor
+                )
 
         diagnostics.append(
             types.Diagnostic(
@@ -331,17 +357,21 @@ def _load_all_yamls(
                 problem_pos = None
                 if err.problem_mark:
                     problem_pos = types.Position(
-                        line=err.problem_mark.line, character=err.problem_mark.column
+                        line=err.problem_mark.line,
+                        character=err.problem_mark.column,
                     )
 
                 context_pos = None
                 if err.context_mark:
                     context_pos = types.Position(
-                        line=err.context_mark.line, character=err.context_mark.column
+                        line=err.context_mark.line,
+                        character=err.context_mark.column,
                     )
 
                 yield YamlParseError(
-                    err=f"{err}", problem_pos=problem_pos, context_pos=context_pos
+                    err=f"{err}",
+                    problem_pos=problem_pos,
+                    context_pos=context_pos,
                 )
 
     finally:
@@ -359,7 +389,9 @@ def _to_lsp_semantics(nodes: Sequence[SemanticNode]) -> Generator[tuple]:
         )
 
 
-def _block_range(semantic_anchor: SemanticAnchor, doc: TextDocument) -> types.Range:
+def _block_range(
+    semantic_anchor: SemanticAnchor, doc: TextDocument
+) -> types.Range:
     return types.Range(
         start=types.Position(
             line=semantic_anchor.abs_position.line,

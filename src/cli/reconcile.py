@@ -29,7 +29,8 @@ def run_reconcile(args):
     for resource in resources:
         resource.patch(patch)
         print(
-            f"Updated {args.kind}/{args.name} in {args.namespace} with last reconciled={now}"
+            f"Updated {args.kind}/{args.name} in {args.namespace} "
+            f"with last reconciled={now}"
         )
 
 

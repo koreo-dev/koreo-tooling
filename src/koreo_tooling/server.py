@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import logging
 import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
@@ -8,6 +9,7 @@ from typing import NamedTuple
 
 logger = logging.getLogger("koreo.ls")
 
+from koreo import schema
 from koreo.schema import load_bundled_schemas
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
@@ -69,7 +71,8 @@ async def completions(params: types.CompletionParams):
                 )
             )
 
-    # TODO: If we're confident about where they are, set this as is_incomplete=False
+    # TODO: If we're confident about where they are,
+    # set this as is_incomplete=False
     return types.CompletionList(is_incomplete=True, items=items)
 
 
@@ -165,7 +168,8 @@ async def initialize(params):
 def code_lens(params: types.CodeLensParams):
     """Return a list of code lens to insert into the given document.
 
-    This method will read the whole document and identify each sum in the document and
+    This method will read the whole document and identify each sum in
+    the document and
     tell the language client to insert a code lens at each location.
     """
     doc = server.workspace.get_text_document(params.text_document.uri)
@@ -258,7 +262,6 @@ async def _process_workspace_directories():
 
         for suffix in suffixes:
             for match in path.rglob(f"*.{suffix}"):
-
                 await handle_file(
                     file_uri=f"file://{match}",
                     monotime=time.monotonic(),
@@ -268,7 +271,6 @@ async def _process_workspace_directories():
 
 @server.feature(types.TEXT_DOCUMENT_DID_OPEN)
 async def open_processor(params):
-
     await handle_file(
         file_uri=params.text_document.uri,
         monotime=time.monotonic(),
@@ -278,7 +280,6 @@ async def open_processor(params):
 
 @server.feature(types.TEXT_DOCUMENT_DID_CHANGE)
 async def change_processor(params):
-
     await handle_file(
         file_uri=params.text_document.uri,
         monotime=time.monotonic(),
@@ -448,7 +449,8 @@ async def _parse_file(doc_uri: str):
     if file_analyzer_resource not in _ANALYZERS:
         registry.register(registerer=file_analyzer_resource)
         registry.subscribe(
-            subscriber=file_analyzer_resource, resource=parse_notification_resource
+            subscriber=file_analyzer_resource,
+            resource=parse_notification_resource,
         )
 
         analysis_task = asyncio.create_task(
@@ -507,7 +509,8 @@ async def _analyze_file(
 
     diagnostics.extend(
         _process_workflows(
-            uri=doc.uri, semantic_range_index=parsing_result.semantic_range_index
+            uri=doc.uri,
+            semantic_range_index=parsing_result.semantic_range_index,
         )
     )
 
@@ -594,7 +597,6 @@ _ANALYZERS: dict[registry.Resource[FileAnalyzer], asyncio.Task] = {}
 
 async def _analyzer_manager(file_analyzer_resource: registry.Resource):
     queue = registry.register(registerer=file_analyzer_resource)
-    last_time = 0
     while True:
         event = await queue.get()
         try:
@@ -602,13 +604,12 @@ async def _analyzer_manager(file_analyzer_resource: registry.Resource):
                 case registry.Kill():
                     logger.info(f"Killing Analysis Manager ({file_analyzer_resource})")
                     break
-                case registry.ResourceEvent(_, event_time):
+                case registry.ResourceEvent(_, _):
                     await _run_doc_analysis(
                         doc_uri=file_analyzer_resource.name,
                     )
                     server.workspace_inlay_hint_refresh(None)
                     server.workspace_code_lens_refresh(None)
-                    last_time = event_time
                     continue
         finally:
             queue.task_done()
@@ -618,7 +619,10 @@ def _get_defined_resources(semantic_range_index: Sequence[SemanticRangeIndex]):
     definitions = (
         (match.group("kind"), match.group("name"), version)
         for match, version in (
-            (constants.RESOURCE_DEF.match(range_index.name), range_index.version)
+            (
+                constants.RESOURCE_DEF.match(range_index.name),
+                range_index.version,
+            )
             for range_index in semantic_range_index
         )
         if match
@@ -692,7 +696,7 @@ def _check_defined_resources(
         return diagnostics
 
     resource_defs = {
-        f"{match.group("kind")}:{match.group("name")}": match_range
+        f"{match.group('kind')}:{match.group('name')}": match_range
         for match, match_range in (
             (constants.RESOURCE_DEF.match(range_index.name), range_index.range)
             for range_index in semantic_range_index

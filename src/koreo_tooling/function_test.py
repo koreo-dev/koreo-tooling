@@ -79,7 +79,10 @@ async def run_function_tests(
                     logs.append(
                         types.LogMessageParams(
                             type=types.MessageType.Error,
-                            message=f"Failed to find FunctionTest ('{test_key}') in Koreo cache.",
+                            message=(
+                                f"Failed to find FunctionTest ('{test_key}') "
+                                "in Koreo cache."
+                            ),
                         )
                     )
                     continue
@@ -89,7 +92,7 @@ async def run_function_tests(
                         _run_function_test(test_key, test), name=test_key
                     )
                 )
-    except:
+    except Exception:
         # exceptions handled for each task
         pass
 
@@ -195,19 +198,21 @@ async def _run_function_test(
             if not isinstance(test_outcome.expected_outcome, DepSkip):
                 success = False
                 messages.append(
-                    f"Unexpected DepSkip(message='{message}', location='{location}'."
+                    f"Unexpected DepSkip(message='{message}', "
+                    f"location='{location}'."
                 )
         case Skip(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, Skip):
                 success = False
                 messages.append(
-                    f"Unexpected Skip(message='{message}', location='{location}')."
+                    f"Unexpected Skip(message='{message}', " f"location='{location}')."
                 )
         case PermFail(message=message, location=location):
             if not isinstance(test_outcome.expected_outcome, PermFail):
                 success = False
                 messages.append(
-                    f"Unexpected PermFail(message='{message}', location='{location}')."
+                    f"Unexpected PermFail(message='{message}', "
+                    f"location='{location}')."
                 )
         case Retry(message=message, delay=delay, location=location):
             if test_outcome.expected_outcome is not None and not isinstance(
@@ -216,7 +221,8 @@ async def _run_function_test(
                 messages.append(f"{test_outcome.expected_outcome}")
                 success = False
                 messages.append(
-                    f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."
+                    f"Unexpected Retry(message='{message}', "
+                    f"delay={delay}, location='{location}')."
                 )
             elif test_outcome.expected_return:
                 success = False
@@ -367,7 +373,7 @@ def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[Compare
 
         key = f"{base_prefix}{mutual_key}"
 
-        if type(actual_value) != type(expected_value):
+        if not isinstance(actual_value, type(expected_value)):
             differences.append(
                 CompareResult(
                     field=key,
@@ -393,7 +399,7 @@ def _dict_compare(base_field: str, actual: dict, expected: dict) -> list[Compare
 
 
 def _values_match(field: str, actual, expected) -> list[CompareResult]:
-    if type(actual) != type(expected):
+    if not isinstance(actual, type(expected)):
         return [
             CompareResult(
                 field=field,
@@ -416,7 +422,7 @@ def _values_match(field: str, actual, expected) -> list[CompareResult]:
             ]
 
         mismatches = []
-        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected, strict=False)):
+        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected)):
             mismatches.extend(
                 _values_match(
                     field=f"{field}[{idx}]",
