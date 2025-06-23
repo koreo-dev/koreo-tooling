@@ -7,11 +7,6 @@ from koreo import cache, registry
 from koreo.function_test.run import run_function_test
 from koreo.function_test.structure import FunctionTest
 from koreo.result import (
-    DepSkip,
-    Ok,
-    PermFail,
-    Retry,
-    Skip,
     UnwrappedOutcome,
     is_unwrapped_ok,
 )
@@ -193,102 +188,6 @@ async def _run_function_test(
         actual_resource=None,
     )
 
-    resource_field_errors = []
-    outcome_fields_errors = []
-    actual_return = None
-
-    match test_outcome.outcome:
-        case DepSkip(message=message, location=location):
-            if not isinstance(test_outcome.expected_outcome, DepSkip):
-                success = False
-                messages.append(
-                    f"Unexpected DepSkip(message='{message}', "
-                    f"location='{location}'."
-                )
-        case Skip(message=message, location=location):
-            if not isinstance(test_outcome.expected_outcome, Skip):
-                success = False
-                messages.append(
-                    f"Unexpected Skip(message='{message}', "
-                    f"location='{location}')."
-                )
-        case PermFail(message=message, location=location):
-            if not isinstance(test_outcome.expected_outcome, PermFail):
-                success = False
-                messages.append(
-                    f"Unexpected PermFail(message='{message}', "
-                    f"location='{location}')."
-                )
-        case Retry(message=message, delay=delay, location=location):
-            if test_outcome.expected_outcome is not None and not isinstance(
-                test_outcome.expected_outcome, Retry
-            ):
-                messages.append(f"{test_outcome.expected_outcome}")
-                success = False
-                messages.append(
-                    f"Unexpected Retry(message='{message}', "
-                    f"delay={delay}, location='{location}')."
-                )
-            elif test_outcome.expected_return:
-                success = False
-                messages.append(
-                    "Can not assert expected return-value when resource "
-                    "modifications requested. Ensure currentResource matches "
-                    "materializer."
-                )
-
-            resource_field_errors = _check_value(
-                actual=test_outcome.actual_resource,
-                expected=test_outcome.expected_resource,
-            )
-            if resource_field_errors:
-                success = False
-
-        case Ok(data=return_value) | return_value:
-            if test_outcome.expected_outcome is not None and not isinstance(
-                test_outcome.expected_outcome, Ok
-            ):
-                success = False
-                messages.append("Unexpected Ok(...).")
-
-            if test_outcome.expected_resource:
-                success = False
-                messages.append(
-                    "Can not assert expectResource unless changes requested."
-                )
-
-            actual_return = return_value
-
-            outcome_fields_errors = _check_value(
-                actual=return_value, expected=test_outcome.expected_return
-            )
-
-            if outcome_fields_errors:
-                success = False
-
-    missing_test_assertion = False
-    if not (
-        test_outcome.expected_resource
-        or test_outcome.expected_outcome
-        or test_outcome.expected_return
-    ):
-        success = False
-        missing_test_assertion = True
-        messages.append(
-            "Must define expectResource, expectOutcome, or expectReturn."
-        )
-
-    return TestResults(
-        success=success,
-        messages=messages,
-        resource_field_errors=resource_field_errors,
-        outcome_fields_errors=outcome_fields_errors,
-        input_mismatches=field_mismatches,
-        actual_resource=test_outcome.actual_resource,
-        actual_return=actual_return,
-        missing_test_assertion=missing_test_assertion,
-    )
-
 
 def _check_inputs(
     inputs: celtypes.MapType | None,
@@ -391,7 +290,7 @@ def _dict_compare(
 
         key = f"{base_prefix}{mutual_key}"
 
-        if not isinstance(actual_value, type(expected_value)):
+        if type(actual_value) != type(expected_value):  # noqa F821
             differences.append(
                 CompareResult(
                     field=key,
@@ -419,7 +318,7 @@ def _dict_compare(
 
 
 def _values_match(field: str, actual, expected) -> list[CompareResult]:
-    if not isinstance(actual, type(expected)):
+    if type(actual_value) != type(expected_value):  # noqa F821
         return [
             CompareResult(
                 field=field,
