@@ -407,14 +407,14 @@ def _code_lens_inputs_action(test_name: str, test_result: TestResults):
     )
 
     indent = (offset + 2) * " "
-    formated_inputs = (
-        f"\n"
-        f"{chr(10).join(f'{indent}{line}' for line in yaml.dump(spec_inputs).splitlines())}"  # noqa: E501
-        f"\n\n"
-    )
+    formatted_inputs = f"\n{
+        '\n'.join(
+            f'{indent}{line}' for line in yaml.dump(spec_inputs).splitlines()
+        )
+    }\n\n"
 
     return EditResult(
-        edits=(types.TextEdit(new_text=formated_inputs, range=edit_range),),
+        edits=(types.TextEdit(new_text=formatted_inputs, range=edit_range),),
         logs=logs,
     )
 
@@ -557,14 +557,14 @@ def _code_lens_replace_value_block_action(
     )
 
     indent = (offset + 2) * " "
-    formated = (
-        f"\n"
-        f"{chr(10).join(f'{indent}{line}' for line in yaml.dump(new_value, width=10000).splitlines())}"  # noqa: E501
-        f"\n\n"
-    )
-
+    formatted = f"\n{
+        '\n'.join(
+            f'{indent}{line}'
+            for line in yaml.dump(new_value, width=10000).splitlines()
+        )
+    }\n\n"
     return EditResult(
-        edits=(types.TextEdit(new_text=formated, range=edit_range),),
+        edits=(types.TextEdit(new_text=formatted, range=edit_range),),
         logs=logs,
     )
 

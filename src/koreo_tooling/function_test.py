@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from typing import Any, Literal, NamedTuple
 
 from celpy import celtypes
-from koreo import cache, registry
+from koreo import DepSkip, Ok, PermFail, Retry, Skip, cache, registry
 from koreo.function_test.run import run_function_test
 from koreo.function_test.structure import FunctionTest
 from koreo.result import (
@@ -364,3 +364,98 @@ def _values_match(field: str, actual, expected) -> list[CompareResult]:
             expected=f"{expected}",
         )
     ]
+
+
+# TODO reimplement this
+def _validate_test_outcome(test_outcome: UnwrappedOutcome, messages: list):
+    resource_field_errors = []
+    outcome_fields_errors = []
+    actual_return = None
+
+    match test_outcome.outcome:
+        case DepSkip(message=message, location=location):
+            if not isinstance(test_outcome.expected_outcome, DepSkip):
+                success = False
+                messages.append(
+                    f"Unexpected DepSkip(message='{message}', location='{location}'."  # noqa: E501
+                )
+        case Skip(message=message, location=location):
+            if not isinstance(test_outcome.expected_outcome, Skip):
+                success = False
+                messages.append(
+                    f"Unexpected Skip(message='{message}', location='{location}')."  # noqa: E501
+                )
+        case PermFail(message=message, location=location):
+            if not isinstance(test_outcome.expected_outcome, PermFail):
+                success = False
+                messages.append(
+                    f"Unexpected PermFail(message='{message}', location='{location}')."  # noqa: E501
+                )
+        case Retry(message=message, delay=delay, location=location):
+            if test_outcome.expected_outcome is not None and not isinstance(
+                test_outcome.expected_outcome, Retry
+            ):
+                messages.append(f"{test_outcome.expected_outcome}")
+                success = False
+                messages.append(
+                    f"Unexpected Retry(message='{message}', delay={delay}, location='{location}')."  # noqa: E501
+                )
+            elif test_outcome.expected_return:
+                success = False
+                messages.append(
+                    "Can not assert expected return-value when resource "
+                    "modifications requested. Ensure currentResource matches "
+                    "materializer."
+                )
+
+            resource_field_errors = _check_value(
+                actual=test_outcome.actual_resource,
+                expected=test_outcome.expected_resource,
+            )
+            if resource_field_errors:
+                success = False
+
+        case Ok(data=return_value) | return_value:
+            if test_outcome.expected_outcome is not None and not isinstance(
+                test_outcome.expected_outcome, Ok
+            ):
+                success = False
+                messages.append("Unexpected Ok(...).")
+
+            if test_outcome.expected_resource:
+                success = False
+                messages.append(
+                    "Can not assert expectResource unless changes requested."
+                )
+
+            actual_return = return_value
+
+            outcome_fields_errors = _check_value(
+                actual=return_value, expected=test_outcome.expected_return
+            )
+
+            if outcome_fields_errors:
+                success = False
+
+    missing_test_assertion = False
+    if not (
+        test_outcome.expected_resource
+        or test_outcome.expected_outcome
+        or test_outcome.expected_return
+    ):
+        success = False
+        missing_test_assertion = True
+        messages.append(
+            "Must define expectResource, expectOutcome, or expectReturn."
+        )
+
+    return TestResults(
+        success=success,
+        messages=messages,
+        resource_field_errors=resource_field_errors,
+        outcome_fields_errors=outcome_fields_errors,
+        input_mismatches=None,
+        actual_resource=test_outcome.actual_resource,
+        actual_return=actual_return,
+        missing_test_assertion=missing_test_assertion,
+    )
