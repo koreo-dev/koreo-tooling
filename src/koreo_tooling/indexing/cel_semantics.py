@@ -1,11 +1,11 @@
-from typing import NamedTuple
 import re
+from typing import NamedTuple
 
 from .semantics import (
     Modifier,
     NodeDiagnostic,
-    SemanticNode,
     Position,
+    SemanticNode,
     Severity,
     TokenType,
 )

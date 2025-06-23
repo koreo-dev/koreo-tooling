@@ -11,7 +11,6 @@ from koreo.value_function.structure import ValueFunction
 from koreo.workflow.prepare import prepare_workflow
 from koreo.workflow.structure import Workflow
 
-
 API_VERSION = "koreo.dev/v1beta1"
 
 PREPARE_MAP = {

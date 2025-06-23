@@ -1,12 +1,11 @@
-from typing import NamedTuple, Sequence
 import copy
+from collections.abc import Sequence
+from typing import NamedTuple
 
 import yaml
-
-from lsprotocol import types
-
 from koreo import cache
 from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import FieldMismatchResult, TestResults
@@ -14,8 +13,8 @@ from koreo_tooling.indexing.semantics import (
     SemanticAnchor,
     SemanticBlock,
     SemanticNode,
-    compute_abs_range,
     compute_abs_position,
+    compute_abs_range,
 )
 from koreo_tooling.langserver.rangers import block_range_extract
 

@@ -1,12 +1,11 @@
-from typing import Any, Literal, NamedTuple, Sequence
 import asyncio
-
-from lsprotocol import types
+from collections.abc import Sequence
+from typing import Any, Literal, NamedTuple
 
 from celpy import celtypes
-
-from koreo import cache
-from koreo import registry
+from koreo import cache, registry
+from koreo.function_test.run import run_function_test
+from koreo.function_test.structure import FunctionTest
 from koreo.result import (
     DepSkip,
     Ok,
@@ -16,10 +15,7 @@ from koreo.result import (
     UnwrappedOutcome,
     is_unwrapped_ok,
 )
-
-
-from koreo.function_test.run import run_function_test
-from koreo.function_test.structure import FunctionTest
+from lsprotocol import types
 
 from . import constants
 
@@ -420,7 +416,7 @@ def _values_match(field: str, actual, expected) -> list[CompareResult]:
             ]
 
         mismatches = []
-        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected)):
+        for idx, (actual_value, expected_value) in enumerate(zip(actual, expected, strict=False)):
             mismatches.extend(
                 _values_match(
                     field=f"{field}[{idx}]",

@@ -1,24 +1,22 @@
-from collections import defaultdict
-from pathlib import Path
-import pathlib
-from typing import Callable, NamedTuple, Sequence
 import asyncio
-import time
-
 import logging
+import time
+from collections import defaultdict
+from collections.abc import Callable, Sequence
+from pathlib import Path
+from typing import NamedTuple
 
 logger = logging.getLogger("koreo.ls")
 
+from koreo.schema import load_bundled_schemas
 from lsprotocol import types
 from pygls.lsp.server import LanguageServer
-from koreo.schema import load_bundled_schemas
 
 KOREO_LSP_NAME = "koreo-ls"
 KOREO_LSP_VERSION = "v1beta1"
 server = LanguageServer(KOREO_LSP_NAME, KOREO_LSP_VERSION)
 
-from koreo import cache
-from koreo import registry
+from koreo import cache, registry
 from koreo.function_test.structure import FunctionTest
 from koreo.resource_function.structure import ResourceFunction
 from koreo.resource_template.structure import ResourceTemplate
@@ -28,9 +26,13 @@ from koreo.workflow.structure import Workflow
 
 from koreo_tooling import constants
 from koreo_tooling.function_test import TestResults
-from koreo_tooling.indexing import TokenModifiers, TokenTypes, SemanticAnchor
+from koreo_tooling.indexing import SemanticAnchor, TokenModifiers, TokenTypes
 from koreo_tooling.indexing.semantics import generate_local_range_index
-from koreo_tooling.langserver.codelens import LENS_COMMANDS, EditResult, handle_lens
+from koreo_tooling.langserver.codelens import (
+    LENS_COMMANDS,
+    EditResult,
+    handle_lens,
+)
 from koreo_tooling.langserver.fileprocessor import (
     ProccessResults,
     SemanticRangeIndex,
@@ -411,7 +413,7 @@ async def goto_reference(params: types.ReferenceParams):
 )
 async def semantic_tokens_full(params: types.ReferenceParams):
     doc = server.workspace.get_text_document(params.text_document.uri)
-    if not doc.uri in __SEMANTIC_TOKEN_INDEX:
+    if doc.uri not in __SEMANTIC_TOKEN_INDEX:
         # Once processing has finished, a refresh will be issued.
         await handle_file(
             file_uri=params.text_document.uri,
@@ -464,7 +466,7 @@ async def _parse_file(doc_uri: str):
             for log in processing_result.logs:
                 server.window_log_message(params=log)
 
-    except Exception as err:
+    except Exception:
         return
 
     __PARSING_RESULT[doc_uri] = (doc.version, processing_result)
