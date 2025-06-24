@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from koreo_tooling.cel_utils import CelExpressionDetector
 from .semantics import Modifier, SemanticStructure
 
 ALL = "*"
@@ -246,7 +247,8 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     type="string",
                                     index_key_fn=lambda value: (
                                         None
-                                        if value.startswith("=")
+                                        if CelExpressionDetector
+                                        .is_cel_expression(value)
                                         else f"ResourceTemplate:{value}:ref"
                                     ),
                                 ),

@@ -10,6 +10,7 @@ from lsprotocol import types
 from pygls.workspace import TextDocument
 
 from koreo_tooling import constants
+from koreo_tooling.error_handling import ValidationError
 from koreo_tooling.indexing import STRUCTURE_KEY, IndexingLoader
 from koreo_tooling.indexing.semantics import (
     SemanticAnchor,
@@ -63,46 +64,52 @@ async def process_file(doc: TextDocument) -> ProccessResults:
                 last_line = len(doc.lines) - 1
 
                 if problem_pos:
-                    diagnostics.append(
-                        types.Diagnostic(
-                            message=err,
-                            severity=types.DiagnosticSeverity.Error,
-                            range=types.Range(
-                                start=types.Position(
-                                    line=problem_pos.line, character=0
-                                ),
-                                end=types.Position(
-                                    line=problem_pos.line,
-                                    character=len(
-                                        doc.lines[
-                                            min(problem_pos.line, last_line)
-                                        ]
-                                    ),
-                                ),
+                    error_range = types.Range(
+                        start=types.Position(
+                            line=problem_pos.line, character=0
+                        ),
+                        end=types.Position(
+                            line=problem_pos.line,
+                            character=len(
+                                doc.lines[
+                                    min(problem_pos.line, last_line)
+                                ]
                             ),
-                        )
+                        ),
                     )
+                    error = ValidationError(
+                        message=err,
+                        path=f"yaml.line_{problem_pos.line}",
+                        line=problem_pos.line,
+                        character=0,
+                        severity=types.DiagnosticSeverity.Error,
+                        source="yaml-parser"
+                    )
+                    diagnostics.append(error.to_diagnostic(range_override=error_range))
 
                 if context_pos:
-                    diagnostics.append(
-                        types.Diagnostic(
-                            message=err,
-                            severity=types.DiagnosticSeverity.Error,
-                            range=types.Range(
-                                start=types.Position(
-                                    line=context_pos.line, character=0
-                                ),
-                                end=types.Position(
-                                    line=context_pos.line,
-                                    character=len(
-                                        doc.lines[
-                                            min(context_pos.line, last_line)
-                                        ]
-                                    ),
-                                ),
+                    context_range = types.Range(
+                        start=types.Position(
+                            line=context_pos.line, character=0
+                        ),
+                        end=types.Position(
+                            line=context_pos.line,
+                            character=len(
+                                doc.lines[
+                                    min(context_pos.line, last_line)
+                                ]
                             ),
-                        )
+                        ),
                     )
+                    context_error = ValidationError(
+                        message=err,
+                        path=f"yaml.line_{context_pos.line}",
+                        line=context_pos.line,
+                        character=0,
+                        severity=types.DiagnosticSeverity.Error,
+                        source="yaml-parser"
+                    )
+                    diagnostics.append(context_error.to_diagnostic(range_override=context_range))
 
                 break
 
@@ -191,14 +198,15 @@ async def _process_block(
     diagnostics: list[types.Diagnostic] = []
 
     for node in extract_diagnostics(flattened):
-        diagnostics.append(
-            types.Diagnostic(
-                message=node.diagnostic.message,
-                # TODO: Map internal to LSP
-                severity=types.DiagnosticSeverity.Error,
-                range=compute_abs_range(node, semantic_anchor),
-            )
+        error = ValidationError(
+            message=node.diagnostic.message,
+            path=f"semantic.{getattr(node, 'name', 'unknown')}",
+            severity=types.DiagnosticSeverity.Error,
+            source="semantic-analysis"
         )
+        diagnostics.append(error.to_diagnostic(
+            range_override=compute_abs_range(node, semantic_anchor)
+        ))
 
     if api_version not in {
         constants.API_VERSION,
@@ -224,13 +232,13 @@ async def _process_block(
                     api_version_block, semantic_anchor
                 )
 
-        diagnostics.append(
-            types.Diagnostic(
-                message=f"'{kind}.{api_version}' is not a Koreo Resource.",
-                severity=types.DiagnosticSeverity.Information,
-                range=resource_range,
-            )
+        error = ValidationError(
+            message=f"'{kind}.{api_version}' is not a Koreo Resource.",
+            path=f"apiVersion.{api_version}",
+            severity=types.DiagnosticSeverity.Information,
+            source="koreo-validation"
         )
+        diagnostics.append(error.to_diagnostic(range_override=resource_range))
 
         block_result = BlockResults(
             semantic_range_index=semantic_range_index,
@@ -260,13 +268,13 @@ async def _process_block(
                     kind_version_block, semantic_anchor
                 )
 
-        diagnostics.append(
-            types.Diagnostic(
-                message=f"'{kind}' is not a supported Koreo Resource.",
-                severity=types.DiagnosticSeverity.Information,
-                range=resource_range,
-            )
+        error = ValidationError(
+            message=f"'{kind}' is not a supported Koreo Resource.",
+            path=f"kind.{kind}",
+            severity=types.DiagnosticSeverity.Information,
+            source="koreo-validation"
         )
+        diagnostics.append(error.to_diagnostic(range_override=resource_range))
         block_result = BlockResults(
             semantic_range_index=semantic_range_index,
             semantic_tokens=semantic_tokens,
@@ -318,13 +326,16 @@ async def _process_block(
                     resource_name_label, semantic_anchor
                 )
 
-        diagnostics.append(
-            types.Diagnostic(
-                message=f"FAILED TO Extract ('{kind}.{api_version}') from {name} ({err}).",  # noqa: E501
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
+        error = ValidationError(
+            message=(
+                f"FAILED TO Extract ('{kind}.{api_version}') from {name} "
+                f"({err})."
+            ),
+            path=f"extraction.{name}",
+            severity=types.DiagnosticSeverity.Error,
+            source="koreo-extraction"
         )
+        diagnostics.append(error.to_diagnostic(range_override=resource_range))
 
     block_result = BlockResults(
         semantic_range_index=semantic_range_index,

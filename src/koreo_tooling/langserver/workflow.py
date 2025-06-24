@@ -14,6 +14,7 @@ from lsprotocol import types
 
 from koreo_tooling import constants
 from koreo_tooling.analysis import call_arg_compare
+from koreo_tooling.error_handling import ValidationError
 from koreo_tooling.indexing import compute_abs_range
 from koreo_tooling.langserver.rangers import block_range_extract
 
@@ -29,29 +30,29 @@ def process_workflows(
         )
 
         if not cached_resource or not cached_resource.resource:
-            diagnostics.append(
-                types.Diagnostic(
-                    message=(
-                        f"Workflow not yet prepared ({koreo_cache_key}) "
-                        "or not in Koreo cache."
-                    ),
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
+            error = ValidationError(
+                message=(
+                    f"Workflow not yet prepared ({koreo_cache_key}) "
+                    "or not in Koreo cache."
+                ),
+                path=f"workflows.{koreo_cache_key}",
+                severity=types.DiagnosticSeverity.Error,
+                source="koreo-workflow"
             )
+            diagnostics.append(error.to_diagnostic(range_override=resource_range))
             continue
 
         if not is_unwrapped_ok(cached_resource.resource):
-            diagnostics.append(
-                types.Diagnostic(
-                    message=(
-                        f"Workflow ({koreo_cache_key}) is not ready "
-                        f"({cached_resource.resource.message})."
-                    ),
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
+            error = ValidationError(
+                message=(
+                    f"Workflow ({koreo_cache_key}) is not ready "
+                    f"({cached_resource.resource.message})."
+                ),
+                path=f"workflows.{koreo_cache_key}",
+                severity=types.DiagnosticSeverity.Error,
+                source="koreo-workflow"
             )
+            diagnostics.append(error.to_diagnostic(range_override=resource_range))
             continue
 
         workflow_result = _process_workflow(
@@ -82,63 +83,61 @@ def _process_workflow(
     koreo_metadata: dict | None,
 ) -> ProcessResult:
     if not koreo_metadata:
+        error = ValidationError(
+            message=(
+                f"Workflow ('{workflow_name}') missing in Koreo Cache "
+                "(this _should_ be impossible)."
+            ),
+            path=f"workflows.{workflow_name}.metadata",
+            severity=types.DiagnosticSeverity.Error,
+            source="koreo-workflow"
+        )
         return ProcessResult(
             error=True,
-            diagnostics=[
-                types.Diagnostic(
-                    message=(
-                        f"Workflow ('{workflow_name}') missing in Koreo Cache "
-                        "(this _should_ be impossible)."
-                    ),
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
-            ],
+            diagnostics=[error.to_diagnostic(range_override=resource_range)],
         )
 
     semantic_uri = koreo_metadata.get("uri", "")
     if semantic_uri != uri:
+        error = ValidationError(
+            message=(
+                f"Duplicate Workflow ('{workflow_name}') detected in "
+                f"('{semantic_uri}'), skipping further analysis."
+            ),
+            path=f"workflows.{workflow_name}",
+            severity=types.DiagnosticSeverity.Error,
+            source="koreo-workflow"
+        )
         return ProcessResult(
             error=True,
-            diagnostics=[
-                types.Diagnostic(
-                    message=(
-                        f"Duplicate Workflow ('{workflow_name}') detected in "
-                        f"('{semantic_uri}'), skipping further analysis."
-                    ),
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
-            ],
+            diagnostics=[error.to_diagnostic(range_override=resource_range)],
         )
 
     semantic_anchor = koreo_metadata.get("anchor")
     if not semantic_anchor:
+        error = ValidationError(
+            message=(
+                f"Unknown error processing Workflow ('{workflow_name}'), "
+                "semantic analysis data missing from Koreo cache."
+            ),
+            path=f"workflows.{workflow_name}.anchor",
+            severity=types.DiagnosticSeverity.Error,
+            source="koreo-workflow"
+        )
         return ProcessResult(
             error=True,
-            diagnostics=[
-                types.Diagnostic(
-                    message=(
-                        f"Unknown error processing Workflow ('{workflow_name}'), "  # noqa: E501
-                        "semantic analysis data missing from Koreo cache."
-                    ),
-                    severity=types.DiagnosticSeverity.Error,
-                    range=resource_range,
-                )
-            ],
+            diagnostics=[error.to_diagnostic(range_override=resource_range)],
         )
 
     diagnostics: list[types.Diagnostic] = []
     if not is_unwrapped_ok(workflow.steps_ready):
-        diagnostics.append(
-            types.Diagnostic(
-                message=(
-                    f"Workflow is not ready ({workflow.steps_ready.message})."
-                ),  # noqa: E501
-                severity=types.DiagnosticSeverity.Warning,
-                range=resource_range,
-            )
+        error = ValidationError(
+            message=f"Workflow is not ready ({workflow.steps_ready.message}).",
+            path=f"workflows.{workflow_name}.steps",
+            severity=types.DiagnosticSeverity.Warning,
+            source="koreo-workflow"
         )
+        diagnostics.append(error.to_diagnostic(range_override=resource_range))
         if not raw_spec:
             return ProcessResult(error=True, diagnostics=diagnostics)
 
@@ -152,13 +151,13 @@ def _process_workflow(
         }
 
     if not step_specs and workflow.steps:
-        diagnostics.append(
-            types.Diagnostic(
-                message="Workflow steps are malformed.",
-                severity=types.DiagnosticSeverity.Warning,
-                range=resource_range,
-            )
+        error = ValidationError(
+            message="Workflow steps are malformed.",
+            path=f"workflows.{workflow_name}.steps",
+            severity=types.DiagnosticSeverity.Warning,
+            source="koreo-workflow"
         )
+        diagnostics.append(error.to_diagnostic(range_override=resource_range))
         return ProcessResult(error=True, diagnostics=diagnostics)
 
     has_step_error = False
@@ -187,13 +186,13 @@ def _process_workflow(
             diagnostics.extend(step_result.diagnostics)
 
     if has_step_error:
-        diagnostics.append(
-            types.Diagnostic(
-                message="Workflow steps are not ready.",
-                severity=types.DiagnosticSeverity.Error,
-                range=resource_range,
-            )
+        error = ValidationError(
+            message="Workflow steps are not ready.",
+            path=f"workflows.{workflow_name}.steps",
+            severity=types.DiagnosticSeverity.Error,
+            source="koreo-workflow"
         )
+        diagnostics.append(error.to_diagnostic(range_override=resource_range))
 
     return ProcessResult(error=has_step_error, diagnostics=diagnostics)
 
@@ -271,13 +270,15 @@ def _process_workflow_step(
 
             raw_arg = raw_inputs.get(argument)
 
-            diagnostics.append(
-                types.Diagnostic(
-                    message=f"Input ('{argument}') not expected. {raw_arg}.",
-                    severity=types.DiagnosticSeverity.Warning,
-                    range=compute_abs_range(input_block, semantic_anchor),
-                )
+            error = ValidationError(
+                message=f"Input ('{argument}') not expected. {raw_arg}.",
+                path=f"steps.{step.label}.inputs.{argument}",
+                severity=types.DiagnosticSeverity.Warning,
+                source="koreo-workflow"
             )
+            diagnostics.append(error.to_diagnostic(
+                range_override=compute_abs_range(input_block, semantic_anchor)
+            ))
 
         elif expected and not provided:
             has_error = True
@@ -287,13 +288,15 @@ def _process_workflow_step(
             if not inputs_block:
                 continue
 
-            diagnostics.append(
-                types.Diagnostic(
-                    message=f"Missing input ('{argument}').",
-                    severity=types.DiagnosticSeverity.Error,
-                    range=compute_abs_range(inputs_block, semantic_anchor),
-                )
+            error = ValidationError(
+                message=f"Missing input ('{argument}').",
+                path=f"steps.{step.label}.inputs.{argument}",
+                severity=types.DiagnosticSeverity.Error,
+                source="koreo-workflow"
             )
+            diagnostics.append(error.to_diagnostic(
+                range_override=compute_abs_range(inputs_block, semantic_anchor)
+            ))
 
     if has_error:
         diagnostics.extend(
@@ -355,10 +358,10 @@ def _step_label_error_diagnostic(
         case _:
             diagnostic_range = compute_abs_range(label_block, semantic_anchor)
 
-    return [
-        types.Diagnostic(
-            message=message,
-            severity=types.DiagnosticSeverity.Warning,
-            range=diagnostic_range,
-        )
-    ]
+    error = ValidationError(
+        message=message,
+        path=f"steps.{label}.label",
+        severity=types.DiagnosticSeverity.Warning,
+        source="koreo-workflow"
+    )
+    return [error.to_diagnostic(range_override=diagnostic_range)]

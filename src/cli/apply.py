@@ -3,8 +3,93 @@ import subprocess
 import time
 from pathlib import Path
 
+import yaml
+from lsprotocol import types
 
-def apply_command(source_dir: str, namespace: str, force: bool):
+from koreo_tooling.error_handling import ErrorFormatter
+from koreo_tooling.k8s_validation import (
+    is_k8s_validation_enabled,
+    set_k8s_validation_enabled,
+    validate_resource_function,
+)
+
+
+def _validate_yaml_files(
+    yaml_files: list[Path], skip_k8s: bool = False
+) -> bool:
+    """Validate YAML files for ResourceFunctions before applying.
+    
+    Returns True if validation passes, False if there are errors.
+    """
+    if skip_k8s or not is_k8s_validation_enabled():
+        return True
+        
+    validation_errors = []
+    
+    for yaml_file in yaml_files:
+        try:
+            with open(yaml_file) as f:
+                documents = list(yaml.safe_load_all(f))
+                
+            for doc in documents:
+                if not doc or doc.get("kind") != "ResourceFunction":
+                    continue
+                    
+                spec = doc.get("spec", {})
+                errors = validate_resource_function(spec)
+                
+                for error in errors:
+                    validation_errors.append({
+                        'file': yaml_file,
+                        'error': error
+                    })
+                    
+        except Exception as e:
+            print(f"Warning: Could not validate {yaml_file}: {e}")
+            continue
+    
+    if validation_errors:
+        print("\n🚫 K8s Validation Failed:")
+        print("=" * 50)
+        
+        for item in validation_errors:
+            file_path = item['file']
+            error = item['error']
+            severity = (
+                "ERROR" 
+                if error.severity == types.DiagnosticSeverity.Error 
+                else "WARNING"
+            )
+            print(f"{severity}: {file_path.name}")
+            print(f"  {error.message}")
+            if error.path:
+                print(f"  Path: {error.path}")
+            print()
+            
+        error_count = sum(
+            1 for item in validation_errors 
+            if item['error'].severity == types.DiagnosticSeverity.Error
+        )
+        
+        if error_count > 0:
+            print(
+                f"Found {error_count} validation error(s). "
+                "Use --force-invalid to apply anyway."
+            )
+            return False
+        else:
+            print("Only warnings found. Proceeding with apply.")
+            
+    return True
+
+
+def apply_command(
+    source_dir: str, 
+    namespace: str, 
+    force: bool, 
+    skip_k8s: bool = False, 
+    force_invalid: bool = False
+):
     source_path = Path(source_dir)
 
     if not source_path.is_dir():
@@ -48,6 +133,18 @@ def apply_command(source_dir: str, namespace: str, force: bool):
             should_apply = True
 
         if should_apply:
+            # Pre-flight K8s validation
+            all_yaml_files = list(dir_path.glob("*.yaml")) + yaml_files
+            if not _validate_yaml_files(all_yaml_files, skip_k8s):
+                if not force_invalid:
+                    print(f"Skipping {dir_path} due to validation errors.")
+                    continue
+                else:
+                    print(
+                        f"Applying {dir_path} despite validation errors "
+                        "(--force-invalid used)."
+                    )
+            
             try:
                 subprocess.run(
                     ["kubectl", "apply", "-f", str(dir_path), "-n", namespace],
@@ -87,8 +184,22 @@ def register_apply_subcommand(subparsers):
         action="store_true",
         help="Force apply all files regardless of last modified.",
     )
+    apply_parser.add_argument(
+        "--skip-k8s",
+        action="store_true",
+        help="Skip K8s CRD validation before applying.",
+    )
+    apply_parser.add_argument(
+        "--force-invalid",
+        action="store_true",
+        help="Apply files even if K8s validation fails.",
+    )
     apply_parser.set_defaults(
         func=lambda args: apply_command(
-            args.source_dir, args.namespace, args.force
+            args.source_dir, 
+            args.namespace, 
+            args.force,
+            args.skip_k8s,
+            args.force_invalid
         )
     )
