@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from yaml.nodes import MappingNode, Node, SequenceNode
 
 from koreo_tooling.cel_utils import is_cel_expression
+
 from . import cel_semantics
 from .koreo_semantics import ALL
 from .semantics import (

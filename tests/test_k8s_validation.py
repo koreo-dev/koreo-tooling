@@ -120,6 +120,7 @@ class TestK8sValidation:
             "apiConfig": {
                 "apiVersion": "aws.konfigurate.realkinetic.com/v1beta1",
                 "kind": "AwsEnvironment",
+                "plural": "awsenvironments",
             },
             "resource": {
                 "spec": {
@@ -133,12 +134,29 @@ class TestK8sValidation:
         errors = validate_resource_function(spec)
         assert len(errors) == 0
 
-    def test_validate_resource_function_missing_crd(self):
-        """Test validation handles missing CRD gracefully."""
+    def test_validate_resource_function_missing_plural(self):
+        """Test validation requires explicit plural field."""
         spec = {
             "apiConfig": {
                 "apiVersion": "nonexistent.example.com/v1",
                 "kind": "NonexistentKind",
+                # Missing plural field
+            },
+            "resource": {"spec": {}},
+        }
+
+        errors = validate_resource_function(spec)
+        assert len(errors) == 1
+        assert errors[0].path == "spec.apiConfig"
+        assert "Missing required 'plural' field" in errors[0].message
+
+    def test_validate_resource_function_missing_crd(self):
+        """Test validation handles missing CRD gracefully when plural is provided."""
+        spec = {
+            "apiConfig": {
+                "apiVersion": "nonexistent.example.com/v1",
+                "kind": "NonexistentKind",
+                "plural": "nonexistentkinds",
             },
             "resource": {"spec": {}},
         }
@@ -177,7 +195,7 @@ class TestK8sValidation:
         with patch("koreo_tooling.k8s_validation.get_crd_schema") as mock_get_schema:
             mock_get_schema.return_value = schema
 
-            errors = validate_spec(spec_data, "test.example.com/v1", "TestKind")
+            errors = validate_spec(spec_data, "test.example.com/v1", "TestKind", "testkinds")
             
             assert len(errors) >= 2  # Should detect multiple type errors
             error_str = " ".join(errors)
@@ -218,6 +236,7 @@ class TestK8sValidation:
             "apiConfig": {
                 "apiVersion": "aws.konfigurate.realkinetic.com/v1beta1",
                 "kind": "AwsEnvironment",
+                "plural": "awsenvironments",
             },
             "resource": {
                 "spec": {

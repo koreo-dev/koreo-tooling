@@ -66,9 +66,7 @@ def clear_crd_cache() -> None:
     logger.debug("CRD schema and validator caches cleared")
 
 
-def get_crd_schema(
-    api_version: str, kind: str, plural: str | None = None
-) -> dict | None:
+def get_crd_schema(api_version: str, kind: str, plural: str) -> dict | None:
     """Fetch CRD schema from local Kubernetes cluster with caching
 
     Returns None if:
@@ -81,7 +79,7 @@ def get_crd_schema(
         return None
 
     # Create cache key
-    cache_key = f"{api_version}/{kind}/{plural or 'default'}"
+    cache_key = f"{api_version}/{kind}/{plural}"
     if cache_key in _CRD_SCHEMA_CACHE:
         return _CRD_SCHEMA_CACHE[cache_key]
     # Skip built-in resources
@@ -119,11 +117,7 @@ def get_crd_schema(
     else:
         group, version = "", api_version
 
-    crd_name = (
-        f"{plural or kind.lower() + 's'}.{group}"
-        if group
-        else (plural or kind.lower() + "s")
-    )
+    crd_name = f"{plural}.{group}" if group else plural
 
     try:
         result = subprocess.run(
@@ -239,8 +233,7 @@ def validate_spec(
     spec_data: dict,
     api_version: str,
     kind: str,
-    plural: str | None = None,
-    allow_partial: bool = False,
+    plural: str,
 ) -> list[str]:
     """Validate resource spec against CRD schema (type checking only).
 
@@ -264,19 +257,9 @@ def validate_spec(
     # Get spec schema if it exists
     spec_schema = schema.get("properties", {}).get("spec", schema)
 
-    # Check if we need partial validation
+    # Always remove required constraints and handle CEL expressions
     has_cel = has_cel_expressions(spec_data)
-
-    if allow_partial:
-        # Use partial validation (remove required constraints)
-        spec_schema = make_partial_schema(spec_schema, relax_oneof=has_cel)
-    elif has_cel:
-        # Only relax oneOf/anyOf for CEL expressions, keep required fields
-        spec_schema = make_partial_schema(spec_schema, relax_oneof=True)
-        # Reset required fields from original schema
-        original_spec = schema.get("properties", {}).get("spec", schema)
-        if "required" in original_spec:
-            spec_schema["required"] = original_spec["required"]
+    spec_schema = make_partial_schema(spec_schema, relax_oneof=has_cel)
 
     # Replace CEL expressions with valid placeholders
     if has_cel:
@@ -375,20 +358,22 @@ def validate_resource_function(spec: dict) -> list[ValidationError]:
     if not api_version or not kind:
         return errors
 
-    # Check if create is enabled
-    create_config = spec.get("create", {})
-    create_enabled = create_config.get("enabled", True)
-    create_overlay = create_config.get("overlay")
+    # Require explicit plural to avoid incorrect CRD name generation
+    if not plural:
+        errors.append(
+            ValidationError(
+                path="spec.apiConfig",
+                message="Missing required 'plural' field in apiConfig. "
+                "Specify the plural form to enable CRD validation.",
+            )
+        )
+        return errors
 
     # Validate main resource
     resource_spec = spec.get("resource")
     if resource_spec and "spec" in resource_spec:
-        # Use partial validation only if create disabled or has create overlay
-        # (CEL expressions are handled automatically in validate_spec)
-        allow_partial = not create_enabled or create_overlay is not None
-
         validation_errors = validate_spec(
-            resource_spec["spec"], api_version, kind, plural, allow_partial
+            resource_spec["spec"], api_version, kind, plural
         )
 
         for error in validation_errors:
@@ -399,12 +384,12 @@ def validate_resource_function(spec: dict) -> list[ValidationError]:
                 )
             )
 
-    # Validate overlays (always partial)
+    # Validate overlays
     for i, overlay_item in enumerate(spec.get("overlays", [])):
         overlay_spec = overlay_item.get("overlay", {}).get("spec")
         if overlay_spec:
             validation_errors = validate_spec(
-                overlay_spec, api_version, kind, plural, allow_partial=True
+                overlay_spec, api_version, kind, plural
             )
 
             for error in validation_errors:
@@ -415,27 +400,20 @@ def validate_resource_function(spec: dict) -> list[ValidationError]:
                     )
                 )
 
-    # Validate create overlay (merged with resource + overlays)
-    if create_overlay and resource_spec:
-        # Merge resource + overlays + create overlay
-        overlays = [
-            item.get("overlay", {}) for item in spec.get("overlays", [])
-        ]
-        merged = merge_overlays(resource_spec, *overlays, create_overlay)
+    # Validate create overlay if present
+    create_overlay = spec.get("create", {}).get("overlay")
+    if create_overlay and "spec" in create_overlay:
+        validation_errors = validate_spec(
+            create_overlay["spec"], api_version, kind, plural
+        )
 
-        if "spec" in merged:
-            use_partial = not create_enabled
-            validation_errors = validate_spec(
-                merged["spec"], api_version, kind, plural, use_partial
-            )
-
-            for error in validation_errors:
-                errors.append(
-                    ValidationError(
-                        path="spec.create.overlay",
-                        message=f"Create overlay validation (merged): {error}",
-                    )
+        for error in validation_errors:
+            errors.append(
+                ValidationError(
+                    path="spec.create.overlay",
+                    message=f"Create overlay validation: {error}",
                 )
+            )
 
     return errors
 
