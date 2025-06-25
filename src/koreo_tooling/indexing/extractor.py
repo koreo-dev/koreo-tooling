@@ -3,6 +3,8 @@ from collections.abc import Sequence
 
 from yaml.nodes import MappingNode, Node, SequenceNode
 
+from koreo_tooling.cel_utils import is_cel_expression
+
 from . import cel_semantics
 from .koreo_semantics import ALL
 from .semantics import (
@@ -484,7 +486,7 @@ def _extract_value_semantic_info(
         else:
             node_type = "string"
 
-    if node_type == "string" and yaml_node.value.startswith("="):
+    if node_type == "string" and is_cel_expression(yaml_node.value):
         return _extract_cel_semantic_info(
             anchor_abs_start=anchor_abs_start,
             last_token_abs_start=last_token_abs_start,

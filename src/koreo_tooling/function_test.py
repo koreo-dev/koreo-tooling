@@ -3,10 +3,15 @@ from collections.abc import Sequence
 from typing import Any, Literal, NamedTuple
 
 from celpy import celtypes
-from koreo import DepSkip, Ok, PermFail, Retry, Skip, cache, registry
+from koreo import cache, registry
 from koreo.function_test.run import run_function_test
 from koreo.function_test.structure import FunctionTest
 from koreo.result import (
+    DepSkip,
+    Ok,
+    PermFail,
+    Retry,
+    Skip,
     UnwrappedOutcome,
     is_unwrapped_ok,
 )

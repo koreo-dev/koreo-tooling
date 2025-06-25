@@ -552,6 +552,11 @@ async def _analyze_file(
         )
     )
 
+    # Add K8s validation for ResourceFunctions
+    diagnostics.extend(
+        _validate_k8s_resources(parsing_result.semantic_range_index)
+    )
+
     old_resource_defs: dict[registry.Resource, str | None] = (
         _get_defined_resources(
             [
@@ -761,6 +766,171 @@ def _check_defined_resources(
             )
         )
     return diagnostics
+
+
+def _validate_k8s_resources(
+    semantic_range_index: Sequence[SemanticRangeIndex] | None,
+) -> list[types.Diagnostic]:
+    """Validate ResourceFunctions against their Kubernetes CRDs"""
+    from koreo_tooling.k8s_validation import (
+        is_k8s_validation_enabled,
+        validate_resource_function,
+    )
+
+    diagnostics: list[types.Diagnostic] = []
+
+    if not semantic_range_index:
+        return diagnostics
+
+    # Check if K8s validation is enabled
+    if not is_k8s_validation_enabled():
+        logger.debug(
+            "K8s validation disabled, skipping ResourceFunction validation"
+        )
+        return diagnostics
+
+    # Find ResourceFunction definitions
+    resource_function_ranges = {}
+    for range_index in semantic_range_index:
+        if match := constants.RESOURCE_DEF.match(range_index.name):
+            if match.group("kind") == "ResourceFunction":
+                name = match.group("name")
+                resource_function_ranges[name] = range_index.range
+
+    # Validate each ResourceFunction
+    for name, range_info in resource_function_ranges.items():
+        try:
+            # Get the ResourceFunction from cache
+            cached = cache.get_resource_system_data_from_cache(
+                resource_class=ResourceFunction, cache_key=name
+            )
+
+            if not (cached and cached.resource):
+                logger.debug(f"ResourceFunction {name} not in cache")
+                continue
+
+            # The original YAML spec is in cached.spec
+            if not (cached and cached.spec):
+                logger.debug(f"ResourceFunction {name} has no original spec")
+                continue
+
+            original_spec = cached.spec
+
+            # Validate the original spec against K8s CRDs
+            validation_errors = validate_resource_function(original_spec)
+
+            logger.info(
+                f"K8s validation: Found {len(validation_errors)} errors for "
+                f"{name}"
+            )
+
+            # Convert validation errors to diagnostics with improved positioning
+            for error in validation_errors:
+                # Try to find a better position for the error
+                error_range = _find_field_position(
+                    semantic_range_index, name, error.path, range_info
+                )
+
+                # Show if we found a more specific position
+                is_specific = error_range != range_info
+                message = f"K8s validation: {error.message}"
+                if is_specific:
+                    message += f" (at {error.path})"
+
+                validation_diagnostic = types.Diagnostic(
+                    range=error_range,
+                    message=message,
+                    severity=error.severity,
+                    source="k8s-validation",
+                )
+                diagnostics.append(validation_diagnostic)
+
+        except Exception as e:
+            # If validation fails for any reason, add a generic diagnostic
+            logger.warning(f"K8s validation failed for {name}: {e}")
+            diagnostics.append(
+                types.Diagnostic(
+                    message=f"K8s validation failed for {name}: {e}",
+                    severity=types.DiagnosticSeverity.Warning,
+                    range=range_info,
+                )
+            )
+
+    logger.debug(f"K8s validation produced {len(diagnostics)} diagnostics")
+    return diagnostics
+
+
+def _find_field_position(
+    semantic_range_index: Sequence[SemanticRangeIndex],
+    resource_name: str,
+    field_path: str,
+    default_range: types.Range,
+) -> types.Range:
+    """Try to find a more specific position for a validation error
+
+    Since semantic range index doesn't have field-level data, we'll try to
+    find a position within the ResourceFunction's spec section.
+    """
+    if not field_path:
+        return default_range
+
+    # Extract the specific field name from the error message
+    # e.g., "spec.autoScalingGroup.maxReplicas must be integer" -> "maxReplicas"
+    field_parts = field_path.split(".")
+    specific_field = field_parts[-1] if field_parts else ""
+
+    # Since the semantic range index doesn't have field-level entries,
+    # let's try to use file content search as a fallback
+
+    # First, get the URI for this resource from the semantic range index
+    resource_uri = None
+    for range_index in semantic_range_index:
+        if f"ResourceFunction:{resource_name}:def" == range_index.name:
+            resource_uri = range_index.uri
+            break
+
+    if resource_uri and specific_field:
+        # Try to find the field in the file content
+        try:
+            doc = server.workspace.get_text_document(resource_uri)
+            lines = doc.lines
+
+            # Look for the specific field name in the lines
+            for line_num, line_content in enumerate(lines):
+                if f"{specific_field}:" in line_content:
+                    # Found the field! Create a range for this line
+                    field_start = line_content.find(f"{specific_field}:")
+                    if field_start >= 0:
+                        return types.Range(
+                            start=types.Position(
+                                line=line_num, character=field_start
+                            ),
+                            end=types.Position(
+                                line=line_num,
+                                character=field_start + len(specific_field),
+                            ),
+                        )
+        except Exception:
+            # If file search fails, fall back to default
+            pass
+
+    # Fallback: try to find the spec section
+    for range_index in semantic_range_index:
+        if (
+            f"ResourceFunction:{resource_name}:def" == range_index.name
+            and isinstance(range_index.range, types.Range)
+        ):
+            # Use the definition range but move closer to the spec section
+            def_range = range_index.range
+            # Move the range down a few lines to get closer to the spec
+            spec_line = def_range.start.line + 5  # Approximate spec location
+            return types.Range(
+                start=types.Position(line=spec_line, character=0),
+                end=types.Position(line=spec_line, character=20),
+            )
+
+    # If nothing else works, return the default range
+    return default_range
 
 
 def _process_workflows(
