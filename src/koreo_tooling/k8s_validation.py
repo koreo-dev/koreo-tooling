@@ -246,15 +246,15 @@ def validate_spec(
     allow_partial: bool = False,
 ) -> list[str]:
     """Validate resource spec against CRD schema (type checking only).
-    
+
     This function performs type validation to ensure fields have the correct
     data types (string, integer, boolean, etc.) according to the CRD schema.
-    
+
     NOTE: This does NOT validate required fields. This is intentional because:
     - ResourceFunctions often use overlays that provide missing fields
     - CEL expressions may compute values dynamically
     - Partial specs are common in Koreo workflows
-    
+
     For full validation including required fields, use kubectl dry-run.
     """
     schema = get_crd_schema(api_version, kind, plural)
@@ -356,11 +356,11 @@ def merge_overlays(base: dict, *overlays: dict) -> dict:
 
 
 def validate_resource_function(spec: dict) -> list[ValidationError]:
-    """Validate ResourceFunction spec with K8s CRD validation (type checking only).
+    """Validate ResourceFunction spec with K8s CRD validation.
 
-    Performs type validation on ResourceFunction specs against their CRD schemas.
+    Performs type validation on ResourceFunction specs against the CRD schemas.
     This validates that fields have correct data types but does NOT check for
-    required fields, as ResourceFunctions commonly use overlays and CEL 
+    required fields, as ResourceFunctions commonly use overlays and CEL
     expressions.
 
     If K8s validation is disabled, returns empty list.

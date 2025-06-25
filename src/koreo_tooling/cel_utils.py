@@ -1,5 +1,3 @@
-"""Simple utilities for CEL (Common Expression Language) detection and handling"""
-
 from typing import Any
 
 
@@ -25,13 +23,13 @@ def replace_cel_with_placeholders(data: dict, schema: dict) -> dict:
     """Replace CEL expressions with valid placeholder values"""
     result = {}
     properties = schema.get("properties", {})
-    
+
     for key, value in data.items():
         if is_cel_expression(value):
             # Replace with appropriate placeholder based on schema type
             field_schema = properties.get(key, {})
             field_type = field_schema.get("type", "string")
-            
+
             if field_type == "integer":
                 result[key] = 1
             elif field_type == "number":
@@ -61,5 +59,5 @@ def replace_cel_with_placeholders(data: dict, schema: dict) -> dict:
                     result[key].append(item)
         else:
             result[key] = value
-    
+
     return result
