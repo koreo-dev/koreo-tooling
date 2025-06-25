@@ -2,9 +2,8 @@
 
 NOTE: This module requires access to a Kubernetes cluster with installed CRDs.
 If you don't have cluster access or kubectl is not available, you can:
-1. Use the --skip-k8s flag in the CLI to disable CRD validation
-2. Set KOREO_SKIP_K8S_VALIDATION=1 environment variable
-3. Check debug logs for cluster connection issues
+1. Set KOREO_SKIP_K8S_VALIDATION=1 environment variable
+2. Check debug logs for cluster connection issues
 """
 
 import json
@@ -164,9 +163,7 @@ def get_crd_schema(
         _CRD_SCHEMA_CACHE[cache_key] = None
         return None
     except FileNotFoundError:
-        logger.debug(
-            "kubectl command not found - please install kubectl or disable K8s validation"  # noqa: E501
-        )
+        logger.debug("kubectl command not found - please install kubectl")
         _CRD_SCHEMA_CACHE[cache_key] = None
         return None
     except json.JSONDecodeError as e:
