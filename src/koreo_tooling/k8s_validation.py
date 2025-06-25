@@ -13,8 +13,10 @@ import os
 import subprocess
 from copy import deepcopy
 
-
-from .cel_utils import has_cel_expressions, is_cel_expression, replace_cel_with_placeholders
+from .cel_utils import (
+    has_cel_expressions,
+    replace_cel_with_placeholders,
+)
 from .error_handling import ValidationError
 
 logger = logging.getLogger("koreo.tooling.k8s_validation")
@@ -50,7 +52,7 @@ def is_k8s_validation_enabled() -> bool:
         "yes",
     ):
         logger.debug(
-            "K8s validation disabled via KOREO_SKIP_K8S_VALIDATION environment variable"
+            "K8s validation disabled via KOREO_SKIP_K8S_VALIDATION environment variable"  # noqa: E501
         )
         return False
 
@@ -63,8 +65,6 @@ def clear_crd_cache() -> None:
     _CRD_SCHEMA_CACHE.clear()
     _SCHEMA_VALIDATOR_CACHE.clear()
     logger.debug("CRD schema and validator caches cleared")
-
-
 
 
 def get_crd_schema(
@@ -136,7 +136,7 @@ def get_crd_schema(
 
         if result.returncode != 0:
             logger.debug(
-                f"CRD '{crd_name}' not found in cluster: {result.stderr.strip()}"
+                f"CRD '{crd_name}' not found in cluster: {result.stderr.strip()}"  # noqa: E501
             )
             return None
 
@@ -159,13 +159,13 @@ def get_crd_schema(
 
     except subprocess.TimeoutExpired:
         logger.debug(
-            f"Timeout accessing cluster for CRD '{crd_name}' - cluster may be unreachable"
+            f"Timeout accessing cluster for CRD '{crd_name}' - cluster may be unreachable"  # noqa: E501
         )
         _CRD_SCHEMA_CACHE[cache_key] = None
         return None
     except FileNotFoundError:
         logger.debug(
-            "kubectl command not found - please install kubectl or disable K8s validation"
+            "kubectl command not found - please install kubectl or disable K8s validation"  # noqa: E501
         )
         _CRD_SCHEMA_CACHE[cache_key] = None
         return None
@@ -182,7 +182,6 @@ def get_crd_schema(
 
 
 def clean_schema(schema: dict) -> dict:
-    """Remove Kubernetes-specific OpenAPI extensions that fastjsonschema doesn't support"""
     cleaned = deepcopy(schema)
 
     def clean_node(node):
@@ -246,7 +245,18 @@ def validate_spec(
     plural: str | None = None,
     allow_partial: bool = False,
 ) -> list[str]:
-    """Validate resource spec against CRD schema"""
+    """Validate resource spec against CRD schema (type checking only).
+    
+    This function performs type validation to ensure fields have the correct
+    data types (string, integer, boolean, etc.) according to the CRD schema.
+    
+    NOTE: This does NOT validate required fields. This is intentional because:
+    - ResourceFunctions often use overlays that provide missing fields
+    - CEL expressions may compute values dynamically
+    - Partial specs are common in Koreo workflows
+    
+    For full validation including required fields, use kubectl dry-run.
+    """
     schema = get_crd_schema(api_version, kind, plural)
     if not schema:
         return []
@@ -292,7 +302,7 @@ def validate_spec(
                 if isinstance(field_value, str):
                     errors.append(f"spec.{field_path} must be integer")
             elif expected_type == "number" and not isinstance(
-                field_value, (int, float)
+                field_value, int | float
             ):
                 if isinstance(field_value, str):
                     errors.append(f"spec.{field_path} must be number")
@@ -346,7 +356,12 @@ def merge_overlays(base: dict, *overlays: dict) -> dict:
 
 
 def validate_resource_function(spec: dict) -> list[ValidationError]:
-    """Validate ResourceFunction spec with K8s CRD validation
+    """Validate ResourceFunction spec with K8s CRD validation (type checking only).
+
+    Performs type validation on ResourceFunction specs against their CRD schemas.
+    This validates that fields have correct data types but does NOT check for
+    required fields, as ResourceFunctions commonly use overlays and CEL 
+    expressions.
 
     If K8s validation is disabled, returns empty list.
     """
@@ -428,9 +443,6 @@ def validate_resource_function(spec: dict) -> list[ValidationError]:
     return errors
 
 
-
-
-# Public API for compatibility
 def validate_resource_function_k8s(spec: dict) -> list[dict]:
     """Public API - validate ResourceFunction spec and return dict format"""
     errors = validate_resource_function(spec)
