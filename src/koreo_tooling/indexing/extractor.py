@@ -484,7 +484,7 @@ def _extract_value_semantic_info(
         else:
             node_type = "string"
 
-    if node_type == "string" and yaml_node.value.startswith("="):
+    if node_type == "string" and yaml_node.value.strip().startswith("="):
         return _extract_cel_semantic_info(
             anchor_abs_start=anchor_abs_start,
             last_token_abs_start=last_token_abs_start,

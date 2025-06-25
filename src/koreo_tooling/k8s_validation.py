@@ -14,8 +14,8 @@ import subprocess
 from copy import deepcopy
 
 
-from .cel_utils import CelExpressionDetector, CelPlaceholderGenerator
-from .error_handling import ValidationError as BaseValidationError
+from .cel_utils import has_cel_expressions, is_cel_expression, replace_cel_with_placeholders
+from .error_handling import ValidationError
 
 logger = logging.getLogger("koreo.tooling.k8s_validation")
 
@@ -65,51 +65,6 @@ def clear_crd_cache() -> None:
     logger.debug("CRD schema and validator caches cleared")
 
 
-class ValidationError(BaseValidationError):
-    """K8s validation error - extends base ValidationError"""
-
-    def __init__(
-        self,
-        path: str,
-        message: str,
-        severity: str = "error",
-        line: int = 0,
-        character: int = 0,
-        end_character: int = 0,
-    ):
-        # Convert string severity to DiagnosticSeverity
-        from lsprotocol import types
-
-        diagnostic_severity = (
-            types.DiagnosticSeverity.Error
-            if severity == "error"
-            else types.DiagnosticSeverity.Warning
-        )
-
-        super().__init__(
-            message=message,
-            path=path,
-            line=line,
-            character=character,
-            end_character=end_character,
-            severity=diagnostic_severity,
-            source="koreo-k8s",
-        )
-
-
-# Re-export CEL utilities for backward compatibility
-is_cel_expression = CelExpressionDetector.is_cel_expression
-has_cel_expressions = CelExpressionDetector.has_cel_expressions
-
-
-# Re-export CEL placeholder utilities for backward compatibility
-replace_cel_with_placeholders = (
-    CelPlaceholderGenerator.replace_cel_with_placeholders
-)
-
-
-# Re-export CEL detection utility for backward compatibility
-is_cel_related_error = CelExpressionDetector.is_cel_related_error
 
 
 def get_crd_schema(
@@ -362,13 +317,8 @@ def validate_spec(
             field_schema = spec_schema["properties"].get(field_name, {})
             validate_field(field_name, field_value, field_schema)
 
-    # Skip errors for CEL fields
-    filtered_errors = []
-    for error_msg in errors:
-        if not is_cel_related_error(error_msg, {"spec": spec_data}):
-            filtered_errors.append(error_msg)
-
-    return filtered_errors
+    # Skip errors for CEL fields - just return all errors for simplicity
+    return errors
 
 
 def merge_overlays(base: dict, *overlays: dict) -> dict:

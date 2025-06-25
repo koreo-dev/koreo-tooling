@@ -246,7 +246,7 @@ SEMANTIC_TYPE_STRUCTURE: dict[str, SemanticStructure] = {
                                     type="string",
                                     index_key_fn=lambda value: (
                                         None
-                                        if value.startswith("=")
+                                        if value.strip().startswith("=")
                                         else f"ResourceTemplate:{value}:ref"
                                     ),
                                 ),
